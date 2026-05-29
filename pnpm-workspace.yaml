@@ -1,0 +1,8 @@
+packages:
+  - "proxy"
+  - "web"
+  - "shared"
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  sharp: true

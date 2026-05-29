@@ -1,0 +1,14 @@
+{
+  "name": "ai-token-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "公司级 AI API 代理网关 + 管理后台",
+  "scripts": {
+    "dev:proxy": "pnpm --filter proxy dev",
+    "dev:web": "pnpm --filter web dev",
+    "build:proxy": "pnpm --filter proxy build",
+    "build:web": "pnpm --filter web build",
+    "db:generate": "pnpm --filter shared db:generate",
+    "db:migrate": "pnpm --filter shared db:migrate"
+  }
+}

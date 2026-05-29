@@ -1,0 +1,15 @@
+{
+  "name": "shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./schema.ts",
+  "types": "./schema.ts",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.0",
+    "sql.js": "^1.12.0"
+  }
+}
