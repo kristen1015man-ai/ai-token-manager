@@ -6,10 +6,21 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      sql.js:
+        specifier: ^1.14.1
+        version: 1.14.1
+    devDependencies:
+      tsx:
+        specifier: ^4.22.3
+        version: 4.22.3
 
   proxy:
     dependencies:
+      '@hono/node-server':
+        specifier: ^2.0.4
+        version: 2.0.4(hono@4.12.23)
       dotenv:
         specifier: ^16.5.0
         version: 16.6.1
@@ -255,6 +266,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@hono/node-server@2.0.4':
+    resolution: {integrity: sha512-Ut3y0dMMPWy6bZ2kVfx25EOVbZlm15dhF4mOsezMlhpNHy+4MkU1qN9Y6lnruYi4wPmFzimGX2X7LF/FwHli4A==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -1333,6 +1350,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.0':
     optional: true
+
+  '@hono/node-server@2.0.4(hono@4.12.23)':
+    dependencies:
+      hono: 4.12.23
 
   '@img/colour@1.1.0':
     optional: true

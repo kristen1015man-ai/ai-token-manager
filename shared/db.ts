@@ -4,12 +4,21 @@ import * as schema from "./schema.js";
 import * as fs from "fs";
 import * as path from "path";
 
-let sqlJsInstance: SqlJsDatabase | null = null;
+const DB_PATH = process.env.DATABASE_URL || "./data.db";
 
-export async function createDb(dbPath: string) {
-  // 如果已有实例且文件路径相同，直接复用
-  const absPath = path.resolve(dbPath);
+let dbInstance: ReturnType<typeof drizzle> | null = null;
+let sqliteInstance: SqlJsDatabase | null = null;
 
+/**
+ * 获取数据库实例（单例模式）
+ * 首次调用时初始化，后续复用
+ */
+export async function getDb() {
+  if (dbInstance && sqliteInstance) {
+    return { db: dbInstance, sqlite: sqliteInstance };
+  }
+
+  const absPath = path.resolve(DB_PATH);
   const SQL = await initSqlJs();
 
   let buffer: Buffer | undefined;
@@ -18,21 +27,23 @@ export async function createDb(dbPath: string) {
   }
 
   const sqlite = buffer ? new SQL.Database(buffer) : new SQL.Database();
-
-  // 保存到文件的函数
-  const save = () => {
-    const data = sqlite.export();
-    const dir = path.dirname(absPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(absPath, Buffer.from(data));
-  };
-
   const db = drizzle(sqlite, { schema });
 
-  // 返回 db 实例 + 保存函数
-  return { db, save, sqlite };
+  dbInstance = db;
+  sqliteInstance = sqlite;
+
+  return { db, sqlite };
 }
 
-export type Database = Awaited<ReturnType<typeof createDb>>["db"];
+/**
+ * 保存数据库到文件
+ */
+export async function saveDb() {
+  if (!sqliteInstance) return;
+  const absPath = path.resolve(DB_PATH);
+  const dir = path.dirname(absPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(absPath, Buffer.from(sqliteInstance.export()));
+}

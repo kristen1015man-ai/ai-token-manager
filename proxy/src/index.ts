@@ -2,48 +2,50 @@ import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { createDb } from "../../shared/db.js";
+import { serve } from "@hono/node-server";
+import { authMiddleware } from "./middleware/auth.js";
+import chatRoutes from "./routes/chat.js";
+import modelRoutes from "./routes/models.js";
 
 const app = new Hono();
 const PORT = parseInt(process.env.PROXY_PORT || "3001");
-
-// 初始化数据库
-const dbPath = process.env.DATABASE_URL || "./data.db";
-const db = createDb(dbPath);
 
 // 全局中间件
 app.use("*", logger());
 app.use("*", cors({ origin: "*" }));
 
-// 健康检查
+// 健康检查（不需要认证）
 app.get("/health", (c) => {
-  return c.json({ status: "ok", service: "ai-token-proxy" });
+  return c.json({ status: "ok", service: "ai-token-proxy", version: "0.1.0" });
 });
 
-// OpenAI 兼容的 models 接口（占位，Phase 2 实现）
-app.get("/v1/models", (c) => {
-  return c.json({
-    object: "list",
-    data: [],
-  });
-});
+// ===== OpenAI 兼容接口 =====
 
-// OpenAI 兼容的 chat 接口（占位，Phase 2 实现）
-app.post("/v1/chat/completions", (c) => {
+// /v1/models — 需要 API Key 认证
+app.use("/v1/models", authMiddleware);
+app.route("/v1/models", modelRoutes);
+
+// /v1/chat/completions — 需要 API Key 认证
+app.use("/v1/chat/completions", authMiddleware);
+app.route("/v1/chat/completions", chatRoutes);
+
+// 404 兜底
+app.notFound((c) => {
   return c.json(
     {
       error: {
-        message: "Proxy core not yet implemented (Phase 2)",
-        type: "not_implemented",
+        message: `Unknown endpoint: ${c.req.method} ${c.req.path}`,
+        type: "not_found",
       },
     },
-    501
+    404
   );
 });
 
 // 启动服务器
 console.log(`🚀 AI Token Proxy starting on port ${PORT}`);
-export default {
-  port: PORT,
-  fetch: app.fetch,
-};
+serve({ fetch: app.fetch, port: PORT });
+console.log(`✅ Proxy ready at http://localhost:${PORT}`);
+console.log(`   Health: http://localhost:${PORT}/health`);
+console.log(`   Models: http://localhost:${PORT}/v1/models`);
+console.log(`   Chat:   http://localhost:${PORT}/v1/chat/completions`);

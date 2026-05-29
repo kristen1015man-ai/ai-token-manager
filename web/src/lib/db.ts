@@ -1,17 +1,21 @@
-import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
+import initSqlJs from "sql.js";
 import { drizzle } from "drizzle-orm/sql-js";
 import * as schema from "../../../shared/schema";
 import * as fs from "fs";
 import * as path from "path";
-import { eq } from "drizzle-orm";
 
 const DB_PATH = process.env.DATABASE_URL || "./data.db";
 
 let dbInstance: ReturnType<typeof drizzle> | null = null;
-let sqliteInstance: SqlJsDatabase | null = null;
+let sqliteInstance: InstanceType<Awaited<ReturnType<typeof initSqlJs>>["Database"]> | null = null;
 
-async function getDb() {
-  if (dbInstance && sqliteInstance) return { db: dbInstance, sqlite: sqliteInstance };
+/**
+ * 获取数据库实例（单例模式）
+ */
+export async function getDb() {
+  if (dbInstance && sqliteInstance) {
+    return { db: dbInstance, sqlite: sqliteInstance };
+  }
 
   const absPath = path.resolve(DB_PATH);
   const SQL = await initSqlJs();
@@ -26,6 +30,7 @@ async function getDb() {
 
   dbInstance = db;
   sqliteInstance = sqlite;
+
   return { db, sqlite };
 }
 
@@ -41,5 +46,3 @@ export async function saveDb() {
   }
   fs.writeFileSync(absPath, Buffer.from(sqliteInstance.export()));
 }
-
-export { getDb };
