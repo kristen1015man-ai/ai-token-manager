@@ -5,6 +5,7 @@ import { logger } from "hono/logger";
 import { serve } from "@hono/node-server";
 import { authMiddleware } from "./middleware/auth.js";
 import { quotaMiddleware } from "./middleware/quota.js";
+import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import chatRoutes from "./routes/chat.js";
 import modelRoutes from "./routes/models.js";
 
@@ -26,8 +27,9 @@ app.get("/health", (c) => {
 app.use("/v1/models", authMiddleware);
 app.route("/v1/models", modelRoutes);
 
-// /v1/chat/completions — 认证 + 限额检查
+// /v1/chat/completions — 认证 + 限频 + 限额检查
 app.use("/v1/chat/completions", authMiddleware);
+app.use("/v1/chat/completions", rateLimitMiddleware);
 app.use("/v1/chat/completions", quotaMiddleware);
 app.route("/v1/chat/completions", chatRoutes);
 
