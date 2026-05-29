@@ -1,0 +1,47 @@
+services:
+  # ===== API 代理网关 =====
+  proxy:
+    build:
+      context: .
+      dockerfile: proxy/Dockerfile
+    ports:
+      - "${PROXY_PORT:-3001}:3001"
+    environment:
+      - DATABASE_URL=/data/data.db
+      - PROXY_PORT=3001
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+    volumes:
+      - proxy-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ===== 管理后台 =====
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      - DATABASE_URL=/data/data.db
+      - FEISHU_APP_ID=${FEISHU_APP_ID}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET}
+      - FEISHU_REDIRECT_URI=${FEISHU_REDIRECT_URI}
+      - NEXT_PUBLIC_FEISHU_APP_ID=${FEISHU_APP_ID}
+      - NEXT_PUBLIC_FEISHU_REDIRECT_URI=${FEISHU_REDIRECT_URI}
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-admin@yourcompany.com}
+    volumes:
+      - shared-data:/data
+    depends_on:
+      proxy:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  proxy-data:
+  shared-data:
