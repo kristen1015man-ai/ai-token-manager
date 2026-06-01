@@ -48,7 +48,7 @@ app.notFound((c) => {
 
 // 启动服务器
 console.log(`🚀 AI Token Proxy starting on port ${PORT}`);
-serve({ fetch: app.fetch, port: PORT });
+serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" });
 console.log(`✅ Proxy ready at http://localhost:${PORT}`);
 console.log(`   Health: http://localhost:${PORT}/health`);
 console.log(`   Models: http://localhost:${PORT}/v1/models`);

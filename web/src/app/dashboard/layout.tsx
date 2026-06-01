@@ -39,13 +39,6 @@ export default function DashboardLayout({
   const [user, setUser] = useState<UserInfo | null>(null);
 
   useEffect(() => {
-    const token = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("token="));
-    if (!token) {
-      router.push("/login");
-      return;
-    }
     fetch("/api/auth/me")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => setUser(data.user))

@@ -29,6 +29,18 @@ export default function LoginPage() {
         <p className="text-xs text-gray-400 mt-6">
           使用公司飞书账号登录，首次登录自动注册
         </p>
+
+        {/* 开发模式快捷登录 */}
+        {process.env.NODE_ENV !== "production" && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <a
+              href="/api/auth/dev-login"
+              className="text-sm text-gray-400 hover:text-indigo-600 transition-colors"
+            >
+              🔧 开发模式：直接进入后台
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
