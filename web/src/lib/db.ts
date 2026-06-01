@@ -4,7 +4,12 @@ import * as schema from "../../../shared/schema";
 import * as fs from "fs";
 import * as path from "path";
 
-const DB_PATH = process.env.DATABASE_URL || "./data.db";
+// 优先用 DATABASE_URL，其次检测 Railway Volume，最后默认本地路径
+const DB_PATH = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes(":")
+  ? process.env.DATABASE_URL
+  : process.env.RAILWAY_VOLUME_MOUNT_PATH
+    ? `${process.env.RAILWAY_VOLUME_MOUNT_PATH}/data.db`
+    : "./data.db";
 
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 let sqliteInstance: InstanceType<Awaited<ReturnType<typeof initSqlJs>>["Database"]> | null = null;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, saveDb } from "../../../lib/db";
+import { getDb, saveDb } from "../../../../lib/db";
 
 /**
  * 初始化/重新填充模拟数据
@@ -72,9 +72,11 @@ export async function GET(request: NextRequest) {
   ];
 
   for (const u of users) {
+    const apiKey = `sk-emp-${Math.random().toString(36).slice(2, 18)}`;
+    // users 表 14 列: id, feishu_id, name, avatar, email, department, department_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at
     dbAny.exec(
-      `INSERT INTO users VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
-      [`sk-emp-${Math.random().toString(36).slice(2, 18)}`, ...u, regTs, regTs]
+      `INSERT INTO users (id, feishu_id, name, avatar, email, department, department_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+      [u[0], u[1], u[2], u[3], u[4], u[5], u[6], apiKey, u[7], u[8], regTs, regTs]
     );
   }
   // 管理员固定 API Key（方便 dev-login）
@@ -117,15 +119,20 @@ export async function GET(request: NextRequest) {
         const sec = randInt(0, 59);
         const ts = Math.floor(new Date(day.getFullYear(), day.getMonth(), day.getDate(), hr, min, sec).getTime() / 1000);
 
-        const m = models[models.reduce((acc, cur, i) => { acc.push({ idx: i, cum: (acc.length ? acc[acc.length - 1].cum : 0) + cur.w }); return acc; }, [] as { idx: number; cum: number }[]).filter(x => x.cum >= rand())[0]?.idx ?? 0];
+        // 加权随机选模型
+        const totalW = models.reduce((s, mm) => s + mm.w, 0);
+        let rr = rand() * totalW;
+        let mi = 0;
+        for (let ii = 0; ii < models.length; ii++) { rr -= models[ii].w; if (rr <= 0) { mi = ii; break; } }
+        const model = models[mi];
         const isDev = u[4] === "研发部";
         const inTok = isDev ? randInt(800, 6000) : randInt(300, 4000);
         const outTok = isDev ? randInt(500, 4000) : randInt(200, 2500);
-        const cost = Number(((inTok * models[m].inPrice + outTok * models[m].outPrice) / 1000).toFixed(4));
+        const cost = Number(((inTok * model.inPrice + outTok * model.outPrice) / 1000).toFixed(4));
         const ch = rand() < 0.7 ? "ch_deepseek" : "ch_silicon";
 
         dbAny.exec(`INSERT INTO usage_logs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [`log_${totalRecords}`, u[0], models[m].name, inTok, outTok, inTok + outTok, cost, ch, ts]);
+          [`log_${totalRecords}`, u[0], model.name, inTok, outTok, inTok + outTok, cost, ch, ts]);
         totalRecords++;
       }
     }

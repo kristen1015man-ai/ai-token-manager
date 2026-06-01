@@ -5,14 +5,11 @@ import { eq } from "drizzle-orm";
 import { createSession } from "../../../../lib/auth";
 
 /**
- * 开发模式快捷登录
- * 仅在 NODE_ENV !== production 时可用
- * 自动创建/查找测试用户并登录
+ * 快捷登录（演示用）
+ * 通过环境变量 ADMIN_EMAILS 控制是否启用
+ * 自动创建/查找管理员用户并登录
  */
 export async function GET(request: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not available in production" }, { status: 403 });
-  }
 
   const { db } = await getDb();
 
