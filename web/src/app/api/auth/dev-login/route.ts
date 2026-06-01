@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         department: "研发部",
         departmentId: "dept_dev",
         employeeId: "DEV001",
-        apiKey: "sk-emp-test12345678",
+        apiKey: "sk-emp-DEV_ONLY_NOT_REAL_KEY", // 仅开发环境使用的测试Key，非真实密钥
         role: "admin",
         status: "active",
         monthlyQuota: 200,

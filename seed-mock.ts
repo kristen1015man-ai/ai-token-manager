@@ -25,8 +25,8 @@ const MOCK_USERS = [
 ];
 
 const CHANNELS = [
-  { id: "ch_deepseek", name: "DeepSeek 官方", baseUrl: "https://api.deepseek.com", apiKey: "sk-placeholder-deepseek", models: ["deepseek-chat", "deepseek-reasoner"], priority: 0 },
-  { id: "ch_silicon", name: "硅基流动", baseUrl: "https://api.siliconflow.cn", apiKey: "sk-placeholder-silicon", models: ["deepseek-ai/deepseek-chat-v3-0324", "Pro/deepseek-ai/deepseek-r1"], priority: 1 },
+  { id: "ch_deepseek", name: "DeepSeek 官方", baseUrl: "https://api.deepseek.com", apiKey: "YOUR_DEEPSEEK_API_KEY", models: ["deepseek-chat", "deepseek-reasoner"], priority: 0 },
+  { id: "ch_silicon", name: "硅基流动", baseUrl: "https://api.siliconflow.cn", apiKey: "YOUR_SILICONFLOW_API_KEY", models: ["deepseek-ai/deepseek-chat-v3-0324", "Pro/deepseek-ai/deepseek-r1"], priority: 1 },
 ];
 
 const MODELS = [
