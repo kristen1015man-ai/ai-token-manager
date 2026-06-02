@@ -113,7 +113,7 @@ async function fetchAllDepartments(appToken: string) {
 
   async function fetchSubDepts(parentId: string) {
     const resp = await fetch(
-      `${BASE_URL}/contact/v3/departments/${parentId}/sub_departments?department_id_type=open_department_id&page_size=50`,
+      `${BASE_URL}/contact/v3/departments?parent_department_id=${parentId}&department_id_type=open_department_id&fetch_child=false&page_size=50`,
       { headers: { Authorization: `Bearer ${appToken}` } }
     );
     const text = await resp.text();
