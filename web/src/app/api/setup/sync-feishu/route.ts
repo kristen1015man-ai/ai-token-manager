@@ -8,16 +8,21 @@ const BASE_URL = "https://open.feishu.cn/open-apis";
 /**
  * POST /api/setup/sync-feishu
  * 从飞书拉取真实通讯录（部门 + 员工）导入系统
+ *
+ * 经验证：
+ * - 部门列表 API 返回 department_id 格式（无 od- 前缀）
+ * - 查员工必须用 department_id_type=department_id
+ * - 用户 name/email 需要 contact:user.base:readonly 等字段权限（发布后生效）
  */
 export async function POST(request: NextRequest) {
   try {
     const appToken = await getAppAccessToken();
 
-    // 1. 获取根部门下的所有子部门
+    // 1. 获取所有部门
     const departments = await fetchAllDepartments(appToken);
     console.log(`[Sync] 获取到 ${departments.length} 个部门`);
 
-    // 2. 获取每个部门下的员工
+    // 2. 获取每个部门下的员工（用户列表只返回 ID，name/email 需要单独获取）
     const allUsers: Array<{
       name: string; open_id: string; email: string;
       department_name: string; department_id: string;
@@ -25,15 +30,32 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const dept of departments) {
-      const deptUsers = await fetchDepartmentUsers(appToken, dept.department_id, dept.open_department_id);
+      const deptUsers = await fetchDepartmentUsers(appToken, dept.department_id);
+      console.log(`[Sync] 部门 ${dept.name} (${dept.department_id}) 获取到 ${deptUsers.length} 个员工`);
+
+      // 如果列表没有 name，逐个获取用户详情
       for (const u of deptUsers) {
+        let userName = u.name || "";
+        let userEmail = u.email || u.enterprise_email || "";
+        let empNo = u.employee_no || "";
+
+        // 如果列表没返回 name/email，尝试获取用户详情
+        if (!userName || !userEmail) {
+          const detail = await fetchUserDetail(appToken, u.open_id);
+          if (detail) {
+            userName = userName || detail.name || "";
+            userEmail = userEmail || detail.email || detail.enterprise_email || "";
+            empNo = empNo || detail.employee_no || "";
+          }
+        }
+
         allUsers.push({
-          name: u.name || "未知",
+          name: userName || `员工${allUsers.length + 1}`,
           open_id: u.open_id || "",
-          email: u.email || u.enterprise_email || "",
+          email: userEmail,
           department_name: dept.name,
           department_id: dept.department_id,
-          employee_no: u.employee_no || "",
+          employee_no: empNo,
         });
       }
     }
@@ -47,6 +69,10 @@ export async function POST(request: NextRequest) {
     });
 
     console.log(`[Sync] 去重后 ${uniqueUsers.length} 个员工`);
+    // 打印员工摘要
+    for (const u of uniqueUsers) {
+      console.log(`[Sync] 员工: ${u.name}, email=${u.email}, dept=${u.department_name}`);
+    }
 
     // 3. 写入数据库
     const { sqlite } = await getDb();
@@ -58,13 +84,11 @@ export async function POST(request: NextRequest) {
     let updated = 0;
 
     for (const u of uniqueUsers) {
-      // 检查是否已存在
       const existing = dbAny.exec(`SELECT id, api_key FROM users WHERE feishu_id = ?`, [u.open_id]);
       const role = adminEmails.includes(u.email) ? "admin" : "member";
       const emailPrefix = u.email ? u.email.split("@")[0] : "user";
 
       if (existing.length > 0 && existing[0].values.length > 0) {
-        // 更新已有用户
         const userId = existing[0].values[0][0];
         dbAny.exec(
           `UPDATE users SET name = ?, email = ?, department = ?, department_id = ?, employee_id = ?, role = ?, updated_at = ? WHERE id = ?`,
@@ -72,7 +96,6 @@ export async function POST(request: NextRequest) {
         );
         updated++;
       } else {
-        // 创建新用户
         const userId = randomBytes(8).toString("hex");
         const apiKey = `sk-emp-${emailPrefix.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12)}-${randomBytes(3).toString("hex")}`;
         dbAny.exec(
@@ -95,6 +118,7 @@ export async function POST(request: NextRequest) {
         updated,
       },
       departments: departments.map((d) => ({ id: d.department_id, name: d.name })),
+      users: uniqueUsers.map(u => ({ name: u.name, email: u.email, department: u.department_name })),
     });
   } catch (error) {
     console.error("[Sync] 同步失败:", error);
@@ -107,90 +131,76 @@ export async function POST(request: NextRequest) {
 
 /**
  * 获取所有部门列表（从根部门 0 递归获取）
- * 注意：飞书 API 返回的 department_id 格式取决于 department_id_type 参数
- * open_department_id 格式带 od- 前缀，department_id 格式不带
+ * 部门列表 API 返回 department_id 格式（无 od- 前缀）
  */
 async function fetchAllDepartments(appToken: string) {
-  const allDepts: Array<{ department_id: string; name: string; open_department_id: string }> = [];
+  const allDepts: Array<{ department_id: string; name: string }> = [];
 
   async function fetchSubDepts(parentId: string) {
-    // 使用 department_id_type=open_department_id 获取带 od- 前缀的部门 ID
     const resp = await fetch(
-      `${BASE_URL}/contact/v3/departments?parent_department_id=${parentId}&department_id_type=open_department_id&fetch_child=false&page_size=50`,
+      `${BASE_URL}/contact/v3/departments?parent_department_id=${parentId}&department_id_type=department_id&fetch_child=false&page_size=50`,
       { headers: { Authorization: `Bearer ${appToken}` } }
     );
-    const text = await resp.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.log(`[Sync] 部门API返回非JSON (parent=${parentId}): ${text.slice(0, 200)}`);
-      return;
-    }
+    const data = await resp.json();
+
     if (data.code !== 0) {
       console.log(`[Sync] 获取子部门失败 (parent=${parentId}): code=${data.code}, msg=${data.msg}`);
       return;
     }
     const items = data.data?.items || [];
     for (const dept of items) {
-      // 同时保存两种 ID 格式
       const deptId = dept.department_id || dept.id || "";
-      const openDeptId = dept.open_department_id || dept.department_id || dept.id || "";
-      console.log(`[Sync] 部门: ${dept.name}, department_id=${deptId}, open_department_id=${openDeptId}`);
-      allDepts.push({ department_id: deptId, name: dept.name, open_department_id: openDeptId });
-      // 递归获取子部门的子部门
-      await fetchSubDepts(openDeptId || deptId);
+      allDepts.push({ department_id: deptId, name: dept.name });
+      // 递归获取子部门
+      await fetchSubDepts(deptId);
     }
   }
 
-  // 从根部门开始（根部门 ID 为 0）
   await fetchSubDepts("0");
   return allDepts;
 }
 
 /**
  * 获取某部门下的员工列表
- * 自动尝试两种 department_id_type：先 open_department_id，再 department_id
+ * 必须使用 department_id_type=department_id（经实测验证）
  */
-async function fetchDepartmentUsers(appToken: string, departmentId: string, openDepartmentId?: string) {
+async function fetchDepartmentUsers(appToken: string, departmentId: string) {
   const allUsers: any[] = [];
+  let pageToken = "";
 
-  // 尝试两种 ID 格式
-  const idAttempts = [
-    { id: openDepartmentId || departmentId, type: "open_department_id" },
-    { id: departmentId, type: "department_id" },
-  ].filter(attempt => attempt.id);
+  do {
+    const url = `${BASE_URL}/contact/v3/users?department_id=${departmentId}&department_id_type=department_id&user_id_type=open_id&page_size=50${pageToken ? `&page_token=${pageToken}` : ""}`;
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${appToken}` } });
+    const data = await resp.json();
 
-  for (const attempt of idAttempts) {
-    let pageToken = "";
-    let success = false;
-
-    do {
-      const url = `${BASE_URL}/contact/v3/users?department_id=${attempt.id}&department_id_type=${attempt.type}&user_id_type=open_id&page_size=50${pageToken ? `&page_token=${pageToken}` : ""}`;
-      const resp = await fetch(url, { headers: { Authorization: `Bearer ${appToken}` } });
-      const text = await resp.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        console.log(`[Sync] 用户API返回非JSON (dept=${attempt.id}, type=${attempt.type}): ${text.slice(0, 200)}`);
-        break;
-      }
-      if (data.code !== 0) {
-        console.log(`[Sync] 部门 ${attempt.id} (type=${attempt.type}) 获取员工失败: code=${data.code}, msg=${data.msg}`);
-        break;
-      }
-      const items = data.data?.items || [];
-      allUsers.push(...items);
-      success = true;
-      pageToken = data.data?.has_more ? data.data?.page_token : "";
-    } while (pageToken);
-
-    if (success) {
-      console.log(`[Sync] 部门 ${attempt.id} (type=${attempt.type}) 获取到 ${allUsers.length} 个员工`);
-      break; // 成功了就不尝试另一种格式
+    if (data.code !== 0) {
+      console.log(`[Sync] 部门 ${departmentId} 获取员工失败: code=${data.code}, msg=${data.msg}`);
+      break;
     }
-  }
+    const items = data.data?.items || [];
+    allUsers.push(...items);
+    pageToken = data.data?.has_more ? data.data?.page_token : "";
+  } while (pageToken);
 
   return allUsers;
+}
+
+/**
+ * 获取单个用户详细信息（name、email、employee_no 等字段）
+ * 需要权限：contact:user.base:readonly, contact:user.email:readonly 等
+ */
+async function fetchUserDetail(appToken: string, openId: string) {
+  try {
+    const resp = await fetch(
+      `${BASE_URL}/contact/v3/users/${openId}?user_id_type=open_id&department_id_type=department_id`,
+      { headers: { Authorization: `Bearer ${appToken}` } }
+    );
+    const data = await resp.json();
+    if (data.code !== 0) {
+      return null;
+    }
+    return data.data?.user || null;
+  } catch {
+    return null;
+  }
 }
