@@ -48,12 +48,16 @@ export async function GET(request: NextRequest) {
       role: user.role,
     });
 
-    // 5. 重定向到仪表盘
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    // 5. 重定向到仪表盘（使用实际域名，不能用 request.url 会得到 Docker 内部地址）
+    const host = request.headers.get("host") || "ai.seapllo.com";
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    return NextResponse.redirect(new URL("/dashboard", `${protocol}://${host}`));
   } catch (error) {
     console.error("Feishu OAuth callback error:", error);
+    const host = request.headers.get("host") || "ai.seapllo.com";
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
     return NextResponse.redirect(
-      new URL("/login?error=auth_failed", request.url)
+      new URL(`/login?error=auth_failed&detail=${encodeURIComponent(error instanceof Error ? error.message : "unknown")}`, `${protocol}://${host}`)
     );
   }
 }
