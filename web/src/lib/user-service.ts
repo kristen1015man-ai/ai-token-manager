@@ -25,6 +25,8 @@ export async function findOrCreateUser(feishuUserInfo: {
   avatar_url?: string;
   email?: string;
   employee_no?: string;
+  department_id?: string;
+  department_name?: string;
 }) {
   const { db } = await getDb();
   const adminEmails = (process.env.ADMIN_EMAILS || "")
@@ -43,7 +45,7 @@ export async function findOrCreateUser(feishuUserInfo: {
     const email = feishuUserInfo.email || existing[0].email || "";
     const shouldBeAdmin = adminEmails.includes(email);
 
-    // 更新用户信息（包括角色）
+    // 更新用户信息（包括角色和部门）
     await db
       .update(users)
       .set({
@@ -51,6 +53,8 @@ export async function findOrCreateUser(feishuUserInfo: {
         avatar: feishuUserInfo.avatar_url || existing[0].avatar,
         email: email || existing[0].email,
         employeeId: feishuUserInfo.employee_no || existing[0].employeeId,
+        department: feishuUserInfo.department_name || existing[0].department,
+        departmentId: feishuUserInfo.department_id || existing[0].departmentId,
         role: shouldBeAdmin ? "admin" : existing[0].role,
         updatedAt: new Date(),
       })
@@ -80,8 +84,8 @@ export async function findOrCreateUser(feishuUserInfo: {
     name: feishuUserInfo.name || "未知用户",
     avatar: feishuUserInfo.avatar_url || null,
     email: email || null,
-    department: null,
-    departmentId: null,
+    department: feishuUserInfo.department_name || null,
+    departmentId: feishuUserInfo.department_id || null,
     employeeId: feishuUserInfo.employee_no || null,
     apiKey,
     role,

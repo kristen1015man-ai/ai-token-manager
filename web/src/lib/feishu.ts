@@ -5,7 +5,7 @@ const BASE_URL = "https://open.feishu.cn/open-apis";
 /**
  * 获取应用 access_token（内部调用用）
  */
-async function getAppAccessToken(): Promise<string> {
+export async function getAppAccessToken(): Promise<string> {
   const resp = await fetch(`${BASE_URL}/auth/v3/app_access_token/internal`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -48,7 +48,7 @@ export async function getUserAccessToken(code: string): Promise<string> {
 }
 
 /**
- * 获取飞书用户信息
+ * 获取飞书用户信息（含部门）
  */
 export async function getUserInfo(accessToken: string) {
   const resp = await fetch(`${BASE_URL}/authen/v1/user_info`, {
@@ -61,4 +61,40 @@ export async function getUserInfo(accessToken: string) {
     throw new Error(`获取用户信息失败: code=${data.code}, msg=${data.msg}`);
   }
   return data.data;
+}
+
+/**
+ * 用 app_access_token 获取用户详细信息（含部门名称）
+ * 需要权限: contact:user.base:readonly, contact:user.department_id:readonly
+ */
+export async function getUserDetail(appToken: string, userId: string) {
+  const resp = await fetch(`${BASE_URL}/contact/v3/users/${userId}?user_id_type=open_id&department_id_type=open_department_id`, {
+    headers: {
+      Authorization: `Bearer ${appToken}`,
+    },
+  });
+  const data = await resp.json();
+  if (data.code !== 0) {
+    console.error(`[Feishu] 获取用户详情失败: code=${data.code}, msg=${data.msg}`);
+    return null;
+  }
+  return data.data?.user || null;
+}
+
+/**
+ * 获取部门信息（部门名称）
+ * 需要权限: contact:department.base:readonly
+ */
+export async function getDepartmentInfo(appToken: string, departmentId: string) {
+  const resp = await fetch(`${BASE_URL}/contact/v3/departments/${departmentId}?department_id_type=open_department_id`, {
+    headers: {
+      Authorization: `Bearer ${appToken}`,
+    },
+  });
+  const data = await resp.json();
+  if (data.code !== 0) {
+    console.error(`[Feishu] 获取部门信息失败: code=${data.code}, msg=${data.msg}`);
+    return null;
+  }
+  return data.data?.department || null;
 }
