@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUser, getAvailableModels } from "../../../../lib/proxy";
+import { authenticateUser, getAvailableModels } from "../../../lib/proxy";
 
 /**
  * GET /v1/models

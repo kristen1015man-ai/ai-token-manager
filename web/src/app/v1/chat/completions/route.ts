@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { authenticateUser, checkQuota, checkRateLimit, proxyChatRequest } from "../../../../../lib/proxy";
+import { authenticateUser, checkQuota, checkRateLimit, proxyChatRequest } from "../../../../lib/proxy";
 
 /**
  * POST /v1/chat/completions
