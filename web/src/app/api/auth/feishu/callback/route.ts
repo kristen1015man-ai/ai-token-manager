@@ -14,18 +14,19 @@ export async function GET(request: NextRequest) {
 
   try {
     // 1. 用 code 换 access_token
-    const tokenData = await getUserAccessToken(code);
-    const accessToken = tokenData?.access_token;
+    const accessToken = await getUserAccessToken(code);
 
     if (!accessToken) {
-      throw new Error("No access token returned");
+      throw new Error("No access token returned from Feishu");
     }
 
     // 2. 获取用户信息
     const userInfo = await getUserInfo(accessToken);
     if (!userInfo) {
-      throw new Error("No user info returned");
+      throw new Error("No user info returned from Feishu");
     }
+
+    console.log("[Feishu OAuth] user info:", JSON.stringify(userInfo));
 
     // 3. 创建或更新用户
     const user = await findOrCreateUser({
