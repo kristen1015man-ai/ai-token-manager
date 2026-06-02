@@ -34,20 +34,32 @@ export async function findOrCreateUser(feishuUserInfo: {
     .limit(1);
 
   if (existing.length > 0) {
-    // 更新用户信息
+    // 每次登录都检查是否应该升级为管理员
+    const email = feishuUserInfo.email || existing[0].email || "";
+    const shouldBeAdmin = adminEmails.includes(email);
+
+    // 更新用户信息（包括角色）
     await db
       .update(users)
       .set({
         name: feishuUserInfo.name || existing[0].name,
         avatar: feishuUserInfo.avatar_url || existing[0].avatar,
-        email: feishuUserInfo.email || existing[0].email,
+        email: email || existing[0].email,
         employeeId: feishuUserInfo.employee_no || existing[0].employeeId,
+        role: shouldBeAdmin ? "admin" : existing[0].role,
         updatedAt: new Date(),
       })
       .where(eq(users.id, existing[0].id));
 
     await saveDb();
-    return existing[0];
+
+    // 返回更新后的用户信息
+    const updated = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, existing[0].id))
+      .limit(1);
+    return updated[0] || existing[0];
   }
 
   // 创建新用户
