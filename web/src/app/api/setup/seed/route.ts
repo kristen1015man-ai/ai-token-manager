@@ -57,18 +57,28 @@ export async function GET(request: NextRequest) {
     dbAny.exec(`DELETE FROM ${t}`);
   }
 
-  // ===== 插入用户 =====
+  // ===== 插入用户（真实感数据） =====
   const now = Math.floor(Date.now() / 1000);
   const regTs = now - 90 * 86400;
   const users = [
-    ["u_admin", "dev_admin", "张明（管理员）", "zhangming@company.com", "研发部", "dept_dev", "EMP001", "admin", 500],
-    ["u_dev_wang", "feishu_wang", "王工", "wang@company.com", "研发部", "dept_dev", "EMP002", "member", 400],
-    ["u_dev_li", "feishu_li", "李工", "li@company.com", "研发部", "dept_dev", "EMP003", "member", 300],
-    ["u_mkt_chen", "feishu_chen", "陈经理", "chen@company.com", "市场部", "dept_mkt", "EMP004", "member", 350],
-    ["u_mkt_zhao", "feishu_zhao", "赵策划", "zhao@company.com", "市场部", "dept_mkt", "EMP005", "member", 250],
-    ["u_design_sun", "feishu_sun", "孙设计", "sun@company.com", "设计部", "dept_design", "EMP006", "member", 200],
-    ["u_design_zhou", "feishu_zhou", "周设计", "zhou@company.com", "设计部", "dept_design", "EMP007", "member", 200],
-    ["u_ops_wu", "feishu_wu", "吴运营", "wu@company.com", "运营部", "dept_ops", "EMP008", "member", 250],
+    // 真实管理员（飞书已登录）
+    ["u_admin", "ou_f2e284bb6701647e664c938806b08627", "何广明", "gmhe@idelamu.com", "技术部", "dept_tech", "EMP001", "admin", 500],
+    // 真实管理员2
+    ["u_admin2", "feishu_chensihua", "陈四华", "shchen@idelamu.com", "技术部", "dept_tech", "EMP002", "admin", 400],
+    // 技术部
+    ["u_tech_liu", "feishu_liuyang", "刘洋", "liuyang@idelamu.com", "技术部", "dept_tech", "EMP003", "member", 350],
+    ["u_tech_zhang", "feishu_zhangwei", "张伟", "zhangwei@idelamu.com", "技术部", "dept_tech", "EMP004", "member", 300],
+    ["u_tech_lin", "feishu_linxue", "林雪", "linxue@idelamu.com", "技术部", "dept_tech", "EMP005", "member", 250],
+    // 市场部
+    ["u_mkt_wang", "feishu_wangfang", "王芳", "wangfang@idelamu.com", "市场部", "dept_mkt", "EMP006", "member", 300],
+    ["u_mkt_li", "feishu_lina", "李娜", "lina@idelamu.com", "市场部", "dept_mkt", "EMP007", "member", 250],
+    ["u_mkt_zhao", "feishu_zhaolei", "赵磊", "zhaolei@idelamu.com", "市场部", "dept_mkt", "EMP008", "member", 200],
+    // 产品部
+    ["u_prod_chen", "feishu_chenming", "陈明", "chenming@idelamu.com", "产品部", "dept_prod", "EMP009", "member", 350],
+    ["u_prod_sun", "feishu_sunli", "孙丽", "sunli@idelamu.com", "产品部", "dept_prod", "EMP010", "member", 250],
+    // 设计部
+    ["u_design_zhou", "feishu_zhouyu", "周宇", "zhouyu@idelamu.com", "设计部", "dept_design", "EMP011", "member", 200],
+    ["u_design_wu", "feishu_wutong", "吴彤", "wutong@idelamu.com", "设计部", "dept_design", "EMP012", "member", 200],
   ];
 
   for (const u of users) {
@@ -98,7 +108,13 @@ export async function GET(request: NextRequest) {
     { name: "Pro/deepseek-ai/deepseek-r1", inPrice: 0.003, outPrice: 0.012, w: 0.1 },
   ];
   const channels = ["ch_deepseek", "ch_silicon"];
-  const activity: Record<string, number> = { u_admin: 1.5, u_dev_wang: 2.0, u_dev_li: 1.0, u_mkt_chen: 1.2, u_mkt_zhao: 0.8, u_design_sun: 0.6, u_design_zhou: 0.5, u_ops_wu: 1.1 };
+  const activity: Record<string, number> = {
+    u_admin: 1.5, u_admin2: 1.2,
+    u_tech_liu: 2.0, u_tech_zhang: 1.8, u_tech_lin: 1.2,
+    u_mkt_wang: 1.3, u_mkt_li: 1.0, u_mkt_zhao: 0.7,
+    u_prod_chen: 1.6, u_prod_sun: 0.9,
+    u_design_zhou: 0.8, u_design_wu: 0.6,
+  };
   const todayDate = new Date();
   const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() - 29);
 
@@ -125,9 +141,9 @@ export async function GET(request: NextRequest) {
         let mi = 0;
         for (let ii = 0; ii < models.length; ii++) { rr -= models[ii].w; if (rr <= 0) { mi = ii; break; } }
         const model = models[mi];
-        const isDev = u[4] === "研发部";
-        const inTok = isDev ? randInt(800, 6000) : randInt(300, 4000);
-        const outTok = isDev ? randInt(500, 4000) : randInt(200, 2500);
+        const isTech = u[4] === "技术部";
+        const inTok = isTech ? randInt(800, 6000) : randInt(300, 4000);
+        const outTok = isTech ? randInt(500, 4000) : randInt(200, 2500);
         const cost = Number(((inTok * model.inPrice + outTok * model.outPrice) / 1000).toFixed(4));
         const ch = rand() < 0.7 ? "ch_deepseek" : "ch_silicon";
 
@@ -140,17 +156,17 @@ export async function GET(request: NextRequest) {
 
   // ===== 限额规则 =====
   dbAny.exec(`INSERT INTO quota_rules VALUES ('q_company', 'company', 'all', 20000, 'u_admin', ?)`, [regTs]);
-  dbAny.exec(`INSERT INTO quota_rules VALUES ('q_dev', 'department', 'dept_dev', 8000, 'u_admin', ?)`, [regTs]);
+  dbAny.exec(`INSERT INTO quota_rules VALUES ('q_tech', 'department', 'dept_tech', 8000, 'u_admin', ?)`, [regTs]);
   dbAny.exec(`INSERT INTO quota_rules VALUES ('q_mkt', 'department', 'dept_mkt', 5000, 'u_admin', ?)`, [regTs]);
+  dbAny.exec(`INSERT INTO quota_rules VALUES ('q_prod', 'department', 'dept_prod', 5000, 'u_admin', ?)`, [regTs]);
   dbAny.exec(`INSERT INTO quota_rules VALUES ('q_design', 'department', 'dept_design', 3000, 'u_admin', ?)`, [regTs]);
-  dbAny.exec(`INSERT INTO quota_rules VALUES ('q_ops', 'department', 'dept_ops', 4000, 'u_admin', ?)`, [regTs]);
-  dbAny.exec(`INSERT INTO quota_rules VALUES ('q_wang', 'personal', 'u_dev_wang', 400, 'u_admin', ?)`, [regTs]);
+  dbAny.exec(`INSERT INTO quota_rules VALUES ('q_liu', 'personal', 'u_tech_liu', 400, 'u_admin', ?)`, [regTs]);
 
   // ===== 预警记录 =====
   const alerts = [
-    ["personal_80", "u_dev_wang", "王工本月用量已达限额的 80%"],
-    ["dept_80", "dept_dev", "研发部本月用量已达限额的 80%"],
-    ["anomaly", "u_mkt_zhao", "赵策划出现异常用量：1小时内消耗 ¥15.2"],
+    ["personal_80", "u_tech_liu", "刘洋本月用量已达限额的 80%"],
+    ["dept_80", "dept_tech", "技术部本月用量已达限额的 80%"],
+    ["anomaly", "u_mkt_zhao", "赵磊出现异常用量：1小时内消耗 ¥15.2"],
   ];
   for (let i = 0; i < alerts.length; i++) {
     dbAny.exec(`INSERT INTO alert_logs VALUES (?, ?, ?, ?, ?)`, [`alert_${i}`, ...alerts[i], now - (15 - i * 4) * 86400]);
