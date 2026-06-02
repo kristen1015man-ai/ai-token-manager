@@ -29,7 +29,8 @@ export async function findOrCreateUser(feishuUserInfo: {
   department_name?: string;
 }) {
   const { db } = await getDb();
-  const adminEmails = (process.env.ADMIN_EMAILS || "")
+  // 管理员通过飞书 open_id 识别（不依赖邮箱）
+  const adminIds = (process.env.ADMIN_IDS || "")
     .split(",")
     .map((e) => e.trim());
 
@@ -42,8 +43,7 @@ export async function findOrCreateUser(feishuUserInfo: {
 
   if (existing.length > 0) {
     // 每次登录都检查是否应该升级为管理员
-    const email = feishuUserInfo.email || existing[0].email || "";
-    const shouldBeAdmin = adminEmails.includes(email);
+    const shouldBeAdmin = adminIds.includes(feishuUserInfo.open_id);
 
     // 更新用户信息（包括角色和部门）
     await db
@@ -76,7 +76,7 @@ export async function findOrCreateUser(feishuUserInfo: {
   const email = feishuUserInfo.email || "";
   const emailPrefix = email ? email.split("@")[0] : undefined;
   const apiKey = generateApiKey(emailPrefix);
-  const role = adminEmails.includes(email) ? "admin" : "member";
+  const role = adminIds.includes(feishuUserInfo.open_id) ? "admin" : "member";
 
   await db.insert(users).values({
     id: userId,
