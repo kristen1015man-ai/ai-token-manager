@@ -116,7 +116,14 @@ async function fetchAllDepartments(appToken: string) {
       `${BASE_URL}/contact/v3/departments/${parentId}/sub_departments?department_id_type=open_department_id&page_size=50`,
       { headers: { Authorization: `Bearer ${appToken}` } }
     );
-    const data = await resp.json();
+    const text = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.log(`[Sync] 部门API返回非JSON (parent=${parentId}): ${text.slice(0, 200)}`);
+      return;
+    }
     if (data.code !== 0) {
       console.log(`[Sync] 获取子部门失败 (parent=${parentId}): code=${data.code}, msg=${data.msg}`);
       return;
@@ -144,7 +151,14 @@ async function fetchDepartmentUsers(appToken: string, departmentId: string) {
   do {
     const url = `${BASE_URL}/contact/v3/users?department_id=${departmentId}&department_id_type=open_department_id&user_id_type=open_id&page_size=50${pageToken ? `&page_token=${pageToken}` : ""}`;
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${appToken}` } });
-    const data = await resp.json();
+    const text = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.log(`[Sync] 用户API返回非JSON (dept=${departmentId}): ${text.slice(0, 200)}`);
+      break;
+    }
     if (data.code !== 0) {
       console.log(`[Sync] 部门 ${departmentId} 获取员工失败: code=${data.code}, msg=${data.msg}`);
       break;
