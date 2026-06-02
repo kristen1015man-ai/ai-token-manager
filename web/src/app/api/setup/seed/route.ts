@@ -128,7 +128,8 @@ export async function GET(request: NextRequest) {
 
   // 插入用户
   for (const u of users) {
-    const emailPrefix = u[3] ? u[3].split("@")[0] : u[2].toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12);
+    const emailStr = typeof u[3] === "string" ? u[3] : "";
+    const emailPrefix = emailStr ? emailStr.split("@")[0] : String(u[2]).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12);
     const apiKey = `sk-emp-${emailPrefix}-${Math.random().toString(36).slice(2, 8)}`;
     dbAny.exec(
       `INSERT INTO users (id, feishu_id, name, avatar, email, department, department_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,

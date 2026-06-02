@@ -51,7 +51,7 @@ export async function findOrCreateUser(feishuUserInfo: {
       .set({
         name: feishuUserInfo.name || existing[0].name,
         avatar: feishuUserInfo.avatar_url || existing[0].avatar,
-        email: email || existing[0].email,
+        email: feishuUserInfo.email || existing[0].email,
         employeeId: feishuUserInfo.employee_no || existing[0].employeeId,
         department: feishuUserInfo.department_name || existing[0].department,
         departmentId: feishuUserInfo.department_id || existing[0].departmentId,
