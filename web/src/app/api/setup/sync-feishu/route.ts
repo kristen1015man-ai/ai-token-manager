@@ -106,44 +106,31 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * 获取所有部门列表
+ * 获取所有部门列表（从根部门 0 递归获取）
  */
 async function fetchAllDepartments(appToken: string) {
   const allDepts: Array<{ department_id: string; name: string }> = [];
 
-  // 获取根部门列表
-  const rootResp = await fetch(`${BASE_URL}/contact/v3/departments?department_id_type=open_department_id&fetch_child=true&page_size=50`, {
-    headers: { Authorization: `Bearer ${appToken}` },
-  });
-  const rootData = await rootResp.json();
-
-  if (rootData.code !== 0) {
-    throw new Error(`获取部门列表失败: ${rootData.msg}`);
-  }
-
-  const items = rootData.data?.items || [];
-  for (const dept of items) {
-    allDepts.push({
-      department_id: dept.department_id,
-      name: dept.name,
-    });
-  }
-
-  // 如果有 has_more，继续获取
-  let pageToken = rootData.data?.page_token;
-  while (pageToken) {
-    const resp = await fetch(`${BASE_URL}/contact/v3/departments?department_id_type=open_department_id&fetch_child=true&page_size=50&page_token=${pageToken}`, {
-      headers: { Authorization: `Bearer ${appToken}` },
-    });
+  async function fetchSubDepts(parentId: string) {
+    const resp = await fetch(
+      `${BASE_URL}/contact/v3/departments/${parentId}/sub_departments?department_id_type=open_department_id&page_size=50`,
+      { headers: { Authorization: `Bearer ${appToken}` } }
+    );
     const data = await resp.json();
-    if (data.code !== 0) break;
-    const moreItems = data.data?.items || [];
-    for (const dept of moreItems) {
-      allDepts.push({ department_id: dept.department_id, name: dept.name });
+    if (data.code !== 0) {
+      console.log(`[Sync] 获取子部门失败 (parent=${parentId}): code=${data.code}, msg=${data.msg}`);
+      return;
     }
-    pageToken = data.data?.page_token;
+    const items = data.data?.items || [];
+    for (const dept of items) {
+      allDepts.push({ department_id: dept.department_id, name: dept.name });
+      // 递归获取子部门的子部门
+      await fetchSubDepts(dept.department_id);
+    }
   }
 
+  // 从根部门开始
+  await fetchSubDepts("0");
   return allDepts;
 }
 
@@ -151,14 +138,21 @@ async function fetchAllDepartments(appToken: string) {
  * 获取某部门下的员工列表
  */
 async function fetchDepartmentUsers(appToken: string, departmentId: string) {
-  const resp = await fetch(
-    `${BASE_URL}/contact/v3/users?department_id=${departmentId}&department_id_type=open_department_id&user_id_type=open_id&page_size=50`,
-    { headers: { Authorization: `Bearer ${appToken}` } }
-  );
-  const data = await resp.json();
-  if (data.code !== 0) {
-    console.log(`[Sync] 部门 ${departmentId} 获取员工失败: ${data.msg}`);
-    return [];
-  }
-  return data.data?.items || [];
+  const allUsers: any[] = [];
+  let pageToken = "";
+
+  do {
+    const url = `${BASE_URL}/contact/v3/users?department_id=${departmentId}&department_id_type=open_department_id&user_id_type=open_id&page_size=50${pageToken ? `&page_token=${pageToken}` : ""}`;
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${appToken}` } });
+    const data = await resp.json();
+    if (data.code !== 0) {
+      console.log(`[Sync] 部门 ${departmentId} 获取员工失败: code=${data.code}, msg=${data.msg}`);
+      break;
+    }
+    const items = data.data?.items || [];
+    allUsers.push(...items);
+    pageToken = data.data?.has_more ? data.data?.page_token : "";
+  } while (pageToken);
+
+  return allUsers;
 }
