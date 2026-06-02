@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const dept of departments) {
-      const deptUsers = await fetchDepartmentUsers(appToken, dept.department_id);
+      const deptUsers = await fetchDepartmentUsers(appToken, dept.department_id, dept.open_department_id);
       for (const u of deptUsers) {
         allUsers.push({
           name: u.name || "未知",
@@ -107,11 +107,14 @@ export async function POST(request: NextRequest) {
 
 /**
  * 获取所有部门列表（从根部门 0 递归获取）
+ * 注意：飞书 API 返回的 department_id 格式取决于 department_id_type 参数
+ * open_department_id 格式带 od- 前缀，department_id 格式不带
  */
 async function fetchAllDepartments(appToken: string) {
-  const allDepts: Array<{ department_id: string; name: string }> = [];
+  const allDepts: Array<{ department_id: string; name: string; open_department_id: string }> = [];
 
   async function fetchSubDepts(parentId: string) {
+    // 使用 department_id_type=open_department_id 获取带 od- 前缀的部门 ID
     const resp = await fetch(
       `${BASE_URL}/contact/v3/departments?parent_department_id=${parentId}&department_id_type=open_department_id&fetch_child=false&page_size=50`,
       { headers: { Authorization: `Bearer ${appToken}` } }
@@ -130,43 +133,64 @@ async function fetchAllDepartments(appToken: string) {
     }
     const items = data.data?.items || [];
     for (const dept of items) {
-      allDepts.push({ department_id: dept.department_id, name: dept.name });
+      // 同时保存两种 ID 格式
+      const deptId = dept.department_id || dept.id || "";
+      const openDeptId = dept.open_department_id || dept.department_id || dept.id || "";
+      console.log(`[Sync] 部门: ${dept.name}, department_id=${deptId}, open_department_id=${openDeptId}`);
+      allDepts.push({ department_id: deptId, name: dept.name, open_department_id: openDeptId });
       // 递归获取子部门的子部门
-      await fetchSubDepts(dept.department_id);
+      await fetchSubDepts(openDeptId || deptId);
     }
   }
 
-  // 从根部门开始
+  // 从根部门开始（根部门 ID 为 0）
   await fetchSubDepts("0");
   return allDepts;
 }
 
 /**
  * 获取某部门下的员工列表
+ * 自动尝试两种 department_id_type：先 open_department_id，再 department_id
  */
-async function fetchDepartmentUsers(appToken: string, departmentId: string) {
+async function fetchDepartmentUsers(appToken: string, departmentId: string, openDepartmentId?: string) {
   const allUsers: any[] = [];
-  let pageToken = "";
 
-  do {
-    const url = `${BASE_URL}/contact/v3/users?department_id=${departmentId}&department_id_type=open_department_id&user_id_type=open_id&page_size=50${pageToken ? `&page_token=${pageToken}` : ""}`;
-    const resp = await fetch(url, { headers: { Authorization: `Bearer ${appToken}` } });
-    const text = await resp.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.log(`[Sync] 用户API返回非JSON (dept=${departmentId}): ${text.slice(0, 200)}`);
-      break;
+  // 尝试两种 ID 格式
+  const idAttempts = [
+    { id: openDepartmentId || departmentId, type: "open_department_id" },
+    { id: departmentId, type: "department_id" },
+  ].filter(attempt => attempt.id);
+
+  for (const attempt of idAttempts) {
+    let pageToken = "";
+    let success = false;
+
+    do {
+      const url = `${BASE_URL}/contact/v3/users?department_id=${attempt.id}&department_id_type=${attempt.type}&user_id_type=open_id&page_size=50${pageToken ? `&page_token=${pageToken}` : ""}`;
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${appToken}` } });
+      const text = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.log(`[Sync] 用户API返回非JSON (dept=${attempt.id}, type=${attempt.type}): ${text.slice(0, 200)}`);
+        break;
+      }
+      if (data.code !== 0) {
+        console.log(`[Sync] 部门 ${attempt.id} (type=${attempt.type}) 获取员工失败: code=${data.code}, msg=${data.msg}`);
+        break;
+      }
+      const items = data.data?.items || [];
+      allUsers.push(...items);
+      success = true;
+      pageToken = data.data?.has_more ? data.data?.page_token : "";
+    } while (pageToken);
+
+    if (success) {
+      console.log(`[Sync] 部门 ${attempt.id} (type=${attempt.type}) 获取到 ${allUsers.length} 个员工`);
+      break; // 成功了就不尝试另一种格式
     }
-    if (data.code !== 0) {
-      console.log(`[Sync] 部门 ${departmentId} 获取员工失败: code=${data.code}, msg=${data.msg}`);
-      break;
-    }
-    const items = data.data?.items || [];
-    allUsers.push(...items);
-    pageToken = data.data?.has_more ? data.data?.page_token : "";
-  } while (pageToken);
+  }
 
   return allUsers;
 }
