@@ -4,10 +4,15 @@ import { users } from "../../../shared/schema";
 import { getDb, saveDb } from "./db";
 
 /**
- * 生成 API Key: sk-emp-{随机16位十六进制}
+ * 生成 API Key: sk-emp-{邮箱前缀或名字缩写}-{随机6位}
+ * 例如: sk-emp-gmhe-x7k9m2
  */
-function generateApiKey(): string {
-  return `sk-emp-${randomBytes(8).toString("hex")}`;
+export function generateApiKey(identifier?: string): string {
+  const prefix = identifier
+    ? identifier.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12)
+    : "user";
+  const random = randomBytes(3).toString("hex");
+  return `sk-emp-${prefix}-${random}`;
 }
 
 /**
@@ -64,8 +69,9 @@ export async function findOrCreateUser(feishuUserInfo: {
 
   // 创建新用户
   const userId = randomBytes(8).toString("hex");
-  const apiKey = generateApiKey();
   const email = feishuUserInfo.email || "";
+  const emailPrefix = email ? email.split("@")[0] : undefined;
+  const apiKey = generateApiKey(emailPrefix);
   const role = adminEmails.includes(email) ? "admin" : "member";
 
   await db.insert(users).values({
