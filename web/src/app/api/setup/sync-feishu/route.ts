@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // 3. 写入数据库
     const { sqlite } = await getDb();
     const dbAny = sqlite as any;
-    const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim());
+    const adminIds = (process.env.ADMIN_IDS || "").split(",").map((e) => e.trim());
     const now = Math.floor(Date.now() / 1000);
 
     let created = 0;
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     for (const u of uniqueUsers) {
       const existing = dbAny.exec(`SELECT id, api_key FROM users WHERE feishu_id = ?`, [u.open_id]);
-      const role = adminEmails.includes(u.email) ? "admin" : "member";
+      const role = adminIds.includes(u.open_id) ? "admin" : "member";
       const emailPrefix = u.email ? u.email.split("@")[0] : "user";
 
       if (existing.length > 0 && existing[0].values.length > 0) {

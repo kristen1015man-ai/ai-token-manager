@@ -6,8 +6,7 @@ import { createSession } from "../../../../lib/auth";
 
 /**
  * 快捷登录（演示用）
- * 通过环境变量 ADMIN_EMAILS 控制是否启用
- * 自动创建/查找管理员用户并登录
+ * 自动查找已有管理员用户并登录（用真实飞书数据时）
  */
 export async function GET(request: NextRequest) {
 
