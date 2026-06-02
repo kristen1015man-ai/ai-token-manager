@@ -1,3 +1,6 @@
+// 强制动态渲染，每次请求时读取最新环境变量（飞书 App ID、回调地址等）
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   const feishuAppId = process.env.NEXT_PUBLIC_FEISHU_APP_ID || "";
   const redirectUri = process.env.NEXT_PUBLIC_FEISHU_REDIRECT_URI || "";
