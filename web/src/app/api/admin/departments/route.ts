@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, saveDb } from "../../../../lib/db";
+
+function ensureColumns(dbAny: any) {
+  const needed = [
+    ["department", "TEXT"], ["department_id", "TEXT"],
+    ["group_name", "TEXT"], ["group_id", "TEXT"],
+    ["center_name", "TEXT"], ["center_id", "TEXT"],
+  ];
+  const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
+  const existing = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
+  let changed = false;
+  for (const [col, type] of needed) {
+    if (!existing.has(col)) {
+      try { dbAny.exec(`ALTER TABLE users ADD COLUMN ${col} ${type}`); changed = true; } catch {}
+    }
+  }
+  return changed;
+}
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAdmin();
@@ -9,10 +26,14 @@ export async function GET(request: NextRequest) {
   const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
   const dbAny = sqlite as any;
+
+  if (ensureColumns(dbAny)) {
+    await saveDb();
+  }
+
   const now = new Date();
   const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
 
-  // 动态检测列
   const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
   const cols = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
 
@@ -21,8 +42,6 @@ export async function GET(request: NextRequest) {
     deptCol = "u.group_name";
   } else if (level === "center" && cols.has("center_name")) {
     deptCol = "u.center_name";
-  } else if (!cols.has("department")) {
-    deptCol = "'未分配'";
   }
 
   const depts = dbAny.exec(
