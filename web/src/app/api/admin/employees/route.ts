@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb, resetDb } from "../../../../lib/db";
+import { getDb } from "../../../../lib/db";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAdmin();
   if (error) return error;
-
-  // 强制从磁盘重新加载数据库（解决 seed/sync 后 schema 不一致问题）
-  resetDb();
 
   const dept = request.nextUrl.searchParams.get("department");
   const range = request.nextUrl.searchParams.get("range") || "month";
@@ -35,37 +32,31 @@ export async function GET(request: NextRequest) {
       startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
   }
 
-  // 动态检测表中有哪些列，做兼容
   const dbAny = sqlite as any;
-  const colResult = dbAny.exec(`PRAGMA table_info(users)`);
-  const existingCols = new Set(
-    (colResult[0]?.values ?? []).map((r: unknown[]) => String(r[1]))
-  );
 
-  // 根据 level 选择聚合列（fallback 到 department）
-  let deptCol: string;
-  let deptIdCol: string;
+  // 动态检测列，兼容任何 schema 版本
+  const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
+  const cols = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
 
-  if (level === "group" && existingCols.has("group_name")) {
+  let deptCol = "u.department";
+  if (level === "group" && cols.has("group_name")) {
     deptCol = "u.group_name";
-    deptIdCol = "u.group_id";
-  } else if (level === "center" && existingCols.has("center_name")) {
+  } else if (level === "center" && cols.has("center_name")) {
     deptCol = "u.center_name";
-    deptIdCol = "u.center_id";
-  } else {
-    deptCol = "u.department";
-    deptIdCol = existingCols.has("department_id") ? "u.department_id" : "''";
+  } else if (!cols.has("department")) {
+    // department 列不存在时，用 name 或空字符串兜底
+    deptCol = "'未分配'";
   }
 
   let query = `
-    SELECT u.name, ${deptCol} as dept_label, ${deptIdCol} as dept_id, u.email, u.avatar,
+    SELECT u.name, ${deptCol} as dept_label, u.email, u.avatar,
       SUM(ul.total_tokens) as tokens, SUM(ul.cost) as cost, COUNT(*) as count
     FROM usage_logs ul
     JOIN users u ON ul.user_id = u.id
     WHERE ul.created_at >= ?`;
   const params: unknown[] = [startTime];
 
-  if (dept) {
+  if (dept && deptCol !== "'未分配'") {
     query += ` AND ${deptCol} = ?`;
     params.push(dept);
   }
@@ -77,12 +68,11 @@ export async function GET(request: NextRequest) {
   const employees = (result[0]?.values ?? []).map((r: unknown[]) => ({
     name: String(r[0]),
     department: String(r[1] ?? "未分配"),
-    departmentId: String(r[2] ?? ""),
-    email: String(r[3] ?? ""),
-    avatar: String(r[4] ?? ""),
-    tokens: Number(r[5]),
-    cost: Number(r[6]),
-    count: Number(r[7]),
+    email: String(r[2] ?? ""),
+    avatar: String(r[3] ?? ""),
+    tokens: Number(r[4]),
+    cost: Number(r[5]),
+    count: Number(r[6]),
   }));
 
   const deptListResult = dbAny.exec(

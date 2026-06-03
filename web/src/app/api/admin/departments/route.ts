@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb, resetDb } from "../../../../lib/db";
+import { getDb } from "../../../../lib/db";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAdmin();
   if (error) return error;
-
-  resetDb(); // 强制从磁盘重新加载
 
   const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
@@ -14,19 +12,17 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
 
-  // 动态检测表中有哪些列
-  const colResult = dbAny.exec(`PRAGMA table_info(users)`);
-  const existingCols = new Set(
-    (colResult[0]?.values ?? []).map((r: unknown[]) => String(r[1]))
-  );
+  // 动态检测列
+  const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
+  const cols = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
 
-  let deptCol: string;
-  if (level === "group" && existingCols.has("group_name")) {
+  let deptCol = "u.department";
+  if (level === "group" && cols.has("group_name")) {
     deptCol = "u.group_name";
-  } else if (level === "center" && existingCols.has("center_name")) {
+  } else if (level === "center" && cols.has("center_name")) {
     deptCol = "u.center_name";
-  } else {
-    deptCol = "u.department";
+  } else if (!cols.has("department")) {
+    deptCol = "'未分配'";
   }
 
   const depts = dbAny.exec(
