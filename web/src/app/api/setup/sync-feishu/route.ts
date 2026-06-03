@@ -26,36 +26,29 @@ export async function POST(request: NextRequest) {
     const allUsers: Array<{
       name: string; open_id: string; email: string;
       department_name: string; department_id: string;
-      employee_no: string;
+      employee_no: string; avatar_url: string;
     }> = [];
 
     for (const dept of departments) {
       const deptUsers = await fetchDepartmentUsers(appToken, dept.department_id);
       console.log(`[Sync] 部门 ${dept.name} (${dept.department_id}) 获取到 ${deptUsers.length} 个员工`);
 
-      // 如果列表没有 name，逐个获取用户详情
+      // 逐个获取用户详情（拿到 name、avatar）
       for (const u of deptUsers) {
-        let userName = u.name || "";
-        let userEmail = u.email || u.enterprise_email || "";
-        let empNo = u.employee_no || "";
-
-        // 如果列表没返回 name/email，尝试获取用户详情
-        if (!userName || !userEmail) {
-          const detail = await fetchUserDetail(appToken, u.open_id);
-          if (detail) {
-            userName = userName || detail.name || "";
-            userEmail = userEmail || detail.email || detail.enterprise_email || "";
-            empNo = empNo || detail.employee_no || "";
-          }
-        }
+        const detail = await fetchUserDetail(appToken, u.open_id);
+        const userName = detail?.name || u.name || `员工${allUsers.length + 1}`;
+        const userEmail = detail?.email || detail?.enterprise_email || u.email || "";
+        const empNo = detail?.employee_no || u.employee_no || "";
+        const avatarUrl = detail?.avatar?.avatar_240 || u.avatar?.avatar_240 || "";
 
         allUsers.push({
-          name: userName || `员工${allUsers.length + 1}`,
+          name: userName,
           open_id: u.open_id || "",
           email: userEmail,
           department_name: dept.name,
           department_id: dept.department_id,
           employee_no: empNo,
+          avatar_url: avatarUrl,
         });
       }
     }
@@ -91,16 +84,16 @@ export async function POST(request: NextRequest) {
       if (existing.length > 0 && existing[0].values.length > 0) {
         const userId = existing[0].values[0][0];
         dbAny.exec(
-          `UPDATE users SET name = ?, email = ?, department = ?, department_id = ?, employee_id = ?, role = ?, updated_at = ? WHERE id = ?`,
-          [u.name, u.email, u.department_name, u.department_id, u.employee_no, role, now, userId]
+          `UPDATE users SET name = ?, avatar = ?, email = ?, department = ?, department_id = ?, employee_id = ?, role = ?, updated_at = ? WHERE id = ?`,
+          [u.name, u.avatar_url || null, u.email, u.department_name, u.department_id, u.employee_no, role, now, userId]
         );
         updated++;
       } else {
         const userId = randomBytes(8).toString("hex");
         const apiKey = `sk-emp-${emailPrefix.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12)}-${randomBytes(3).toString("hex")}`;
         dbAny.exec(
-          `INSERT INTO users (id, feishu_id, name, avatar, email, department, department_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'active', 200, ?, ?)`,
-          [userId, u.open_id, u.name, u.email, u.department_name, u.department_id, u.employee_no, apiKey, role, now, now]
+          `INSERT INTO users (id, feishu_id, name, avatar, email, department, department_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 200, ?, ?)`,
+          [userId, u.open_id, u.name, u.avatar_url || null, u.email, u.department_name, u.department_id, u.employee_no, apiKey, role, now, now]
         );
         created++;
       }
