@@ -69,10 +69,13 @@ export async function GET(request: NextRequest) {
   const cols = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
 
   let deptCol = "u.department";
+  let bareCol = "department";
   if (level === "group" && cols.has("group_name")) {
     deptCol = "u.group_name";
+    bareCol = "group_name";
   } else if (level === "center" && cols.has("center_name")) {
     deptCol = "u.center_name";
+    bareCol = "center_name";
   }
 
   let query = `
@@ -102,8 +105,9 @@ export async function GET(request: NextRequest) {
     count: Number(r[6]),
   }));
 
+  // bareCol 不带表别名，用于直接查 users 表的场景
   const deptListResult = dbAny.exec(
-    `SELECT DISTINCT ${deptCol} FROM users WHERE ${deptCol} IS NOT NULL AND ${deptCol} != '' ORDER BY ${deptCol}`
+    `SELECT DISTINCT ${bareCol} FROM users WHERE ${bareCol} IS NOT NULL AND ${bareCol} != '' ORDER BY ${bareCol}`
   );
   const departments = (deptListResult[0]?.values ?? []).map((r: unknown[]) => String(r[0]));
 
