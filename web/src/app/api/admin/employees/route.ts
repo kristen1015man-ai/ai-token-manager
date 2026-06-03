@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
 
   let query = `
-    SELECT u.name, u.department, u.email,
+    SELECT u.name, u.department, u.email, u.avatar,
       SUM(ul.total_tokens) as tokens, SUM(ul.cost) as cost, COUNT(*) as count
     FROM usage_logs ul
     JOIN users u ON ul.user_id = u.id
@@ -32,9 +32,10 @@ export async function GET(request: NextRequest) {
     name: String(r[0]),
     department: String(r[1] ?? "未分配"),
     email: String(r[2] ?? ""),
-    tokens: Number(r[3]),
-    cost: Number(r[4]),
-    count: Number(r[5]),
+    avatar: String(r[3] ?? ""),
+    tokens: Number(r[4]),
+    cost: Number(r[5]),
+    count: Number(r[6]),
   }));
 
   return NextResponse.json({ employees });
