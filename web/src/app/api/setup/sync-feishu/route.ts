@@ -73,6 +73,25 @@ export async function POST(request: NextRequest) {
     const adminIds = (process.env.ADMIN_IDS || "").split(",").map((e) => e.trim());
     const now = Math.floor(Date.now() / 1000);
 
+    // 3.1 建部门表（如果不存在）并同步部门层级
+    dbAny.exec(`CREATE TABLE IF NOT EXISTS departments (
+      department_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_id TEXT NOT NULL DEFAULT '0',
+      level INTEGER NOT NULL DEFAULT 0,
+      member_count INTEGER DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`);
+    // 清空旧部门数据重新同步
+    dbAny.exec(`DELETE FROM departments`);
+    for (const dept of departments) {
+      dbAny.exec(
+        `INSERT INTO departments (department_id, name, parent_id, level, member_count, updated_at) VALUES (?, ?, ?, ?, 0, ?)`,
+        [dept.department_id, dept.name, dept.parent_id, dept.level, now]
+      );
+    }
+    console.log(`[Sync] 同步 ${departments.length} 个部门层级关系`);
+
     let created = 0;
     let updated = 0;
 
@@ -110,7 +129,7 @@ export async function POST(request: NextRequest) {
         created,
         updated,
       },
-      departments: departments.map((d) => ({ id: d.department_id, name: d.name })),
+      departments: departments.map((d) => ({ id: d.department_id, name: d.name, parent_id: d.parent_id, level: d.level })),
       users: uniqueUsers.map(u => ({ name: u.name, email: u.email, department: u.department_name })),
     });
   } catch (error) {
@@ -124,12 +143,12 @@ export async function POST(request: NextRequest) {
 
 /**
  * 获取所有部门列表（从根部门 0 递归获取）
- * 部门列表 API 返回 department_id 格式（无 od- 前缀）
+ * 同时保存层级关系：parent_id 和 level
  */
 async function fetchAllDepartments(appToken: string) {
-  const allDepts: Array<{ department_id: string; name: string }> = [];
+  const allDepts: Array<{ department_id: string; name: string; parent_id: string; level: number }> = [];
 
-  async function fetchSubDepts(parentId: string) {
+  async function fetchSubDepts(parentId: string, level: number) {
     const resp = await fetch(
       `${BASE_URL}/contact/v3/departments?parent_department_id=${parentId}&department_id_type=department_id&fetch_child=false&page_size=50`,
       { headers: { Authorization: `Bearer ${appToken}` } }
@@ -143,13 +162,13 @@ async function fetchAllDepartments(appToken: string) {
     const items = data.data?.items || [];
     for (const dept of items) {
       const deptId = dept.department_id || dept.id || "";
-      allDepts.push({ department_id: deptId, name: dept.name });
+      allDepts.push({ department_id: deptId, name: dept.name, parent_id: parentId, level });
       // 递归获取子部门
-      await fetchSubDepts(deptId);
+      await fetchSubDepts(deptId, level + 1);
     }
   }
 
-  await fetchSubDepts("0");
+  await fetchSubDepts("0", 0);
   return allDepts;
 }
 
