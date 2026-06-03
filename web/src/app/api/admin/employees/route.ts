@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     params.push(dept);
   }
 
-  query += ` GROUP BY ul.user_id ORDER BY cost DESC LIMIT 20`;
+  query += ` GROUP BY ul.user_id ORDER BY cost DESC`;
 
   const result = dbAny.exec(query, params);
 
