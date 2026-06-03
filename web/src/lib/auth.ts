@@ -6,7 +6,7 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 const TOKEN_NAME = "token";
-const TOKEN_MAX_AGE = 7 * 24 * 60 * 60; // 7 天
+const TOKEN_MAX_AGE = 30 * 24 * 60 * 60; // 30 天
 
 export interface SessionPayload {
   userId: string;
@@ -22,7 +22,7 @@ export async function createSession(payload: SessionPayload) {
   const token = await new SignJWT(payload as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime("30d")
     .sign(JWT_SECRET);
 
   const cookieStore = await cookies();
