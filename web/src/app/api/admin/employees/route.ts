@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
 
   const dept = request.nextUrl.searchParams.get("department");
   const range = request.nextUrl.searchParams.get("range") || "month";
-  // level: "group" | "department" | "center" — 默认部门级
   const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
 
@@ -33,14 +32,27 @@ export async function GET(request: NextRequest) {
       startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
   }
 
-  // 根据 level 选择聚合列
-  const deptCol = level === "group" ? "u.group_name"
-    : level === "center" ? "u.center_name"
-    : "u.department";
+  // 动态检测表中有哪些列，做兼容
+  const dbAny = sqlite as any;
+  const colResult = dbAny.exec(`PRAGMA table_info(users)`);
+  const existingCols = new Set(
+    (colResult[0]?.values ?? []).map((r: unknown[]) => String(r[1]))
+  );
 
-  const deptIdCol = level === "group" ? "u.group_id"
-    : level === "center" ? "u.center_id"
-    : "u.department_id";
+  // 根据 level 选择聚合列（fallback 到 department）
+  let deptCol: string;
+  let deptIdCol: string;
+
+  if (level === "group" && existingCols.has("group_name")) {
+    deptCol = "u.group_name";
+    deptIdCol = "u.group_id";
+  } else if (level === "center" && existingCols.has("center_name")) {
+    deptCol = "u.center_name";
+    deptIdCol = "u.center_id";
+  } else {
+    deptCol = "u.department";
+    deptIdCol = existingCols.has("department_id") ? "u.department_id" : "''";
+  }
 
   let query = `
     SELECT u.name, ${deptCol} as dept_label, ${deptIdCol} as dept_id, u.email, u.avatar,
@@ -57,7 +69,7 @@ export async function GET(request: NextRequest) {
 
   query += ` GROUP BY ul.user_id ORDER BY cost DESC LIMIT 20`;
 
-  const result = (sqlite as any).exec(query, params);
+  const result = dbAny.exec(query, params);
 
   const employees = (result[0]?.values ?? []).map((r: unknown[]) => ({
     name: String(r[0]),
@@ -70,15 +82,10 @@ export async function GET(request: NextRequest) {
     count: Number(r[7]),
   }));
 
-  // 获取可选部门列表（基于当前 level）
-  const deptListResult = (sqlite as any).exec(
+  const deptListResult = dbAny.exec(
     `SELECT DISTINCT ${deptCol} FROM users WHERE ${deptCol} IS NOT NULL AND ${deptCol} != '' ORDER BY ${deptCol}`
   );
   const departments = (deptListResult[0]?.values ?? []).map((r: unknown[]) => String(r[0]));
 
-  return NextResponse.json({
-    employees,
-    departments,
-    level,
-  });
+  return NextResponse.json({ employees, departments, level });
 }

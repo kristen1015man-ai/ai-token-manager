@@ -6,19 +6,28 @@ export async function GET(request: NextRequest) {
   const { error } = await requireAdmin();
   if (error) return error;
 
-  // level: "group" | "department" | "center" — 默认部门级
   const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
+  const dbAny = sqlite as any;
   const now = new Date();
   const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
 
-  // 根据 level 选择聚合列
-  const deptCol = level === "group" ? "u.group_name"
-    : level === "center" ? "u.center_name"
-    : "u.department";
+  // 动态检测表中有哪些列
+  const colResult = dbAny.exec(`PRAGMA table_info(users)`);
+  const existingCols = new Set(
+    (colResult[0]?.values ?? []).map((r: unknown[]) => String(r[1]))
+  );
 
-  // 按选定层级汇总：人数去重、费用和 token 聚合
-  const depts = (sqlite as any).exec(
+  let deptCol: string;
+  if (level === "group" && existingCols.has("group_name")) {
+    deptCol = "u.group_name";
+  } else if (level === "center" && existingCols.has("center_name")) {
+    deptCol = "u.center_name";
+  } else {
+    deptCol = "u.department";
+  }
+
+  const depts = dbAny.exec(
     `SELECT ${deptCol} as dept_label,
        COUNT(DISTINCT u.id) as user_count,
        SUM(ul.total_tokens) as tokens,

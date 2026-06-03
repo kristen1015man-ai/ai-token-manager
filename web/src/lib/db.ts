@@ -51,3 +51,12 @@ export async function saveDb() {
   }
   fs.writeFileSync(absPath, Buffer.from(sqliteInstance.export()));
 }
+
+/**
+ * 重置内存缓存，下次 getDb() 会从磁盘重新加载
+ * 用于 seed/sync 等会 DROP+CREATE 表结构变化的操作后
+ */
+export function resetDb() {
+  dbInstance = null;
+  sqliteInstance = null;
+}

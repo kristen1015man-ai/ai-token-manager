@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, saveDb } from "../../../../lib/db";
+import { getDb, saveDb, resetDb } from "../../../../lib/db";
 
 /**
  * 用真实飞书通讯录数据重新填充模拟数据
@@ -288,6 +288,7 @@ export async function GET(request: NextRequest) {
   }
 
   await saveDb();
+  resetDb(); // 清除内存缓存，下次请求从磁盘加载新 schema
 
   return NextResponse.json({
     success: true,
