@@ -65,12 +65,6 @@ const RANGE_OPTIONS = [
   { value: "year", label: "今年" },
 ];
 
-const LEVEL_OPTIONS = [
-  { value: "group", label: "组级" },
-  { value: "department", label: "部门级" },
-  { value: "center", label: "中心级" },
-];
-
 interface Employee {
   name: string; department: string; email: string; avatar: string;
   tokens: number; cost: number; count: number;
@@ -79,7 +73,6 @@ interface Employee {
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [range, setRange] = useState("month");
-  const [level, setLevel] = useState("department");
   const [dept, setDept] = useState("");
   const [allDepts, setAllDepts] = useState<string[]>([]);
   const deptColors = useDeptColors(allDepts);
@@ -87,7 +80,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     const params = new URLSearchParams();
     params.set("range", range);
-    params.set("level", level);
+    params.set("level", "department");
     if (dept) params.set("department", dept);
     fetch(`/api/admin/employees?${params}`)
       .then((r) => r.ok ? r.json() : null)
@@ -98,7 +91,7 @@ export default function EmployeesPage() {
           setAllDepts(d?.departments || []);
         }
       });
-  }, [range, level, dept]);
+  }, [range, dept]);
 
   function getDeptStyle(deptName: string) {
     const c = deptColors[deptName] || DEFAULT_COLOR;
@@ -114,20 +107,6 @@ export default function EmployeesPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h3 className="font-semibold text-gray-800 text-lg">员工用量排行</h3>
         <div className="flex items-center gap-3 flex-wrap">
-          {/* 层级切换 */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {LEVEL_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => { setLevel(opt.value); setDept(""); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  level === opt.value ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
           {/* 时间范围切换 */}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             {RANGE_OPTIONS.map((opt) => (
@@ -148,7 +127,7 @@ export default function EmployeesPage() {
             onChange={(e) => setDept(e.target.value)}
             className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white"
           >
-            <option value="">全部{LEVEL_OPTIONS.find(o => o.value === level)?.label || ""}</option>
+            <option value="">全部部门</option>
             {allDepts.map((d) => (<option key={d} value={d}>{d}</option>))}
           </select>
         </div>

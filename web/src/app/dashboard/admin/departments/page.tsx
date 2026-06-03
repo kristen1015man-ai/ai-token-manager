@@ -5,12 +5,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
-const LEVEL_OPTIONS = [
-  { value: "group", label: "组级" },
-  { value: "department", label: "部门级" },
-  { value: "center", label: "中心级" },
-];
-
 /* ===== 动态颜色池 ===== */
 const CHART_COLORS = [
   "#6366f1", "#8b5cf6", "#a855f7", "#d946ef",
@@ -22,13 +16,12 @@ const CHART_COLORS = [
 
 export default function DepartmentsPage() {
   const [data, setData] = useState<{ department: string; userCount: number; tokens: number; cost: number; avgCost: string }[]>([]);
-  const [level, setLevel] = useState("department");
 
   useEffect(() => {
-    fetch(`/api/admin/departments?level=${level}`)
+    fetch(`/api/admin/departments?level=department`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => setData(d?.departments || []));
-  }, [level]);
+  }, []);
 
   const chartData = useMemo(() => {
     return data.map((d, i) => ({
@@ -39,28 +32,15 @@ export default function DepartmentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* 标题 + 层级切换 */}
+      {/* 标题 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h3 className="font-semibold text-gray-800 text-lg">部门用量排行</h3>
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          {LEVEL_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setLevel(opt.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                level === opt.value ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="font-semibold text-gray-800 mb-4">
-            {LEVEL_OPTIONS.find(o => o.value === level)?.label}费用排行
+            部门费用排行
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
@@ -76,7 +56,7 @@ export default function DepartmentsPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h3 className="font-semibold text-gray-800 mb-4">
-          {LEVEL_OPTIONS.find(o => o.value === level)?.label}明细
+          部门明细
         </h3>
         {data.length === 0 ? (
           <div className="py-12 text-center text-gray-400">暂无数据</div>
@@ -85,7 +65,7 @@ export default function DepartmentsPage() {
             <thead>
               <tr className="border-b border-gray-100 text-gray-500">
                 <th className="text-left py-2 font-medium">
-                  {LEVEL_OPTIONS.find(o => o.value === level)?.label}名称
+                  部门名称
                 </th>
                 <th className="text-right py-2 font-medium">人数</th>
                 <th className="text-right py-2 font-medium">总费用</th>
