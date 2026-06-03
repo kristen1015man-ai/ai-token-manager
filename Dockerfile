@@ -7,6 +7,10 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
+# 强制破坏构建缓存
+ARG CACHEBUST=1
+RUN echo "Build ${CACHEBUST} - $(date)" > /dev/null
+
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
