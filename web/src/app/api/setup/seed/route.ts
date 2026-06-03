@@ -52,11 +52,53 @@ export async function GET(request: NextRequest) {
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
 
-  // ===== 清空旧数据 =====
+  // ===== 清空旧数据（先删表再建，确保表结构最新） =====
   const tables = ["usage_logs", "quota_rules", "alert_logs", "admin_logs", "channels", "users"];
   for (const t of tables) {
-    dbAny.exec(`DELETE FROM ${t}`);
+    dbAny.exec(`DROP TABLE IF EXISTS ${t}`);
   }
+  // 重新建表（上面已执行过 CREATE TABLE IF NOT EXISTS，但 DROP 后需要再建）
+  dbAny.exec(`CREATE TABLE users (
+    id TEXT PRIMARY KEY, feishu_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+    avatar TEXT, email TEXT, department TEXT, department_id TEXT,
+    group_name TEXT, group_id TEXT,
+    center_name TEXT, center_id TEXT,
+    employee_id TEXT,
+    api_key TEXT NOT NULL UNIQUE, role TEXT NOT NULL DEFAULT 'member',
+    status TEXT NOT NULL DEFAULT 'active', monthly_quota REAL DEFAULT 200,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE TABLE channels (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, base_url TEXT NOT NULL,
+    api_key TEXT NOT NULL, models TEXT NOT NULL DEFAULT '[]',
+    priority INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active',
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE TABLE usage_logs (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, model TEXT NOT NULL,
+    input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0, cost REAL DEFAULT 0, channel_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE TABLE quota_rules (
+    id TEXT PRIMARY KEY, scope TEXT NOT NULL, target_id TEXT NOT NULL,
+    monthly_limit REAL NOT NULL, updated_by TEXT,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE TABLE alert_logs (
+    id TEXT PRIMARY KEY, type TEXT NOT NULL, target_id TEXT NOT NULL,
+    message TEXT NOT NULL, sent_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE TABLE admin_logs (
+    id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, action TEXT NOT NULL,
+    target_type TEXT NOT NULL, target_id TEXT NOT NULL, detail TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key)`);
+  dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_users_feishu_id ON users(feishu_id)`);
+  dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id ON usage_logs(user_id)`);
+  dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_usage_logs_created_at ON usage_logs(created_at)`);
 
   // ===== 管理员 ID（与 ADMIN_IDS 环境变量一致） =====
   const ADMIN_IDS = [
