@@ -11,7 +11,10 @@ async function seed() {
   // 建表
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, feishu_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-    avatar TEXT, email TEXT, department TEXT, department_id TEXT, employee_id TEXT,
+    avatar TEXT, email TEXT, department TEXT, department_id TEXT,
+    group_name TEXT, group_id TEXT,
+    center_name TEXT, center_id TEXT,
+    employee_id TEXT,
     api_key TEXT NOT NULL UNIQUE, role TEXT NOT NULL DEFAULT 'member',
     status TEXT NOT NULL DEFAULT 'active', monthly_quota REAL DEFAULT 200,
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),

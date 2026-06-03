@@ -3,6 +3,17 @@ import { getUserAccessToken, getUserInfo, getUserDetail, getDepartmentInfo, getA
 import { findOrCreateUser } from "../../../../../lib/user-service";
 import { createSession } from "../../../../../lib/auth";
 
+/**
+ * 根据部门名称简单分类
+ * 登录场景不做完整树分析，只按名称规律判断
+ */
+function classifyDeptByName(name: string): "center" | "department" | "group" {
+  if (name.endsWith("中心")) return "center";
+  if (name.endsWith("组")) return "group";
+  if (name.endsWith("部")) return "department";
+  return "department"; // 默认部门级
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -28,30 +39,67 @@ export async function GET(request: NextRequest) {
 
     console.log("[Feishu OAuth] user info:", JSON.stringify(userInfo));
 
-    // 3. 尝试获取部门信息（需要额外权限，如果没开通就跳过）
+    // 3. 获取所有部门并分类三层
     let departmentName: string | undefined;
     let departmentId: string | undefined;
+    let groupName: string | undefined;
+    let groupId: string | undefined;
+    let centerName: string | undefined;
+    let centerId: string | undefined;
 
     try {
       const appToken = await getAppAccessToken();
       const userDetail = await getUserDetail(appToken, userInfo.open_id);
 
       if (userDetail) {
-        // 从用户详情中提取部门 ID
         const deptIds: string[] = userDetail.department_ids || [];
-        if (deptIds.length > 0) {
-          departmentId = deptIds[0]; // 取第一个部门（主部门）
-          // 获取部门名称
-          const deptInfo = await getDepartmentInfo(appToken, departmentId);
-          if (deptInfo) {
-            departmentName = deptInfo.name;
-            console.log(`[Feishu OAuth] 部门: ${departmentName} (${departmentId})`);
+        const classified = { center: [] as string[], department: [] as string[], group: [] as string[] };
+        const deptNames = new Map<string, string>();
+
+        // 获取所有部门名称并分类
+        for (const did of deptIds) {
+          try {
+            const deptInfo = await getDepartmentInfo(appToken, did);
+            if (deptInfo?.name) {
+              deptNames.set(did, deptInfo.name);
+              const level = classifyDeptByName(deptInfo.name);
+              classified[level].push(did);
+            }
+          } catch {
+            // 跳过获取失败的部门
+          }
+        }
+
+        console.log(`[Feishu OAuth] 部门分类: 中心=${classified.center.length}, 部门=${classified.department.length}, 组=${classified.group.length}`);
+
+        // 取每个层级的第一个
+        if (classified.center[0]) {
+          centerId = classified.center[0];
+          centerName = deptNames.get(centerId);
+        }
+        if (classified.department[0]) {
+          departmentId = classified.department[0];
+          departmentName = deptNames.get(departmentId);
+        }
+        if (classified.group[0]) {
+          groupId = classified.group[0];
+          groupName = deptNames.get(groupId);
+        }
+
+        // 如果没有部门级，尝试从组级或中心推导
+        if (!departmentName) {
+          if (groupName) {
+            // 组挂在部门下，暂时用组名中的部门名
+            departmentName = groupName.replace(/[一二三四五六七八九十组]/g, "").replace(/组$/, "部");
+            console.log(`[Feishu OAuth] 从组推导部门: ${groupName} → ${departmentName}`);
+          } else if (centerName) {
+            departmentName = `${centerName}-直属`;
+            console.log(`[Feishu OAuth] 无部门级，标记为: ${departmentName}`);
           }
         }
       }
     } catch (deptErr) {
-      // 部门权限未开启，不影响登录
-      console.log("[Feishu OAuth] 部门信息获取跳过（可能权限未开启）:", deptErr instanceof Error ? deptErr.message : "");
+      console.log("[Feishu OAuth] 部门信息获取跳过:", deptErr instanceof Error ? deptErr.message : "");
     }
 
     // 4. 创建或更新用户
@@ -63,6 +111,10 @@ export async function GET(request: NextRequest) {
       employee_no: userInfo.employee_no ?? undefined,
       department_id: departmentId,
       department_name: departmentName,
+      group_id: groupId,
+      group_name: groupName,
+      center_id: centerId,
+      center_name: centerName,
     });
 
     if (!user) {

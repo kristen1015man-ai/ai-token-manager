@@ -16,7 +16,10 @@ export async function GET(request: NextRequest) {
   // ===== 建表（如果不存在） =====
   dbAny.exec(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, feishu_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-    avatar TEXT, email TEXT, department TEXT, department_id TEXT, employee_id TEXT,
+    avatar TEXT, email TEXT, department TEXT, department_id TEXT,
+    group_name TEXT, group_id TEXT,
+    center_name TEXT, center_id TEXT,
+    employee_id TEXT,
     api_key TEXT NOT NULL UNIQUE, role TEXT NOT NULL DEFAULT 'member',
     status TEXT NOT NULL DEFAULT 'active', monthly_quota REAL DEFAULT 200,
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -132,8 +135,8 @@ export async function GET(request: NextRequest) {
     const emailPrefix = emailStr ? emailStr.split("@")[0] : String(u[2]).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12);
     const apiKey = `sk-emp-${emailPrefix}-${Math.random().toString(36).slice(2, 8)}`;
     dbAny.exec(
-      `INSERT INTO users (id, feishu_id, name, avatar, email, department, department_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
-      [u[0], u[1], u[2], u[3], u[4], u[5], u[6], apiKey, u[7], u[8], regTs, regTs]
+      `INSERT INTO users (id, feishu_id, name, avatar, email, department, department_id, group_name, group_id, center_name, center_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+      [u[0], u[1], u[2], u[3], u[4], u[5], null, null, null, null, u[6], apiKey, u[7], u[8], regTs, regTs]
     );
   }
   // 何广明固定 API Key（方便 dev-login）

@@ -98,3 +98,80 @@ export async function getDepartmentInfo(appToken: string, departmentId: string) 
   }
   return data.data?.department || null;
 }
+
+/**
+ * 获取部门详细信息（含父级关系、负责人）
+ * 需要权限: contact:department.base:readonly
+ */
+export async function getDepartmentDetail(appToken: string, departmentId: string) {
+  const resp = await fetch(
+    `${BASE_URL}/contact/v3/departments/${departmentId}?department_id_type=open_department_id`,
+    { headers: { Authorization: `Bearer ${appToken}` } }
+  );
+  const data = await resp.json();
+  if (data.code !== 0) {
+    console.error(`[Feishu] 获取部门详情失败: code=${data.code}, msg=${data.msg}`);
+    return null;
+  }
+  return data.data?.department || null;
+}
+
+/**
+ * 递归获取所有部门（含父级关系）
+ * 返回完整树结构
+ */
+export async function fetchAllDepartmentsWithParent(appToken: string) {
+  const allDepts: Array<{
+    department_id: string;
+    name: string;
+    parent_department_id: string;
+    leader_user_id?: string;
+  }> = [];
+
+  async function fetchSubDepts(parentId: string, depth: number) {
+    const resp = await fetch(
+      `${BASE_URL}/contact/v3/departments?parent_department_id=${parentId}&department_id_type=department_id&fetch_child=false&page_size=50`,
+      { headers: { Authorization: `Bearer ${appToken}` } }
+    );
+    const data = await resp.json();
+    if (data.code !== 0) {
+      console.log(`[Feishu] 获取子部门失败 (parent=${parentId}): code=${data.code}, msg=${data.msg}`);
+      return;
+    }
+    const items = data.data?.items || [];
+    for (const dept of items) {
+      const deptId = dept.department_id || dept.id || "";
+      allDepts.push({
+        department_id: deptId,
+        name: dept.name,
+        parent_department_id: dept.parent_department_id || parentId,
+        leader_user_id: dept.leader_user_id || undefined,
+      });
+      if (depth < 6) {
+        await fetchSubDepts(deptId, depth + 1);
+      }
+    }
+  }
+
+  await fetchSubDepts("0", 0);
+  return allDepts;
+}
+
+/**
+ * 获取用户所属的所有部门 ID 列表
+ * 需要权限: contact:user.base:readonly
+ */
+export async function getUserDepartmentIds(appToken: string, openId: string): Promise<string[]> {
+  try {
+    const resp = await fetch(
+      `${BASE_URL}/contact/v3/users/${openId}?user_id_type=open_id&department_id_type=department_id`,
+      { headers: { Authorization: `Bearer ${appToken}` } }
+    );
+    const data = await resp.json();
+    if (data.code !== 0) return [];
+    const user = data.data?.user;
+    return user?.department_ids || [];
+  } catch {
+    return [];
+  }
+}

@@ -5,7 +5,6 @@ import { getDb, saveDb } from "./db";
 
 /**
  * 生成 API Key: sk-emp-{邮箱前缀或名字缩写}-{随机6位}
- * 例如: sk-emp-gmhe-x7k9m2
  */
 export function generateApiKey(identifier?: string): string {
   const prefix = identifier
@@ -27,6 +26,10 @@ export async function findOrCreateUser(feishuUserInfo: {
   employee_no?: string;
   department_id?: string;
   department_name?: string;
+  group_id?: string;
+  group_name?: string;
+  center_id?: string;
+  center_name?: string;
 }) {
   const { db } = await getDb();
   // 管理员通过飞书 open_id 识别（不依赖邮箱）
@@ -42,33 +45,46 @@ export async function findOrCreateUser(feishuUserInfo: {
     .limit(1);
 
   if (existing.length > 0) {
-    // 每次登录都检查是否应该升级为管理员
     const shouldBeAdmin = adminIds.includes(feishuUserInfo.open_id);
+    const current = existing[0];
 
-    // 更新用户信息（包括角色和部门）
+    // 更新用户信息，但保留已有的三层数据（除非传入新值）
+    const updateData: Record<string, any> = {
+      name: feishuUserInfo.name || current.name,
+      avatar: feishuUserInfo.avatar_url || current.avatar,
+      email: feishuUserInfo.email || current.email,
+      employeeId: feishuUserInfo.employee_no || current.employeeId,
+      role: shouldBeAdmin ? "admin" : current.role,
+      updatedAt: new Date(),
+    };
+
+    // 三层组织架构：只在有值时更新（避免登录时清空 sync-feishu 的数据）
+    if (feishuUserInfo.department_name) {
+      updateData.department = feishuUserInfo.department_name;
+      updateData.departmentId = feishuUserInfo.department_id || current.departmentId;
+    }
+    if (feishuUserInfo.group_name) {
+      updateData.groupName = feishuUserInfo.group_name;
+      updateData.groupId = feishuUserInfo.group_id || null;
+    }
+    if (feishuUserInfo.center_name) {
+      updateData.centerName = feishuUserInfo.center_name;
+      updateData.centerId = feishuUserInfo.center_id || null;
+    }
+
     await db
       .update(users)
-      .set({
-        name: feishuUserInfo.name || existing[0].name,
-        avatar: feishuUserInfo.avatar_url || existing[0].avatar,
-        email: feishuUserInfo.email || existing[0].email,
-        employeeId: feishuUserInfo.employee_no || existing[0].employeeId,
-        department: feishuUserInfo.department_name || existing[0].department,
-        departmentId: feishuUserInfo.department_id || existing[0].departmentId,
-        role: shouldBeAdmin ? "admin" : existing[0].role,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, existing[0].id));
+      .set(updateData)
+      .where(eq(users.id, current.id));
 
     await saveDb();
 
-    // 返回更新后的用户信息
     const updated = await db
       .select()
       .from(users)
-      .where(eq(users.id, existing[0].id))
+      .where(eq(users.id, current.id))
       .limit(1);
-    return updated[0] || existing[0];
+    return updated[0] || current;
   }
 
   // 创建新用户
@@ -86,6 +102,10 @@ export async function findOrCreateUser(feishuUserInfo: {
     email: email || null,
     department: feishuUserInfo.department_name || null,
     departmentId: feishuUserInfo.department_id || null,
+    groupName: feishuUserInfo.group_name || null,
+    groupId: feishuUserInfo.group_id || null,
+    centerName: feishuUserInfo.center_name || null,
+    centerId: feishuUserInfo.center_id || null,
     employeeId: feishuUserInfo.employee_no || null,
     apiKey,
     role,

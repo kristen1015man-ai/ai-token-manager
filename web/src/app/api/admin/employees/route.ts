@@ -7,7 +7,9 @@ export async function GET(request: NextRequest) {
   if (error) return error;
 
   const dept = request.nextUrl.searchParams.get("department");
-  const range = request.nextUrl.searchParams.get("range") || "month"; // day | week | month | year
+  const range = request.nextUrl.searchParams.get("range") || "month";
+  // level: "group" | "department" | "center" — 默认部门级
+  const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
 
   const now = new Date();
@@ -18,7 +20,7 @@ export async function GET(request: NextRequest) {
       startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
       break;
     case "week": {
-      const dayOfWeek = now.getDay() || 7; // 周日=7
+      const dayOfWeek = now.getDay() || 7;
       const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 1);
       startTime = Math.floor(monday.getTime() / 1000);
       break;
@@ -31,8 +33,17 @@ export async function GET(request: NextRequest) {
       startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
   }
 
+  // 根据 level 选择聚合列
+  const deptCol = level === "group" ? "u.group_name"
+    : level === "center" ? "u.center_name"
+    : "u.department";
+
+  const deptIdCol = level === "group" ? "u.group_id"
+    : level === "center" ? "u.center_id"
+    : "u.department_id";
+
   let query = `
-    SELECT u.name, u.department, u.email, u.avatar,
+    SELECT u.name, ${deptCol} as dept_label, ${deptIdCol} as dept_id, u.email, u.avatar,
       SUM(ul.total_tokens) as tokens, SUM(ul.cost) as cost, COUNT(*) as count
     FROM usage_logs ul
     JOIN users u ON ul.user_id = u.id
@@ -40,7 +51,7 @@ export async function GET(request: NextRequest) {
   const params: unknown[] = [startTime];
 
   if (dept) {
-    query += ` AND u.department = ?`;
+    query += ` AND ${deptCol} = ?`;
     params.push(dept);
   }
 
@@ -51,12 +62,23 @@ export async function GET(request: NextRequest) {
   const employees = (result[0]?.values ?? []).map((r: unknown[]) => ({
     name: String(r[0]),
     department: String(r[1] ?? "未分配"),
-    email: String(r[2] ?? ""),
-    avatar: String(r[3] ?? ""),
-    tokens: Number(r[4]),
-    cost: Number(r[5]),
-    count: Number(r[6]),
+    departmentId: String(r[2] ?? ""),
+    email: String(r[3] ?? ""),
+    avatar: String(r[4] ?? ""),
+    tokens: Number(r[5]),
+    cost: Number(r[6]),
+    count: Number(r[7]),
   }));
 
-  return NextResponse.json({ employees });
+  // 获取可选部门列表（基于当前 level）
+  const deptListResult = (sqlite as any).exec(
+    `SELECT DISTINCT ${deptCol} FROM users WHERE ${deptCol} IS NOT NULL AND ${deptCol} != '' ORDER BY ${deptCol}`
+  );
+  const departments = (deptListResult[0]?.values ?? []).map((r: unknown[]) => String(r[0]));
+
+  return NextResponse.json({
+    employees,
+    departments,
+    level,
+  });
 }
