@@ -1,10 +1,10 @@
 HTTP/1.1 307 Temporary Redirect
-Date: Wed, 03 Jun 2026 10:31:02 GMT
+Date: Wed, 03 Jun 2026 10:48:55 GMT
 Location: https://ai.seapllo.com/dashboard
 Server: railway-edge
-Set-Cookie: token=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOiJ1X2hlZ3VhbmdtaW5nIiwiZmVpc2h1SWQiOiJvdV9mMmUyODRiYjY3MDE2NDdlNjY0YzkzODgwNmIwODYyNyIsIm5hbWUiOiLkvZXlub_mmI4iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODA0ODI2NjIsImV4cCI6MTc4MzA3NDY2Mn0.3vPFNqL9DdizqjuyJAHmLcmCRMplenl7ouruz96OACI; Path=/; Expires=Fri, 03 Jul 2026 10:31:02 GMT; Max-Age=2592000; Secure; HttpOnly; SameSite=lax
+Set-Cookie: token=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOiJ1X2hlZ3VhbmdtaW5nIiwiZmVpc2h1SWQiOiJvdV9mMmUyODRiYjY3MDE2NDdlNjY0YzkzODgwNmIwODYyNyIsIm5hbWUiOiLkvZXlub_mmI4iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODA0ODM3MzUsImV4cCI6MTc4MzA3NTczNX0.0E4mzWv7M-3Q46PW5FMdwMcOR3JV0c4rk61wIYkOZlo; Path=/; Expires=Fri, 03 Jul 2026 10:48:55 GMT; Max-Age=2592000; Secure; HttpOnly; SameSite=lax
 Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
 X-Railway-Edge: railway/asia-southeast1-eqsg3a
-X-Railway-Request-Id: IYuX5XsfSk2IvpTXAQeqjw
+X-Railway-Request-Id: -CZGlxpgSuCF3s290ubPiw
 Transfer-Encoding: chunked
 
