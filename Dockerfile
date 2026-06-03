@@ -36,8 +36,8 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/web/.next/standalone ./
 COPY --from=builder /app/web/.next/static ./web/.next/static
 
-# public 目录可能不存在，创建一个空的
-RUN mkdir -p ./web/public
+# 复制 public 静态资源（logo 等）
+COPY --from=builder /app/web/public ./web/public
 
 # 数据目录（Railway Volume 挂载）— 确保 nextjs 用户有写权限
 RUN mkdir -p /data && chown nextjs:nodejs /data
