@@ -22,6 +22,9 @@ RUN pnpm install --frozen-lockfile
 COPY shared/ shared/
 COPY web/ web/
 
+# 清掉任何残留的 .next 缓存，强制完全重建
+RUN rm -rf web/.next
+
 # Next.js standalone 构建
 RUN cd web && pnpm next build
 
