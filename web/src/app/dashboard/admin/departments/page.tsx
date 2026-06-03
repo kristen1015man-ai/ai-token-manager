@@ -14,9 +14,6 @@ const CHART_COLORS = [
   "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9",
   "#3b82f6", "#6366f1",
 ];
-
-const CUSTOM_LABEL = [{ name: "费用占比", nameKey: "department", dataKey: "cost" }];
-
 export default function DepartmentsPage() {
   const [data, setData] = useState<{ department: string; userCount: number; tokens: number; cost: number; avgCost: string }[]>([]);
 
@@ -66,7 +63,7 @@ export default function DepartmentsPage() {
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => `¥${value.toFixed(2)}`}
+                formatter={(value) => `¥${Number(value).toFixed(2)}` as any}
                 contentStyle={{ borderRadius: "8px", fontSize: "12px" }}
               />
               <Legend
@@ -96,7 +93,7 @@ export default function DepartmentsPage() {
                 width={80}
               />
               <Tooltip
-                formatter={(value: number) => `¥${value.toFixed(2)}`}
+                formatter={(value) => `¥${Number(value).toFixed(2)}` as any}
                 contentStyle={{ borderRadius: "8px", fontSize: "12px" }}
               />
               <Bar dataKey="avgCost" radius={[0, 4, 4, 0]} name="人均费用(¥)">
@@ -118,7 +115,7 @@ export default function DepartmentsPage() {
             <XAxis dataKey="department" tick={{ fontSize: 12 }} stroke="#999" />
             <YAxis tick={{ fontSize: 12 }} stroke="#999" />
             <Tooltip
-              formatter={(value: number) => `¥${value.toFixed(2)}`}
+              formatter={(value) => `¥${Number(value).toFixed(2)}` as any}
               contentStyle={{ borderRadius: "8px", fontSize: "12px" }}
             />
             <Bar dataKey="cost" radius={[4, 4, 0, 0]} name="费用(¥)">
