@@ -7,9 +7,29 @@ export async function GET(request: NextRequest) {
   if (error) return error;
 
   const dept = request.nextUrl.searchParams.get("department");
+  const range = request.nextUrl.searchParams.get("range") || "month"; // day | week | month | year
   const { sqlite } = await getDb();
+
   const now = new Date();
-  const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
+  let startTime: number;
+
+  switch (range) {
+    case "day":
+      startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
+      break;
+    case "week": {
+      const dayOfWeek = now.getDay() || 7; // 周日=7
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 1);
+      startTime = Math.floor(monday.getTime() / 1000);
+      break;
+    }
+    case "year":
+      startTime = Math.floor(new Date(now.getFullYear(), 0, 1).getTime() / 1000);
+      break;
+    case "month":
+    default:
+      startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
+  }
 
   let query = `
     SELECT u.name, u.department, u.email, u.avatar,
@@ -17,7 +37,7 @@ export async function GET(request: NextRequest) {
     FROM usage_logs ul
     JOIN users u ON ul.user_id = u.id
     WHERE ul.created_at >= ?`;
-  const params: unknown[] = [monthStart];
+  const params: unknown[] = [startTime];
 
   if (dept) {
     query += ` AND u.department = ?`;
