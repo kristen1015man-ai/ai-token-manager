@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, resetDb } from "../../../../lib/db";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAdmin();
   if (error) return error;
+
+  // 强制从磁盘重新加载数据库（解决 seed/sync 后 schema 不一致问题）
+  resetDb();
 
   const dept = request.nextUrl.searchParams.get("department");
   const range = request.nextUrl.searchParams.get("range") || "month";

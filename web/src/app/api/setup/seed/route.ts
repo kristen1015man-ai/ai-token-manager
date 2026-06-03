@@ -265,6 +265,13 @@ export async function GET(request: NextRequest) {
   await saveDb();
   resetDb(); // 清除内存缓存，下次请求从磁盘加载新 schema
 
+  // 验证：重新加载后检查表结构
+  const { sqlite: verifyDb } = await getDb();
+  const verifyAny = verifyDb as any;
+  const cols = verifyAny.exec(`PRAGMA table_info(users)`);
+  const colNames = (cols[0]?.values ?? []).map((r: unknown[]) => String(r[1]));
+  console.log(`[Seed] 验证 users 表列: ${colNames.join(", ")}`);
+
   return NextResponse.json({
     success: true,
     message: "真实通讯录模拟数据已填充",
@@ -277,5 +284,6 @@ export async function GET(request: NextRequest) {
       alerts: alerts.length,
       adminLogs: logs.length,
     },
+    debug: { columns: colNames },
   });
 }

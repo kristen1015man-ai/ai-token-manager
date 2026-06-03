@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, resetDb } from "../../../../lib/db";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAdmin();
   if (error) return error;
+
+  resetDb(); // 强制从磁盘重新加载
 
   const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
