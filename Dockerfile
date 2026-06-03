@@ -1,6 +1,7 @@
 # ===== AI Token Manager - Web + API =====
 # 单服务部署：Next.js 管理后台
 # Railway 从根目录的 Dockerfile 构建
+# v2: three-tier org structure (center/department/group)
 
 # ---- Build Stage ----
 FROM node:22-alpine AS builder
