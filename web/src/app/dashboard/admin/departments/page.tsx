@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import TimeRangeFilter from "@/components/TimeRangeFilter";
 
 /* ===== 动态部门颜色 ===== */
 const DEPT_COLORS = [
@@ -30,7 +31,7 @@ interface DeptData {
 
 export default function DepartmentsPage() {
   const [data, setData] = useState<DeptData[]>([]);
-  const [range, setRange] = useState("month");
+  const [range, setRange] = useState("30d");
 
   useEffect(() => {
     fetch(`/api/admin/departments?level=department&range=${range}`)
@@ -42,13 +43,6 @@ export default function DepartmentsPage() {
 
   const top3 = data.slice(0, 3);
   const rest = data.slice(3);
-
-  const RANGE_OPTIONS = [
-    { value: "day", label: "今日" },
-    { value: "week", label: "本周" },
-    { value: "month", label: "本月" },
-    { value: "year", label: "今年" },
-  ];
 
   function getDeptStyle(idx: number) {
     const c = DEPT_COLORS[idx % DEPT_COLORS.length];
@@ -72,19 +66,7 @@ export default function DepartmentsPage() {
       {/* 筛选栏 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h3 className="font-semibold text-gray-800 text-lg">部门用量排行</h3>
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setRange(opt.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                range === opt.value ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <TimeRangeFilter value={range} onChange={setRange} />
       </div>
 
       {/* ====== 领奖台 TOP 3 ====== */}

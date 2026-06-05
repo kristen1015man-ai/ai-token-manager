@@ -53,8 +53,9 @@ export default function QuotasPage() {
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [tab, setTab] = useState<"company" | "personal">("company");
-  const [companyLimit, setCompanyLimit] = useState(10000);
+  const [companyLimit, setCompanyLimit] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // 筛选 & 搜索
   const [deptFilter, setDeptFilter] = useState("");
@@ -75,6 +76,7 @@ export default function QuotasPage() {
       if (d) {
         setUsers(d.users || []);
         setDepartments(d.departments || []);
+        if (d.companyLimit != null) setCompanyLimit(d.companyLimit);
       }
     });
   }, []);
@@ -90,13 +92,26 @@ export default function QuotasPage() {
 
   const saveCompany = async () => {
     setSaving(true);
-    await fetch("/api/admin/quotas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: "company", targetId: "all", monthlyLimit: companyLimit }),
-    });
-    setSaving(false);
-    loadData();
+    setSaved(false);
+    try {
+      const res = await fetch("/api/admin/quotas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "company", targetId: "all", monthlyLimit: companyLimit }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "保存失败");
+        return;
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      alert("请求失败：" + (err instanceof Error ? err.message : "未知错误"));
+    } finally {
+      setSaving(false);
+      loadData();
+    }
   };
 
   const saveAllPersonal = async () => {
@@ -202,23 +217,36 @@ export default function QuotasPage() {
       {tab === "company" && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="font-semibold text-gray-800 mb-4">全公司月度预算</h3>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600">¥</span>
-            <input
-              type="number"
-              value={companyLimit}
-              onChange={(e) => setCompanyLimit(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-200 rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            />
-            <span className="text-gray-500 text-sm">/ 月</span>
-            <button
-              onClick={saveCompany}
-              disabled={saving}
-              className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? "保存中..." : "保存"}
-            </button>
-          </div>
+          {companyLimit === null ? (
+            <div className="flex items-center gap-2 text-gray-400 text-sm">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              加载中...
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <span className="text-gray-600">¥</span>
+              <input
+                type="number"
+                value={companyLimit}
+                onChange={(e) => setCompanyLimit(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-200 rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+              <span className="text-gray-500 text-sm">/ 月</span>
+              <button
+                onClick={saveCompany}
+                disabled={saving}
+                className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {saving ? "保存中..." : "保存"}
+              </button>
+              {saved && (
+                <span className="text-sm text-emerald-600 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                  已保存
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 

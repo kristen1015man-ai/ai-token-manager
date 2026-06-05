@@ -4,14 +4,14 @@ import { authenticateUser, getAvailableModels } from "../../../../../lib/proxy";
 /**
  * GET /api/proxy/v1/models
  * OpenAI 兼容的模型列表接口
- * 需要 Authorization: Bearer sk-emp-xxx
+ * 需要 Authorization: Bearer sk-xxx
  */
 export async function GET(request: NextRequest) {
   // 认证
   const authHeader = request.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return NextResponse.json(
-      { error: { message: "Missing Authorization header. Use: Bearer sk-emp-xxx", type: "authentication_error" } },
+      { error: { message: "Missing Authorization header. Use: Bearer sk-xxx", type: "authentication_error" } },
       { status: 401 }
     );
   }

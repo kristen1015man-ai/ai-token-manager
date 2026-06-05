@@ -5,7 +5,6 @@ import TimeRangeFilter from "../../components/TimeRangeFilter";
 import SummaryCards from "../../components/dashboard/summary-cards";
 import QuotaProgress from "../../components/dashboard/quota-progress";
 import UsageChart from "../../components/dashboard/usage-chart";
-import UsageTable from "../../components/dashboard/usage-table";
 
 export default function DashboardPage() {
   const [range, setRange] = useState("day");
@@ -26,9 +25,6 @@ export default function DashboardPage() {
 
       {/* 本月额度：始终按月 */}
       <QuotaProgress />
-
-      {/* 最近调用记录 */}
-      <UsageTable />
     </div>
   );
 }

@@ -17,7 +17,7 @@ interface UserInfo {
 const ICON_MAP: Record<string, string> = {
   chart: "📊", key: "🔑", globe: "🌍", building: "🏢",
   users: "👥", receipt: "🧾", route: "🔀", shield: "🛡️",
-  bell: "🔔", document: "📋", lock: "🔒",
+  bell: "🔔", document: "📋", lock: "🔒", pricetag: "🏷️",
 };
 
 export default function DashboardLayout({
@@ -61,7 +61,11 @@ export default function DashboardLayout({
   }
 
   const menuItems = getMenuForRole(user.role);
-  const roleInfo = ROLE_LABELS[(user.role || "member") as Role];
+
+  // 解析多角色徽章
+  const userRoles = (user.role || "member").split(",").map((r) => r.trim() as Role).filter(Boolean);
+  const roleBadges = userRoles.filter((r) => r !== "member").map((r) => ROLE_LABELS[r]).filter(Boolean);
+  if (roleBadges.length === 0) roleBadges.push(ROLE_LABELS.member);
 
   return (
     <div className="min-h-screen flex">
@@ -92,10 +96,12 @@ export default function DashboardLayout({
             );
           })}
         </nav>
-        <div className="p-3 border-t border-gray-100">
-          <span className={`text-xs px-2 py-1 rounded-full ${roleInfo?.color || "bg-gray-50 text-gray-600"}`}>
-            {roleInfo?.label || "员工"}
-          </span>
+        <div className="p-3 border-t border-gray-100 flex flex-wrap gap-1">
+          {roleBadges.map((badge) => (
+            <span key={badge.label} className={`text-[10px] px-1.5 py-0.5 rounded-full ${badge.color}`}>
+              {badge.label}
+            </span>
+          ))}
         </div>
       </aside>
 

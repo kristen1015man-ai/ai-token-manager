@@ -60,6 +60,21 @@ export interface QuotaRule {
   updatedAt: Date;
 }
 
+export interface ModelPrice {
+  id: string;
+  model: string;
+  channelId: string | null;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cachePerMillion: number;
+  displayName: string | null;
+  deprecated: boolean;
+  syncedAt: Date | null;
+  updatedBy: string | null;
+  updatedAt: Date;
+  createdAt: Date;
+}
+
 // ===== API 响应类型 =====
 
 export interface UsageSummary {

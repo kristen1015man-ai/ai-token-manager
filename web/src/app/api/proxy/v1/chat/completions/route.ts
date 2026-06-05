@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return Response.json(
-      { error: { message: "Missing Authorization header. Use: Bearer sk-emp-xxx", type: "authentication_error" } },
+      { error: { message: "Missing Authorization header. Use: Bearer sk-xxx", type: "authentication_error" } },
       { status: 401 }
     );
   }

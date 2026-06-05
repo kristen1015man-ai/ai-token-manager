@@ -14,7 +14,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     return c.json(
       {
         error: {
-          message: "Missing or invalid Authorization header. Use: Bearer sk-emp-xxx",
+          message: "Missing or invalid Authorization header. Use: Bearer sk-xxx",
           type: "authentication_error",
         },
       },

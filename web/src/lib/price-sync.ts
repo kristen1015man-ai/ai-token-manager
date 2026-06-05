@@ -70,7 +70,10 @@ async function fetchDeepSeekPrices(): Promise<ParsedPrice[]> {
     ];
   } catch (err) {
     console.error("[PriceSync] DeepSeek 抓取失败:", err);
-    return [];
+    return [
+      { model: "deepseek-v4-flash", inputPerMillion: 1, outputPerMillion: 2, cachePerMillion: 0.02, displayName: "DeepSeek V4 Flash", provider: "deepseek" },
+      { model: "deepseek-v4-pro", inputPerMillion: 3, outputPerMillion: 6, cachePerMillion: 0.025, displayName: "DeepSeek V4 Pro", provider: "deepseek" },
+    ];
   }
 }
 
@@ -98,7 +101,11 @@ async function fetchGLMPrices(): Promise<ParsedPrice[]> {
     ];
   } catch (err) {
     console.error("[PriceSync] GLM 抓取失败:", err);
-    return [];
+    return [
+      { model: "glm-5.1", inputPerMillion: 6, outputPerMillion: 24, cachePerMillion: 0.5, displayName: "GLM-5.1", provider: "glm" },
+      { model: "glm-4-plus", inputPerMillion: 50, outputPerMillion: 50, cachePerMillion: 0, displayName: "GLM-4 Plus", provider: "glm" },
+      { model: "glm-4-flash", inputPerMillion: 0.1, outputPerMillion: 0.1, cachePerMillion: 0, displayName: "GLM-4 Flash", provider: "glm" },
+    ];
   }
 }
 
@@ -158,7 +165,12 @@ async function fetchOpenAIPrices(): Promise<ParsedPrice[]> {
     ];
   } catch (err) {
     console.error("[PriceSync] OpenAI 抓取失败:", err);
-    return [];
+    // fetch 本身失败（如 403）也要返回兜底价格
+    return [
+      { model: "gpt-5.5", inputPerMillion: 36, outputPerMillion: 216, cachePerMillion: 3.6, displayName: "GPT-5.5", provider: "openai" },
+      { model: "gpt-4o", inputPerMillion: 17.5, outputPerMillion: 60, cachePerMillion: 1.75, displayName: "GPT-4o", provider: "openai" },
+      { model: "gpt-4o-mini", inputPerMillion: 1.05, outputPerMillion: 4.2, cachePerMillion: 0.105, displayName: "GPT-4o Mini", provider: "openai" },
+    ];
   }
 }
 
@@ -215,7 +227,11 @@ async function fetchAnthropicPrices(): Promise<ParsedPrice[]> {
     ];
   } catch (err) {
     console.error("[PriceSync] Anthropic 抓取失败:", err);
-    return [];
+    return [
+      { model: "claude-opus-4-8", inputPerMillion: 36, outputPerMillion: 180, cachePerMillion: 3.6, displayName: "Claude Opus 4.8", provider: "anthropic" },
+      { model: "claude-sonnet-4-6", inputPerMillion: 21.6, outputPerMillion: 108, cachePerMillion: 2.16, displayName: "Claude Sonnet 4.6", provider: "anthropic" },
+      { model: "claude-haiku-4-5", inputPerMillion: 7.2, outputPerMillion: 36, cachePerMillion: 0.72, displayName: "Claude Haiku 4.5", provider: "anthropic" },
+    ];
   }
 }
 
@@ -307,13 +323,21 @@ export async function fetchOfficialPrices(): Promise<ParsedPrice[]> {
 }
 
 /**
- * 执行价格同步：对比官网价格与数据库，更新允许同步的行
+ * 执行价格同步：对比官网价格与数据库，更新允许同步的全局价格行
  *
- * @returns updated 更新的行数, added 新增的行数, providers 抓取的供应商列表
+ * 规则：
+ * - 只同步全局价格（channel_id IS NULL 的行）
+ * - syncedAt 不为 null → 允许被官网同步覆盖
+ * - syncedAt 为 null → 手动编辑过，不覆盖
+ * - 新模型插入前检查 sync_blacklist，在黑名单中的跳过
+ * - 插入的新模型 channel_id = NULL（全局价格）
+ *
+ * @returns updated 更新的行数, added 新增的行数, skipped 黑名单跳过的行数, providers 抓取的供应商列表
  */
 export async function syncPricesFromOfficial(): Promise<{
   updated: number;
   added: number;
+  skipped: number;
   providers: string[];
 }> {
   const officialPrices = await fetchOfficialPrices();
@@ -325,15 +349,40 @@ export async function syncPricesFromOfficial(): Promise<{
   // 统计成功的供应商
   const providers = [...new Set(officialPrices.map((p) => p.provider))];
 
-  const { db } = await getDb();
+  const { db, sqlite } = await getDb();
+  const dbAny = sqlite as any;
+
+  // 只加载全局价格（channel_id IS NULL）用于同步比对
   const existing = await db.select().from(modelPrices);
-  const existingMap = new Map(existing.map((row) => [row.model, row]));
+  const globalMap = new Map<string, typeof existing[0]>();
+  for (const row of existing) {
+    if (row.channelId === null || row.channelId === undefined) {
+      globalMap.set(row.model, row);
+    }
+  }
+
+  // 加载同步黑名单
+  const blacklist = new Set<string>();
+  try {
+    const blRows = dbAny.exec("SELECT model FROM sync_blacklist");
+    for (const r of (blRows[0]?.values ?? [])) {
+      blacklist.add(String(r[0]));
+    }
+  } catch { /* sync_blacklist 表可能还不存在 */ }
 
   let updated = 0;
   let added = 0;
+  let skipped = 0;
 
   for (const price of officialPrices) {
-    const row = existingMap.get(price.model);
+    // 检查黑名单：被删除过的模型不再同步回来
+    if (blacklist.has(price.model)) {
+      console.log(`[PriceSync] 模型 '${price.model}' 在同步黑名单中，跳过`);
+      skipped++;
+      continue;
+    }
+
+    const row = globalMap.get(price.model);
 
     if (row) {
       // 只更新 syncedAt 不为 null 的行（即未被手动编辑过的）
@@ -353,11 +402,12 @@ export async function syncPricesFromOfficial(): Promise<{
         updated++;
       }
     } else {
-      // 新模型，自动插入
+      // 新模型，自动插入全局价格（channel_id = NULL）
       const { randomBytes } = await import("crypto");
       await db.insert(modelPrices).values({
         id: `price_${randomBytes(6).toString("hex")}`,
         model: price.model,
+        channelId: null,
         inputPerMillion: price.inputPerMillion,
         outputPerMillion: price.outputPerMillion,
         cachePerMillion: price.cachePerMillion,
@@ -380,5 +430,5 @@ export async function syncPricesFromOfficial(): Promise<{
     invalidatePriceCache();
   } catch { /* 非 proxy 进程时忽略 */ }
 
-  return { updated, added, providers };
+  return { updated, added, skipped, providers };
 }

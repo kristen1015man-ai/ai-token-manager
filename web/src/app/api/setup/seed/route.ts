@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, saveDb, resetDb } from "../../../../lib/db";
 import * as fs from "fs";
 import * as path from "path";
+import { randomBytes } from "crypto";
+import { pinyin } from "pinyin-pro";
 
 /**
  * 用真实飞书通讯录数据重新填充模拟数据
@@ -40,6 +42,7 @@ export async function GET(request: NextRequest) {
   dbAny.exec(`CREATE TABLE channels (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, base_url TEXT NOT NULL,
     api_key TEXT NOT NULL, models TEXT NOT NULL DEFAULT '[]',
+    provider TEXT,
     priority INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active',
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
@@ -58,6 +61,10 @@ export async function GET(request: NextRequest) {
     id TEXT PRIMARY KEY, type TEXT NOT NULL, target_id TEXT NOT NULL,
     message TEXT NOT NULL, sent_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
+  dbAny.exec(`CREATE TABLE IF NOT EXISTS alert_settings (
+    id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, value TEXT NOT NULL,
+    updated_by TEXT, updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
   dbAny.exec(`CREATE TABLE admin_logs (
     id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, action TEXT NOT NULL,
     target_type TEXT NOT NULL, target_id TEXT NOT NULL, detail TEXT,
@@ -67,6 +74,23 @@ export async function GET(request: NextRequest) {
   dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_users_feishu_id ON users(feishu_id)`);
   dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id ON usage_logs(user_id)`);
   dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_usage_logs_created_at ON usage_logs(created_at)`);
+
+  // ===== 模型价格表（渠道+模型组合定价） =====
+  dbAny.exec(`CREATE TABLE model_prices (
+    id TEXT PRIMARY KEY, model TEXT NOT NULL, channel_id TEXT,
+    input_per_million REAL NOT NULL, output_per_million REAL NOT NULL,
+    cache_per_million REAL NOT NULL DEFAULT 0, display_name TEXT,
+    deprecated INTEGER NOT NULL DEFAULT 0, synced_at INTEGER,
+    updated_by TEXT, updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mp_channel_model ON model_prices(channel_id, model)`);
+  dbAny.exec(`CREATE INDEX IF NOT EXISTS idx_model_prices_model ON model_prices(model)`);
+
+  // ===== 同步黑名单 =====
+  dbAny.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (
+    model TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
 
   // ===== 管理员 feishu_id =====
   const ADMIN_IDS = [
@@ -118,6 +142,11 @@ export async function GET(request: NextRequest) {
       { name: "于建明", fid: "ou_yy29", quota: 190 },
       { name: "董小红", fid: "ou_yy30", quota: 170 },
       { name: "程志伟", fid: "ou_yy31", quota: 200 },
+      { name: "曹丽华", fid: "ou_yy32", quota: 170 },
+      { name: "袁志明", fid: "ou_yy33", quota: 190 },
+      { name: "邓小芳", fid: "ou_yy34", quota: 160 },
+      { name: "许建平", fid: "ou_yy35", quota: 180 },
+      { name: "傅小红", fid: "ou_yy36", quota: 170 },
     ]},
     // ── 经管部（12人） ──
     { dept: "经管部", deptId: "dept_jingguan", members: [
@@ -275,7 +304,8 @@ export async function GET(request: NextRequest) {
       const uid = `u_${String(userIdx++).padStart(3, "0")}`;
       const isAdmin = ADMIN_IDS.includes(m.fid);
       const emailPrefix = m.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) || `user${userIdx}`;
-      const apiKey = `sk-emp-${emailPrefix}-${uid.slice(2)}`;
+      const namePinyin = pinyin(m.name || "", { toneType: "none", type: "array" }).join("").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 16) || `user${userIdx}`;
+      const apiKey = `sk-${namePinyin}-${randomBytes(6).toString("hex")}`;
       dbAny.exec(
         `INSERT INTO users (id, feishu_id, name, avatar, email, department, department_id, group_name, group_id, center_name, center_id, employee_id, api_key, role, status, monthly_quota, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, NULL, '', ?, ?, 'active', ?, ?, ?)`,
         [uid, m.fid, m.name, `${emailPrefix}@company.com`, dept.dept, dept.deptId, apiKey, isAdmin ? "admin" : "member", m.quota || 200, regTs, regTs]
@@ -284,11 +314,15 @@ export async function GET(request: NextRequest) {
   }
 
   // 何广明固定 API Key（方便 dev-login）
-  dbAny.exec(`UPDATE users SET api_key = 'sk-emp-heguangming-dev-key' WHERE feishu_id = 'ou_f2e284bb6701647e664c938806b08627'`);
+  dbAny.exec(`UPDATE users SET api_key = 'sk-heguangming-dev-key' WHERE feishu_id = 'ou_f2e284bb6701647e664c938806b08627'`);
 
   // ===== 渠道 =====
-  dbAny.exec(`INSERT INTO channels VALUES ('ch_deepseek', 'DeepSeek 官方', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY', '["deepseek-chat","deepseek-reasoner"]', 0, 'active', ?)`, [regTs]);
+  dbAny.exec(`INSERT INTO channels VALUES ('ch_deepseek', 'DeepSeek 官方', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY', '["deepseek-chat","deepseek-reasoner","deepseek-v4-flash","deepseek-v4-pro"]', 0, 'active', ?)`, [regTs]);
   dbAny.exec(`INSERT INTO channels VALUES ('ch_silicon', '硅基流动', 'https://api.siliconflow.cn', 'YOUR_SILICONFLOW_API_KEY', '["deepseek-ai/deepseek-chat-v3-0324"]', 1, 'active', ?)`, [regTs]);
+  dbAny.exec(`INSERT INTO channels VALUES ('ch_glm', '智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4', 'YOUR_GLM_API_KEY', '["glm-5.1","glm-4-plus","glm-4-flash"]', 2, 'active', ?)`, [regTs]);
+  dbAny.exec(`INSERT INTO channels VALUES ('ch_openai', 'OpenAI 官方', 'https://api.openai.com', 'YOUR_OPENAI_API_KEY', '["gpt-5.5","gpt-4o","gpt-4o-mini"]', 3, 'active', ?)`, [regTs]);
+  // 注意：Anthropic 使用独立 API 格式，需通过格式适配层（后续实现）
+  dbAny.exec(`INSERT INTO channels VALUES ('ch_anthropic', 'Anthropic Claude', 'https://api.anthropic.com', 'YOUR_ANTHROPIC_API_KEY', '["claude-opus-4-8","claude-sonnet-4-6"]', 4, 'inactive', ?)`, [regTs]);
 
   // ===== 生成 30 天 usage_logs =====
   let seed = 42;
@@ -296,10 +330,15 @@ export async function GET(request: NextRequest) {
   const randInt = (min: number, max: number) => Math.floor(rand() * (max - min + 1)) + min;
 
   const models = [
-    { name: "deepseek-chat", inPrice: 0.001, outPrice: 0.002, w: 0.55 },
-    { name: "deepseek-reasoner", inPrice: 0.004, outPrice: 0.016, w: 0.15 },
-    { name: "deepseek-ai/deepseek-chat-v3-0324", inPrice: 0.0008, outPrice: 0.0016, w: 0.2 },
-    { name: "Pro/deepseek-ai/deepseek-r1", inPrice: 0.003, outPrice: 0.012, w: 0.1 },
+    { name: "deepseek-chat", inPrice: 0.001, outPrice: 0.002, w: 0.30, channel: "ch_deepseek" },
+    { name: "deepseek-reasoner", inPrice: 0.004, outPrice: 0.016, w: 0.08, channel: "ch_deepseek" },
+    { name: "deepseek-v4-flash", inPrice: 0.001, outPrice: 0.002, w: 0.20, channel: "ch_deepseek" },
+    { name: "deepseek-v4-pro", inPrice: 0.003, outPrice: 0.006, w: 0.08, channel: "ch_deepseek" },
+    { name: "deepseek-ai/deepseek-chat-v3-0324", inPrice: 0.0008, outPrice: 0.0016, w: 0.10, channel: "ch_silicon" },
+    { name: "glm-5.1", inPrice: 0.006, outPrice: 0.024, w: 0.10, channel: "ch_glm" },
+    { name: "glm-4-flash", inPrice: 0.0001, outPrice: 0.0001, w: 0.08, channel: "ch_glm" },
+    { name: "gpt-5.5", inPrice: 0.036, outPrice: 0.216, w: 0.04, channel: "ch_openai" },
+    { name: "gpt-4o", inPrice: 0.0175, outPrice: 0.060, w: 0.02, channel: "ch_openai" },
   ];
 
   // 不同部门活跃度
@@ -349,7 +388,7 @@ export async function GET(request: NextRequest) {
         const inTok = isTech ? randInt(800, 6000) : randInt(300, 4000);
         const outTok = isTech ? randInt(500, 4000) : randInt(200, 2500);
         const cost = Number(((inTok * model.inPrice + outTok * model.outPrice) / 1000).toFixed(4));
-        const ch = rand() < 0.7 ? "ch_deepseek" : "ch_silicon";
+        const ch = model.channel;
 
         dbAny.exec(`INSERT INTO usage_logs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [`log_${totalRecords}`, u.id, model.name, inTok, outTok, inTok + outTok, cost, ch, ts]);
@@ -376,6 +415,22 @@ export async function GET(request: NextRequest) {
     dbAny.exec(`INSERT INTO alert_logs VALUES (?, ?, ?, ?, ?)`, [`alert_${i}`, ...alerts[i], now - (15 - i * 4) * 86400]);
   }
 
+  // ===== 预警默认设置 =====
+  const defaultSettings: [string, string][] = [
+    ["personal_threshold", "80"],
+    ["dept_threshold", "80"],
+    ["company_threshold", "90"],
+    ["anomaly_threshold", "10"],
+    ["feishu_webhook_url", ""],
+    ["feishu_notify_enabled", "false"],
+    ["feishu_notify_types", "personal_80,personal_100,dept_80,company_90,anomaly"],
+  ];
+  for (let i = 0; i < defaultSettings.length; i++) {
+    const [key, value] = defaultSettings[i];
+    dbAny.exec(`INSERT INTO alert_settings VALUES (?, ?, ?, NULL, ?)`,
+      [`as_${String(i).padStart(2, "0")}`, key, value, now]);
+  }
+
   // ===== 操作日志 =====
   const logs = [
     ["sync_feishu", "system", "all", '{"departments":13,"users":153}'],
@@ -385,6 +440,32 @@ export async function GET(request: NextRequest) {
   ];
   for (let i = 0; i < logs.length; i++) {
     dbAny.exec(`INSERT INTO admin_logs VALUES (?, 'u_000', ?, ?, ?, ?, ?)`, [`alog_${i}`, ...logs[i], now - (20 - i * 5) * 86400]);
+  }
+
+  // ===== 模型价格种子数据 =====
+  const seedPrices: [string, string, number, number, number, string, number][] = [
+    // DeepSeek
+    ["mp_flash", "deepseek-v4-flash", 1.0, 2.0, 0.02, "DeepSeek V4 Flash", 0],
+    ["mp_pro", "deepseek-v4-pro", 3.0, 6.0, 0.025, "DeepSeek V4 Pro", 0],
+    ["mp_chat", "deepseek-chat", 1.0, 2.0, 0.1, "DeepSeek Chat (旧版)", 1],
+    ["mp_reasoner", "deepseek-reasoner", 4.0, 16.0, 0.4, "DeepSeek Reasoner (旧版)", 1],
+    // 智谱 GLM
+    ["mp_glm51", "glm-5.1", 6.0, 24.0, 0.5, "GLM-5.1", 0],
+    ["mp_glm4plus", "glm-4-plus", 50.0, 50.0, 0, "GLM-4 Plus", 0],
+    ["mp_glm4flash", "glm-4-flash", 0.1, 0.1, 0, "GLM-4 Flash", 0],
+    // OpenAI
+    ["mp_gpt55", "gpt-5.5", 36.0, 216.0, 3.6, "GPT-5.5", 0],
+    ["mp_gpt4o", "gpt-4o", 17.5, 60.0, 1.75, "GPT-4o", 0],
+    ["mp_gpt4omini", "gpt-4o-mini", 1.05, 4.2, 0.105, "GPT-4o Mini", 0],
+    // Anthropic
+    ["mp_opus48", "claude-opus-4-8", 36.0, 180.0, 3.6, "Claude Opus 4.8", 0],
+    ["mp_sonnet46", "claude-sonnet-4-6", 14.0, 70.0, 1.4, "Claude Sonnet 4.6", 0],
+  ];
+  for (const [id, model, input, output, cache, displayName, deprecated] of seedPrices) {
+    dbAny.exec(
+      `INSERT INTO model_prices (id, model, channel_id, input_per_million, output_per_million, cache_per_million, display_name, deprecated, synced_at, updated_at, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, model, input, output, cache, displayName, deprecated, now, now, now]
+    );
   }
 
   await saveDb();
@@ -399,7 +480,7 @@ export async function GET(request: NextRequest) {
       departments: DEPT_DATA.length,
       deptBreakdown: DEPT_DATA.map(d => `${d.dept}: ${d.members.length}人`).join(", "),
       usageLogs: totalRecords,
-      channels: 2,
+      channels: 5,
       quotaRules: DEPT_DATA.length + 1,
     },
   });

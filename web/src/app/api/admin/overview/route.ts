@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "../../../../lib/admin-check";
+import { requireRole } from "../../../../lib/admin-check";
 import { getDb } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
+  const { error } = await requireRole("admin", "finance");
   if (error) return error;
 
   const range = request.nextUrl.searchParams.get("range") || "30d";

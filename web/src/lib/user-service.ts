@@ -1,17 +1,29 @@
 import { randomBytes } from "crypto";
 import { eq } from "drizzle-orm";
+import { pinyin } from "pinyin-pro";
 import { users } from "../../../shared/schema";
 import { getDb, saveDb } from "./db";
 
 /**
- * 生成 API Key: sk-emp-{邮箱前缀或名字缩写}-{随机6位}
+ * 中文名 → 拼音标识（无音调、小写、去空格）
+ * "何广明" → "heguangming"，"Jean-Paul" → "jeanpaul"
  */
-export function generateApiKey(identifier?: string): string {
-  const prefix = identifier
-    ? identifier.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12)
-    : "user";
-  const random = randomBytes(3).toString("hex");
-  return `sk-emp-${prefix}-${random}`;
+function nameToPinyin(name: string): string {
+  if (!name) return "user";
+  // 先尝试拼音转换（中文名会得到拼音数组）
+  const py = pinyin(name, { toneType: "none", type: "array" });
+  const joined = py.join("").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return joined.slice(0, 16) || "user";
+}
+
+/**
+ * 生成 API Key: sk-{名字拼音}-{随机12位}
+ * 示例: sk-heguangming-a1b2c3d4e5f6
+ */
+export function generateApiKey(name?: string): string {
+  const prefix = nameToPinyin(name || "");
+  const random = randomBytes(6).toString("hex");
+  return `sk-${prefix}-${random}`;
 }
 
 /**
@@ -90,8 +102,7 @@ export async function findOrCreateUser(feishuUserInfo: {
   // 创建新用户
   const userId = randomBytes(8).toString("hex");
   const email = feishuUserInfo.email || "";
-  const emailPrefix = email ? email.split("@")[0] : undefined;
-  const apiKey = generateApiKey(emailPrefix);
+  const apiKey = generateApiKey(feishuUserInfo.name);
   const role = adminIds.includes(feishuUserInfo.open_id) ? "admin" : "member";
 
   await db.insert(users).values({

@@ -63,7 +63,7 @@ export async function POST() {
 
   await saveDb();
 
-  const masked = newKey.slice(0, Math.min(newKey.indexOf("-", 7) + 1 || 12, 20)) + "****" + newKey.slice(-4);
+  const masked = newKey.slice(0, Math.min(newKey.indexOf("-", 3) + 1 || 12, 20)) + "****" + newKey.slice(-4);
 
   return NextResponse.json({
     apiKey: newKey,

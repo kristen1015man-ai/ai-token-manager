@@ -16,7 +16,7 @@
 
 ```
 员工代码/工具
-    ↓ 请求（带专属 sk-emp-xxx Key）
+    ↓ 请求（带专属 sk-xxx Key）
 API 代理网关（认证 → 限频 → 限额 → 转发 → 记录）
     ↓
 DeepSeek / Claude / 其他模型 API
@@ -120,7 +120,7 @@ docker compose logs -f
 # 1. 打开管理后台，飞书登录，复制专属 Key
 
 # 2. 设置环境变量
-export OPENAI_API_KEY=sk-emp-xxx
+export OPENAI_API_KEY=sk-xxx
 export OPENAI_BASE_URL=https://ai.yourcompany.com/v1
 
 # 完成！所有兼容 OpenAI 的工具自动走公司代理

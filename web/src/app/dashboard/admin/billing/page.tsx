@@ -5,14 +5,28 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
+import TimeRangeFilter from "@/components/TimeRangeFilter";
 
-/* ===== 颜色池 ===== */
+/* ===== 颜色池 — 高区分度 ===== */
 const CHART_COLORS = [
-  "#6366f1", "#8b5cf6", "#a855f7", "#d946ef",
-  "#ec4899", "#f43f5e", "#ef4444", "#f97316",
-  "#f59e0b", "#eab308", "#84cc16", "#22c55e",
-  "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9",
-  "#3b82f6", "#6366f1",
+  "#4F46E5", // 靛蓝
+  "#E11D48", // 玫红
+  "#059669", // 翠绿
+  "#D97706", // 琥珀
+  "#7C3AED", // 紫罗兰
+  "#0891B2", // 青色
+  "#DC2626", // 正红
+  "#65A30D", // 黄绿
+  "#DB2777", // 粉红
+  "#0284C7", // 天蓝
+  "#CA8A04", // 深金
+  "#9333EA", // 深紫
+  "#0D9488", // 蓝绿
+  "#EA580C", // 橙色
+  "#2563EB", // 蓝色
+  "#16A34A", // 绿色
+  "#C026D3", // 品红
+  "#475569", // 石板灰
 ];
 
 /* ===== 饼图中心标签 ===== */
@@ -25,23 +39,23 @@ function PieCenterLabel({ totalCost }: { totalCost: number }) {
   );
 }
 
-/* ===== 自定义饼图标签（扇区外显示名称+百分比+金额） ===== */
+/* ===== 自定义饼图标签（扇区外显示名称+占比） ===== */
 const RADIAN = Math.PI / 180;
-function renderCustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent, name, value }: any) {
+function renderCustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) {
   const radius = outerRadius + 35;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
-  // 如果占比太小(<5%)，不显示标签避免重叠
+  // 如果占比太小(<4%)，不显示标签避免重叠
   if (percent < 0.04) return null;
 
   return (
     <g>
-      <text x={x} y={y - 6} textAnchor={x > cx ? "start" : "end"} fill="#374151" fontSize="11" fontWeight="600">
+      <text x={x} y={y - 5} textAnchor={x > cx ? "start" : "end"} fill="#374151" fontSize="11" fontWeight="600">
         {name}
       </text>
-      <text x={x} y={y + 8} textAnchor={x > cx ? "start" : "end"} fill="#6b7280" fontSize="10">
-        ¥{Number(value).toFixed(2)} · {(percent * 100).toFixed(1)}%
+      <text x={x} y={y + 9} textAnchor={x > cx ? "start" : "end"} fill="#6b7280" fontSize="10">
+        {(percent * 100).toFixed(1)}%
       </text>
     </g>
   );
@@ -49,7 +63,7 @@ function renderCustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent
 
 export default function BillingPage() {
   const [departments, setDepartments] = useState<{ department: string; userCount: number; tokens: number; cost: number; avgCost: string }[]>([]);
-  const [range, setRange] = useState("month");
+  const [range, setRange] = useState("30d");
 
   useEffect(() => {
     fetch(`/api/admin/departments?level=department&range=${range}`)
@@ -58,7 +72,7 @@ export default function BillingPage() {
   }, [range]);
 
   const handleExport = () => {
-    window.open("/api/admin/export", "_blank");
+    window.open(`/api/admin/export?range=${range}`, "_blank");
   };
 
   const totalCost = departments.reduce((s, d) => s + Number(d.cost), 0);
@@ -72,40 +86,29 @@ export default function BillingPage() {
     .map(d => ({ department: d.department || "未分配", avgCost: Number(d.avgCost) }))
     .sort((a, b) => b.avgCost - a.avgCost);
 
-  const RANGE_OPTIONS = [
-    { value: "day", label: "今日" },
-    { value: "week", label: "本周" },
-    { value: "month", label: "本月" },
-    { value: "year", label: "今年" },
-  ];
+  const rangeLabels: Record<string, string> = {
+    day: "今日", "7d": "近7天", "30d": "近30天", year: "今年",
+  };
+
+  const currentLabel = range.match(/^\d{4}-\d{2}$/)
+    ? `${range.split("-")[0]}年${parseInt(range.split("-")[1])}月`
+    : rangeLabels[range] || "近30天";
 
   return (
     <div className="space-y-6">
       {/* 头部：总费用 + 筛选 + 导出 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-sm text-gray-500">本月总费用</p>
+          <p className="text-sm text-gray-500">{currentLabel}总费用</p>
           <p className="text-3xl font-bold text-gray-900">¥{totalCost.toFixed(2)}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setRange(opt.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  range === opt.value ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <TimeRangeFilter value={range} onChange={setRange} />
           <button
             onClick={handleExport}
             className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
           >
-            📥 导出 CSV
+            📥 导出 Excel
           </button>
         </div>
       </div>
@@ -198,7 +201,6 @@ export default function BillingPage() {
                   <th className="text-right py-2 font-medium">总费用</th>
                   <th className="text-right py-2 font-medium">占比</th>
                   <th className="text-right py-2 font-medium">人均</th>
-                  <th className="text-right py-2 font-medium">Token数</th>
                 </tr>
               </thead>
               <tbody>
@@ -216,7 +218,6 @@ export default function BillingPage() {
                       {totalCost > 0 ? ((Number(d.cost) / totalCost) * 100).toFixed(1) : 0}%
                     </td>
                     <td className="py-2 text-right text-gray-600">¥{d.avgCost}</td>
-                    <td className="py-2 text-right text-gray-600">{d.tokens.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

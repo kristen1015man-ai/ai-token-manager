@@ -72,6 +72,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: "员工排行", href: "/dashboard/admin/employees", icon: "users", roles: ["admin", "dept_manager"] },
   { label: "部门分账", href: "/dashboard/admin/billing", icon: "receipt", roles: ["admin", "finance", "dept_manager"] },
   { label: "渠道管理", href: "/dashboard/admin/channels", icon: "route", roles: ["admin"] },
+  { label: "模型价格", href: "/dashboard/admin/prices", icon: "pricetag", roles: ["admin"] },
   { label: "限额设置", href: "/dashboard/admin/quotas", icon: "shield", roles: ["admin"] },
   { label: "预警记录", href: "/dashboard/admin/alerts", icon: "bell", roles: ["admin"] },
   { label: "操作日志", href: "/dashboard/admin/logs", icon: "document", roles: ["admin"] },

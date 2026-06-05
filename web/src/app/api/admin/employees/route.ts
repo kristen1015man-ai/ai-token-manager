@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "../../../../lib/admin-check";
+import { requireRole } from "../../../../lib/admin-check";
 import { getDb, saveDb } from "../../../../lib/db";
+import { getTimeRange } from "../../../../lib/time-range";
 
 /**
  * 确保表有所需的列，没有就加（解决多实例缓存问题）
@@ -29,11 +30,11 @@ function ensureColumns(dbAny: any) {
 }
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
+  const { error } = await requireRole("admin", "dept_manager");
   if (error) return error;
 
   const dept = request.nextUrl.searchParams.get("department");
-  const range = request.nextUrl.searchParams.get("range") || "month";
+  const range = request.nextUrl.searchParams.get("range") || "30d";
   const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
   const dbAny = sqlite as any;
@@ -43,52 +44,44 @@ export async function GET(request: NextRequest) {
     await saveDb();
   }
 
-  const now = new Date();
-  let startTime: number;
-
-  switch (range) {
-    case "day":
-      startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
-      break;
-    case "week": {
-      const dayOfWeek = now.getDay() || 7;
-      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 1);
-      startTime = Math.floor(monday.getTime() / 1000);
-      break;
-    }
-    case "year":
-      startTime = Math.floor(new Date(now.getFullYear(), 0, 1).getTime() / 1000);
-      break;
-    case "month":
-    default:
-      startTime = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
-  }
+  const { start: startTime, end: rangeEnd } = getTimeRange(range);
 
   // 动态选列
   const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
   const cols = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
 
   let deptCol = "u.department";
+  let bareCol = "department";
   if (level === "group" && cols.has("group_name")) {
     deptCol = "u.group_name";
+    bareCol = "group_name";
   } else if (level === "center" && cols.has("center_name")) {
     deptCol = "u.center_name";
+    bareCol = "center_name";
+  }
+
+  // LEFT JOIN: 返回所有用户，没有 usage_logs 的显示 0
+  let joinCond = `ul.user_id = u.id AND ul.created_at >= ?`;
+  const params: unknown[] = [startTime];
+  if (rangeEnd) {
+    joinCond += ` AND ul.created_at < ?`;
+    params.push(rangeEnd);
   }
 
   let query = `
     SELECT u.name, ${deptCol} as dept_label, u.email, u.avatar,
-      SUM(ul.total_tokens) as tokens, SUM(ul.cost) as cost, COUNT(*) as count
-    FROM usage_logs ul
-    JOIN users u ON ul.user_id = u.id
-    WHERE ul.created_at >= ?`;
-  const params: unknown[] = [startTime];
+      COALESCE(SUM(ul.total_tokens), 0) as tokens,
+      COALESCE(SUM(ul.cost), 0) as cost,
+      COALESCE(COUNT(ul.id), 0) as count
+    FROM users u
+    LEFT JOIN usage_logs ul ON ${joinCond}`;
 
   if (dept) {
     query += ` AND ${deptCol} = ?`;
     params.push(dept);
   }
 
-  query += ` GROUP BY ul.user_id ORDER BY cost DESC LIMIT 20`;
+  query += ` GROUP BY u.id ORDER BY cost DESC`;
 
   const result = dbAny.exec(query, params);
 
@@ -102,10 +95,15 @@ export async function GET(request: NextRequest) {
     count: Number(r[6]),
   }));
 
+  // bareCol 不带表别名，用于直接查 users 表的场景
+  // 虚拟部门黑名单
+  const VIRTUAL_DEPTS = ["管理部"];
   const deptListResult = dbAny.exec(
-    `SELECT DISTINCT ${deptCol} FROM users WHERE ${deptCol} IS NOT NULL AND ${deptCol} != '' ORDER BY ${deptCol}`
+    `SELECT DISTINCT ${bareCol} FROM users WHERE ${bareCol} IS NOT NULL AND ${bareCol} != '' ORDER BY ${bareCol}`
   );
-  const departments = (deptListResult[0]?.values ?? []).map((r: unknown[]) => String(r[0]));
+  const departments = (deptListResult[0]?.values ?? [])
+    .map((r: unknown[]) => String(r[0]))
+    .filter((d: string) => !VIRTUAL_DEPTS.includes(d));
 
   return NextResponse.json({ employees, departments, level });
 }

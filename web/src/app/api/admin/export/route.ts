@@ -1,25 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "../../../../lib/auth";
+import { NextRequest } from "next/server";
+import { requireRole } from "../../../../lib/admin-check";
 import { getDb } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
 import * as XLSX from "xlsx";
-
-/** 允许导出的角色 */
-const EXPORT_ROLES = new Set(["admin", "finance", "dept_manager"]);
-
-/**
- * 检查当前用户是否有导出权限
- */
-async function requireExportRole() {
-  const session = await getSession();
-  if (!session) {
-    return { session: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
-  if (!EXPORT_ROLES.has(session.role)) {
-    return { session, error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-  }
-  return { session, error: null };
-}
 
 /**
  * 导出 Excel 报表（财务视角）
@@ -35,7 +18,7 @@ async function requireExportRole() {
  * Sheet 2: 部门费用汇总（排名、占比、人均）
  */
 export async function GET(request: NextRequest) {
-  const { error } = await requireExportRole();
+  const { error } = await requireRole("admin", "finance", "dept_manager");
   if (error) return error;
 
   const range = request.nextUrl.searchParams.get("range") || "30d";
@@ -72,6 +55,12 @@ export async function GET(request: NextRequest) {
     "费用(元)": Number(Number(r[3]).toFixed(2)),
   }));
 
+  // ===== 虚拟部门黑名单 =====
+  const VIRTUAL_DEPTS = ["管理部"];
+
+  // ===== Sheet 1: 员工费用汇总（过滤虚拟部门） =====
+  const empRowsFiltered = empRows.filter((r: Record<string, string>) => !VIRTUAL_DEPTS.includes(r["部门"]));
+
   // ===== Sheet 2: 部门费用汇总 =====
   const deptParams = [...params];
   const deptResult = dbAny.exec(
@@ -86,28 +75,33 @@ export async function GET(request: NextRequest) {
     deptParams
   );
 
-  const totalCost = (deptResult[0]?.values ?? []).reduce(
-    (sum: number, r: unknown[]) => sum + Number(r[3]), 0
-  );
+  // 部门汇总也过滤虚拟部门，重新计算排名和占比
+  interface DeptRaw { dept: string; userCount: number; callCount: number; totalCost: number }
+  const deptRowsRaw: DeptRaw[] = (deptResult[0]?.values ?? [])
+    .map((r: unknown[]) => ({
+      dept: String(r[0] ?? "未分配"),
+      userCount: Number(r[1]),
+      callCount: Number(r[2]),
+      totalCost: Number(r[3]),
+    }))
+    .filter((d: DeptRaw) => !VIRTUAL_DEPTS.includes(d.dept));
 
-  const deptRows = (deptResult[0]?.values ?? []).map((r: unknown[], idx: number) => {
-    const cost = Number(r[3]);
-    const userCount = Number(r[1]);
-    return {
-      "排名": idx + 1,
-      "部门": String(r[0] ?? "未分配"),
-      "人数": userCount,
-      "调用次数": Number(r[2]),
-      "总费用(元)": Number(cost.toFixed(2)),
-      "占比": totalCost > 0 ? `${((cost / totalCost) * 100).toFixed(1)}%` : "0%",
-      "人均费用(元)": userCount ? Number((cost / userCount).toFixed(2)) : 0,
-    };
-  });
+  const filteredTotalCost = deptRowsRaw.reduce((sum: number, d: DeptRaw) => sum + d.totalCost, 0);
+
+  const deptRows = deptRowsRaw.map((d: DeptRaw, idx: number) => ({
+    "排名": idx + 1,
+    "部门": d.dept,
+    "人数": d.userCount,
+    "调用次数": d.callCount,
+    "总费用(元)": Number(d.totalCost.toFixed(2)),
+    "占比": filteredTotalCost > 0 ? `${((d.totalCost / filteredTotalCost) * 100).toFixed(1)}%` : "0%",
+    "人均费用(元)": d.userCount ? Number((d.totalCost / d.userCount).toFixed(2)) : 0,
+  }));
 
   // ===== 生成 Excel =====
   const wb = XLSX.utils.book_new();
 
-  const ws1 = XLSX.utils.json_to_sheet(empRows);
+  const ws1 = XLSX.utils.json_to_sheet(empRowsFiltered);
   ws1["!cols"] = [
     { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 12 },
   ];
