@@ -1,65 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, saveDb } from "../../../../lib/db";
-import { users } from "../../../../../../shared/schema";
-import { eq, desc } from "drizzle-orm";
 import { createSession } from "../../../../lib/auth";
 
 /**
- * 快捷登录（演示用）
- * 优先找管理员账号登录，确保能看到所有数据
+ * 开发环境快捷登录（GET /api/auth/dev-login）
+ *
+ * 以何广明（管理员）身份登录。
+ * 首次调用时会自动将何广明的 role 设为 admin。
  */
 export async function GET(request: NextRequest) {
+  const { sqlite } = await getDb();
+  const dbAny = sqlite as any;
 
-  const { db } = await getDb();
+  // 查找何广明
+  const result = dbAny.exec(
+    `SELECT id, name, feishu_id, role FROM users WHERE name = '何广明' LIMIT 1`
+  );
 
-  // 1. 优先找 admin 角色的用户
-  let adminUser = (await db.select().from(users).where(eq(users.role, "admin")).limit(1))[0];
-
-  // 2. 没有管理员则找 dev_admin 测试账号
-  if (!adminUser) {
-    adminUser = (await db.select().from(users).where(eq(users.feishuId, "dev_admin")).limit(1))[0];
+  if (!result[0]?.values?.length) {
+    return NextResponse.json(
+      { error: "未找到用户「何广明」，请先同步飞书员工数据" },
+      { status: 404 }
+    );
   }
 
-  // 3. 都没有则取第一个用户并升级为 admin
-  if (!adminUser) {
-    const existing = await db.select().from(users).limit(1);
-    if (existing.length > 0) {
-      await db.update(users).set({ role: "admin" }).where(eq(users.id, existing[0].id));
-      await saveDb();
-      adminUser = (await db.select().from(users).where(eq(users.id, existing[0].id)).limit(1))[0];
-    }
-  }
+  const userId = String(result[0].values[0][0]);
+  const currentRole = String(result[0].values[0][3]);
 
-  // 4. 完全空库，创建管理员
-  if (!adminUser) {
-    const { randomBytes } = await import("crypto");
-    const userId = randomBytes(8).toString("hex");
-    await db.insert(users).values({
-      id: userId,
-      feishuId: "dev_admin",
-      name: "开发管理员",
-      avatar: null,
-      email: "admin@yourcompany.com",
-      department: "研发部",
-      departmentId: "dept_dev",
-      employeeId: "DEV001",
-      apiKey: "sk-emp-dev-test-key",
-      role: "admin",
-      status: "active",
-      monthlyQuota: 200,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+  // 如果还不是 admin，自动提升
+  if (currentRole !== "admin") {
+    dbAny.exec(`UPDATE users SET role = 'admin' WHERE id = ?`, [userId]);
     await saveDb();
-    adminUser = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
   }
 
   // 创建 session
   await createSession({
-    userId: adminUser.id,
-    feishuId: adminUser.feishuId,
-    name: adminUser.name,
-    role: "admin", // dev-login 强制 admin
+    userId,
+    feishuId: String(result[0].values[0][2] || userId),
+    name: "何广明",
+    role: "admin",
   });
 
   const host = request.headers.get("host") || "localhost:3000";

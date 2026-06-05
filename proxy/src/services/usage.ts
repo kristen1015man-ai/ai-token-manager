@@ -12,11 +12,13 @@ export interface UsageRecord {
 
 /**
  * 从 OpenAI 兼容响应中提取 usage 信息
+ * channelId 用于「渠道+模型」组合定价查找
  */
-export function extractUsageFromResponse(
+export async function extractUsageFromResponse(
   responseBody: Record<string, unknown>,
+  channelId: string,
   model: string
-): UsageRecord {
+): Promise<UsageRecord> {
   const usage = responseBody.usage as {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -29,7 +31,7 @@ export function extractUsageFromResponse(
   const totalTokens = usage?.total_tokens ?? inputTokens + outputTokens;
   const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
 
-  const cost = calculateCost(model, inputTokens, outputTokens, cachedTokens);
+  const cost = await calculateCost(channelId, model, inputTokens, outputTokens, cachedTokens);
 
   return { inputTokens, outputTokens, totalTokens, cost };
 }
@@ -38,14 +40,15 @@ export function extractUsageFromResponse(
  * 从 SSE 流式 chunk 中提取 usage
  * 流式响应在最后一个 data chunk 中包含 usage 字段
  */
-export function extractUsageFromStreamChunk(
+export async function extractUsageFromStreamChunk(
   chunk: string,
+  channelId: string,
   model: string
-): UsageRecord | null {
+): Promise<UsageRecord | null> {
   try {
     const parsed = JSON.parse(chunk);
     if (parsed.usage) {
-      return extractUsageFromResponse(parsed, model);
+      return await extractUsageFromResponse(parsed, channelId, model);
     }
   } catch {
     // 不是 JSON，忽略

@@ -6,15 +6,15 @@ models.get("/", async (c) => {
   const { getAvailableModels } = await import("../services/channel.js");
   const { getKnownModels } = await import("../utils/pricing.js");
 
-  // 优先从数据库渠道配置获取，兜底用硬编码列表
+  // 优先从数据库渠道配置获取，兜底用价格表模型列表
   let modelList: string[];
   try {
     modelList = await getAvailableModels();
     if (modelList.length === 0) {
-      modelList = getKnownModels();
+      modelList = await getKnownModels();
     }
   } catch {
-    modelList = getKnownModels();
+    modelList = await getKnownModels();
   }
 
   const data = modelList.map((id) => ({

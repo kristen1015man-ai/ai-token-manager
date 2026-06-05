@@ -1,69 +1,58 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "../../../../lib/auth";
 import { getDb } from "../../../../lib/db";
-import { usageLogs, users } from "../../../../../../shared/schema";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { getTimeRange } from "../../../../lib/time-range";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { db } = await getDb();
+  const range = request.nextUrl.searchParams.get("range") || "day";
+  const { start, end, label } = getTimeRange(range);
+
+  const { sqlite } = await getDb();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dbAny = sqlite as any;
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // 今日汇总
-  const todayResult = await db
-    .select({
-      tokens: sql<number>`COALESCE(SUM(${usageLogs.totalTokens}), 0)`,
-      cost: sql<number>`COALESCE(SUM(${usageLogs.cost}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(usageLogs)
-    .where(
-      and(
-        eq(usageLogs.userId, session.userId),
-        gte(usageLogs.createdAt, todayStart)
-      )
-    );
+  // 按时间范围统计
+  let where = `user_id = ? AND created_at >= ?`;
+  const params: unknown[] = [session.userId, start];
+  if (end) {
+    where += ` AND created_at < ?`;
+    params.push(end);
+  }
 
-  // 本月汇总
-  const monthResult = await db
-    .select({
-      tokens: sql<number>`COALESCE(SUM(${usageLogs.totalTokens}), 0)`,
-      cost: sql<number>`COALESCE(SUM(${usageLogs.cost}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(usageLogs)
-    .where(
-      and(
-        eq(usageLogs.userId, session.userId),
-        gte(usageLogs.createdAt, monthStart)
-      )
-    );
+  const rangeStats = dbAny.exec(
+    `SELECT COALESCE(SUM(total_tokens), 0), COALESCE(SUM(cost), 0), COUNT(*)
+     FROM usage_logs WHERE ${where}`,
+    params
+  );
 
-  // 获取用户限额
-  const userInfo = await db
-    .select({ monthlyQuota: users.monthlyQuota })
-    .from(users)
-    .where(eq(users.id, session.userId))
-    .limit(1);
+  // 本月额度（始终取当月）
+  const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
+  const monthStats = dbAny.exec(
+    `SELECT COALESCE(SUM(cost), 0) FROM usage_logs WHERE user_id = ? AND created_at >= ?`,
+    [session.userId, monthStart]
+  );
+  const monthCost = Number(monthStats[0]?.values[0]?.[0] ?? 0);
 
-  const monthlyQuota = userInfo[0]?.monthlyQuota ?? 200;
-  const monthCost = monthResult[0]?.cost ?? 0;
+  // 用户配额
+  const userInfo = dbAny.exec(
+    `SELECT COALESCE(monthly_quota, 500) FROM users WHERE id = ?`,
+    [session.userId]
+  );
+  const monthlyQuota = Number(userInfo[0]?.values[0]?.[0] ?? 500);
 
   return NextResponse.json({
-    todayTokens: todayResult[0]?.tokens ?? 0,
-    todayCost: Number(todayResult[0]?.cost ?? 0),
-    todayCount: todayResult[0]?.count ?? 0,
-    monthTokens: monthResult[0]?.tokens ?? 0,
-    monthCost: Number(monthCost),
-    monthCount: monthResult[0]?.count ?? 0,
+    tokens: Number(rangeStats[0]?.values[0]?.[0] ?? 0),
+    cost: Number(rangeStats[0]?.values[0]?.[1] ?? 0),
+    count: Number(rangeStats[0]?.values[0]?.[2] ?? 0),
+    rangeLabel: label,
     monthlyQuota,
-    quotaUsed: Number(monthCost),
-    quotaRemaining: Math.max(0, monthlyQuota - Number(monthCost)),
+    quotaUsed: monthCost,
+    quotaRemaining: Math.max(0, monthlyQuota - monthCost),
   });
 }

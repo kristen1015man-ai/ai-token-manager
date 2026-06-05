@@ -141,7 +141,7 @@ async function handleNonStreamResponse(
   }
 
   // 提取用量并记录
-  const usage = extractUsageFromResponse(parsed, model);
+  const usage = await extractUsageFromResponse(parsed, channelId, model);
   await recordUsage(userId, model, channelId, usage);
 
   // 返回原始响应
@@ -198,7 +198,7 @@ function handleStreamResponse(
           if (line.startsWith("data: ")) {
             const data = line.slice(6).trim();
             if (data === "[DONE]") continue;
-            const usage = extractUsageFromStreamChunk(data, model);
+            const usage = await extractUsageFromStreamChunk(data, channelId, model);
             if (usage) {
               lastUsage = usage;
             }

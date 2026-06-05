@@ -116,6 +116,15 @@ export const syncBlacklist = sqliteTable("sync_blacklist", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
+// ===== 预警设置表 =====
+export const alertSettings = sqliteTable("alert_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 // ===== 管理操作日志表 =====
 export const adminLogs = sqliteTable("admin_logs", {
   id: text("id").primaryKey(),

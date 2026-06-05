@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "../../../../lib/auth";
 import { getDb } from "../../../../lib/db";
-import initSqlJs from "sql.js";
+import { getTimeRange } from "../../../../lib/time-range";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -9,45 +9,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const granularity = request.nextUrl.searchParams.get("granularity") || "hourly";
-  const { sqlite } = await getDb();
-  const now = new Date();
+  const range = request.nextUrl.searchParams.get("range") || "day";
+  const { start, end, label } = getTimeRange(range);
 
-  let startDate: Date;
+  // 粒度：今日/近7天 → 小时级，近30天/历史月份 → 日级，今年 → 月级
   let groupFormat: string;
-
-  switch (granularity) {
-    case "daily":
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      groupFormat = "%Y-%m-%d";
-      break;
-    case "weekly":
-      startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-      groupFormat = "%Y-W%W";
-      break;
-    case "monthly":
-      startDate = new Date(now.getFullYear(), 0, 1);
-      groupFormat = "%Y-%m";
-      break;
-    default: // hourly
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      groupFormat = "%H:00";
-      break;
+  if (range === "day" || range === "7d") {
+    groupFormat = "%Y-%m-%d %H:00";
+  } else if (range === "year") {
+    groupFormat = "%Y-%m";
+  } else {
+    // 30d 或历史月份(YYYY-MM) → 日级
+    groupFormat = "%Y-%m-%d";
   }
 
-  const startTs = Math.floor(startDate.getTime() / 1000);
+  const { sqlite } = await getDb();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const dbAny = sqlite as any;
-  const result: { columns: string[]; values: unknown[][] }[] = dbAny.exec(
+
+  let where = `user_id = ? AND created_at >= ?`;
+  const params: unknown[] = [session.userId, start];
+  if (end) {
+    where += ` AND created_at < ?`;
+    params.push(end);
+  }
+
+  const result = dbAny.exec(
     `SELECT
       strftime('${groupFormat}', created_at, 'unixepoch', 'localtime') as time_slot,
       SUM(total_tokens) as tokens,
       SUM(cost) as cost
     FROM usage_logs
-    WHERE user_id = ? AND created_at >= ?
+    WHERE ${where}
     GROUP BY time_slot
     ORDER BY time_slot`,
-    [session.userId, startTs]
+    params
   );
 
   const data = result[0]
@@ -58,5 +54,5 @@ export async function GET(request: NextRequest) {
       }))
     : [];
 
-  return NextResponse.json({ granularity, data });
+  return NextResponse.json({ range, label, data });
 }

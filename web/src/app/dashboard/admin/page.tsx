@@ -4,34 +4,44 @@ import { useEffect, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import TimeRangeFilter from "@/components/TimeRangeFilter";
 
 interface Overview {
-  today: { tokens: number; cost: number; count: number };
-  month: { tokens: number; cost: number; count: number };
+  cost: number;
+  tokens: number;
+  count: number;
   activeUsers: number;
+  rangeLabel: string;
   trend: { day: string; tokens: number; cost: number }[];
 }
 
 export default function AdminOverviewPage() {
   const [data, setData] = useState<Overview | null>(null);
+  const [range, setRange] = useState("30d");
 
   useEffect(() => {
-    fetch("/api/admin/overview").then((r) => r.ok ? r.json() : null).then(setData);
-  }, []);
+    fetch(`/api/admin/overview?range=${range}`).then((r) => r.ok ? r.json() : null).then(setData);
+  }, [range]);
 
   if (!data) return <div className="animate-pulse p-6">加载中...</div>;
 
   const fmt = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
 
   const cards = [
-    { label: "今日总费用", value: `¥${data.today.cost.toFixed(2)}`, sub: `${data.today.count} 次调用`, color: "text-blue-600" },
-    { label: "本月总费用", value: `¥${data.month.cost.toFixed(2)}`, sub: `${fmt(data.month.tokens)} tokens`, color: "text-green-600" },
-    { label: "本月活跃用户", value: `${data.activeUsers}`, sub: "有调用记录的用户", color: "text-purple-600" },
-    { label: "本月总调用", value: `${data.month.count}`, sub: "次请求", color: "text-orange-600" },
+    { label: `${data.rangeLabel}总费用`, value: `¥${data.cost.toFixed(2)}`, sub: `${data.count} 次调用`, color: "text-blue-600" },
+    { label: `${data.rangeLabel}总Token`, value: fmt(data.tokens), sub: `${data.activeUsers} 活跃用户`, color: "text-green-600" },
+    { label: `${data.rangeLabel}活跃用户`, value: `${data.activeUsers}`, sub: "有调用记录的用户", color: "text-purple-600" },
+    { label: `${data.rangeLabel}总调用`, value: `${data.count}`, sub: "次请求", color: "text-orange-600" },
   ];
 
   return (
     <div className="space-y-6">
+      {/* 筛选栏 */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h3 className="font-semibold text-gray-800 text-lg">全局概览</h3>
+        <TimeRangeFilter value={range} onChange={setRange} />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {cards.map((c) => (
           <div key={c.label} className="bg-white rounded-xl border border-gray-200 p-5">
@@ -43,7 +53,7 @@ export default function AdminOverviewPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="font-semibold text-gray-800 mb-4">本月费用趋势</h3>
+        <h3 className="font-semibold text-gray-800 mb-4">{data.rangeLabel}费用趋势</h3>
         {data.trend.length === 0 ? (
           <div className="h-64 flex items-center justify-center text-gray-400">暂无数据</div>
         ) : (

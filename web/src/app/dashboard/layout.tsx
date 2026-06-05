@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { getMenuForRole, canAccess, ROLE_LABELS, type Role } from "@/lib/permissions";
 
 interface UserInfo {
   id: string;
@@ -12,25 +13,12 @@ interface UserInfo {
   department: string | null;
 }
 
-const memberMenuItems = [
-  { label: "我的用量", href: "/dashboard", icon: "chart" },
-  { label: "API Key", href: "/dashboard/key", icon: "key" },
-];
-
-const adminMenuItems = [
-  ...memberMenuItems,
-  { label: "全局概览", href: "/dashboard/admin", icon: "globe" },
-  { label: "部门排行", href: "/dashboard/admin/departments", icon: "building" },
-  { label: "员工排行", href: "/dashboard/admin/employees", icon: "users" },
-  { label: "部门分账", href: "/dashboard/admin/billing", icon: "receipt" },
-  { label: "渠道管理", href: "/dashboard/admin/channels", icon: "route" },
-  { label: "模型价格", href: "/dashboard/admin/prices", icon: "coins" },
-  { label: "模型管理", href: "/dashboard/admin/models", icon: "cpu" },
-  { label: "权限管理", href: "/dashboard/admin/permissions", icon: "lock" },
-  { label: "限额设置", href: "/dashboard/admin/quotas", icon: "shield" },
-  { label: "预警记录", href: "/dashboard/admin/alerts", icon: "bell" },
-  { label: "操作日志", href: "/dashboard/admin/logs", icon: "document" },
-];
+/* ===== 图标 ===== */
+const ICON_MAP: Record<string, string> = {
+  chart: "📊", key: "🔑", globe: "🌍", building: "🏢",
+  users: "👥", receipt: "🧾", route: "🔀", shield: "🛡️",
+  bell: "🔔", document: "📋", lock: "🔒",
+};
 
 export default function DashboardLayout({
   children,
@@ -48,6 +36,17 @@ export default function DashboardLayout({
       .catch(() => router.push("/login"));
   }, [router]);
 
+  // 权限守卫：用户加载后检查当前路径是否可访问
+  useEffect(() => {
+    if (!user) return;
+    if (!canAccess(user.role, pathname)) {
+      // 重定向到该角色可见的第一个页面
+      const menu = getMenuForRole(user.role);
+      const fallback = menu[0]?.href || "/dashboard";
+      router.replace(fallback);
+    }
+  }, [user, pathname, router]);
+
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
     router.push("/login");
@@ -61,7 +60,8 @@ export default function DashboardLayout({
     );
   }
 
-  const menuItems = user.role === "admin" ? adminMenuItems : memberMenuItems;
+  const menuItems = getMenuForRole(user.role);
+  const roleInfo = ROLE_LABELS[(user.role || "member") as Role];
 
   return (
     <div className="min-h-screen flex">
@@ -73,31 +73,30 @@ export default function DashboardLayout({
             玄牝词元
           </h2>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive
                     ? "bg-indigo-50 text-indigo-700 font-medium"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               >
+                <span className="text-base">{ICON_MAP[item.icon] || "📄"}</span>
                 {item.label}
               </Link>
             );
           })}
         </nav>
-        {user.role === "admin" && (
-          <div className="p-3 border-t border-gray-100">
-            <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
-              管理员
-            </span>
-          </div>
-        )}
+        <div className="p-3 border-t border-gray-100">
+          <span className={`text-xs px-2 py-1 rounded-full ${roleInfo?.color || "bg-gray-50 text-gray-600"}`}>
+            {roleInfo?.label || "员工"}
+          </span>
+        </div>
       </aside>
 
       {/* 主内容区 */}

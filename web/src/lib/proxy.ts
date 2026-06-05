@@ -1,17 +1,77 @@
 import { randomBytes } from "crypto";
 import { getDb, saveDb } from "./db";
-import { channels, usageLogs, quotaRules, users } from "../../../shared/schema";
+import { channels, usageLogs, quotaRules, users, modelPrices } from "../../../shared/schema";
 import { eq } from "drizzle-orm";
 
-// ========== 定价表 ==========
+// ========== 定价表（从数据库读取，60秒缓存，渠道+模型复合键） ==========
 
-const PRICING_TABLE: Record<string, { input: number; output: number; cache: number }> = {
+const FALLBACK_PRICES: Record<string, { input: number; output: number; cache: number }> = {
   "deepseek-chat": { input: 1.0, output: 2.0, cache: 0.1 },
   "deepseek-reasoner": { input: 4.0, output: 16.0, cache: 0.4 },
 };
 
-function calculateCost(model: string, inputTokens: number, outputTokens: number, cachedTokens = 0): number {
-  const price = PRICING_TABLE[model] || PRICING_TABLE["deepseek-chat"];
+// key 格式："channelId:model" 或 ":model"（全局价格）
+let priceCache: Map<string, { input: number; output: number; cache: number }> | null = null;
+let cacheExpireAt = 0;
+const CACHE_TTL_MS = 60_000;
+
+async function loadPriceTable(): Promise<Map<string, { input: number; output: number; cache: number }>> {
+  const now = Date.now();
+  if (priceCache && now < cacheExpireAt) return priceCache;
+
+  try {
+    const { db } = await getDb();
+    const rows = await db.select().from(modelPrices);
+    const map = new Map<string, { input: number; output: number; cache: number }>();
+    for (const row of rows) {
+      const key = `${row.channelId ?? ""}:${row.model}`;
+      map.set(key, {
+        input: row.inputPerMillion,
+        output: row.outputPerMillion,
+        cache: row.cachePerMillion,
+      });
+    }
+    priceCache = map;
+    cacheExpireAt = now + CACHE_TTL_MS;
+    return map;
+  } catch (err) {
+    console.error("[Proxy] 加载价格表失败，使用 fallback:", err);
+    const map = new Map<string, { input: number; output: number; cache: number }>();
+    for (const [model, price] of Object.entries(FALLBACK_PRICES)) {
+      map.set(`:${model}`, price);
+    }
+    priceCache = map;
+    cacheExpireAt = now + CACHE_TTL_MS;
+    return map;
+  }
+}
+
+/** 手动清除价格缓存（管理后台修改价格后调用） */
+export function invalidatePriceCache(): void {
+  priceCache = null;
+  cacheExpireAt = 0;
+}
+
+/**
+ * 计算单次请求费用
+ * 三级查找链：(channelId, model) → (NULL, model) → 硬编码兜底
+ */
+async function calculateCost(channelId: string, model: string, inputTokens: number, outputTokens: number, cachedTokens = 0): Promise<number> {
+  const prices = await loadPriceTable();
+
+  // 第一级：渠道专属价格
+  let price = prices.get(`${channelId}:${model}`);
+
+  if (!price) {
+    // 第二级：全局价格
+    price = prices.get(`:${model}`);
+  }
+
+  if (!price) {
+    // 第三级：硬编码兜底
+    price = prices.get(`:deepseek-chat`) || FALLBACK_PRICES["deepseek-chat"];
+  }
+
   const nonCached = Math.max(0, inputTokens - cachedTokens);
   return (nonCached * price.input + cachedTokens * price.cache + outputTokens * price.output) / 1_000_000;
 }
@@ -19,7 +79,7 @@ function calculateCost(model: string, inputTokens: number, outputTokens: number,
 // ========== API Key 认证 ==========
 
 export async function authenticateUser(apiKey: string) {
-  if (!apiKey.startsWith("sk-emp-")) return null;
+  if (!apiKey.startsWith("sk-")) return null;
 
   const { db } = await getDb();
   const result = await db.select().from(users).where(eq(users.apiKey, apiKey)).limit(1);
@@ -153,7 +213,7 @@ interface UsageRecord {
   cost: number;
 }
 
-function extractUsage(responseBody: Record<string, unknown>, model: string): UsageRecord {
+async function extractUsage(responseBody: Record<string, unknown>, channelId: string, model: string): Promise<UsageRecord> {
   const usage = responseBody.usage as {
     prompt_tokens?: number; completion_tokens?: number; total_tokens?: number;
     prompt_tokens_details?: { cached_tokens?: number };
@@ -163,7 +223,7 @@ function extractUsage(responseBody: Record<string, unknown>, model: string): Usa
   const outputTokens = usage?.completion_tokens ?? 0;
   const totalTokens = usage?.total_tokens ?? inputTokens + outputTokens;
   const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
-  const cost = calculateCost(model, inputTokens, outputTokens, cachedTokens);
+  const cost = await calculateCost(channelId, model, inputTokens, outputTokens, cachedTokens);
 
   return { inputTokens, outputTokens, totalTokens, cost };
 }
@@ -280,8 +340,8 @@ async function handleNonStreamResponse(
     });
   }
 
-  // 提取用量并记录
-  const usage = extractUsage(parsed, model);
+  // 提取用量并记录（传入 channelId 用于渠道定价查找）
+  const usage = await extractUsage(parsed, channelId, model);
   await recordUsage(userId, model, channelId, usage);
 
   return new Response(JSON.stringify(parsed), {
@@ -326,7 +386,7 @@ function handleStreamResponse(
             if (data === "[DONE]") continue;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.usage) lastUsage = extractUsage(parsed, model);
+              if (parsed.usage) lastUsage = await extractUsage(parsed, channelId, model);
             } catch { /* 忽略非 JSON 行 */ }
           }
         }

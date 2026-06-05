@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
 import { getDb, saveDb } from "../../../../lib/db";
-import { modelPrices, channels } from "../../../../../../shared/schema";
+import { modelPrices, channels, syncBlacklist } from "../../../../../../shared/schema";
 import { eq } from "drizzle-orm";
 
 /** 确保 model_prices 表存在且有完整列 */
@@ -134,7 +134,7 @@ export async function DELETE(request: NextRequest) {
   // 如果是全局价格，加入同步黑名单
   if (!price.channelId) {
     try {
-      sqlite.exec(`INSERT OR IGNORE INTO sync_blacklist (model, created_at) VALUES ('${price.model}', unixepoch())`);
+      await db.insert(syncBlacklist).values({ model: price.model, createdAt: new Date() }).onConflictDoNothing();
     } catch {}
   }
 

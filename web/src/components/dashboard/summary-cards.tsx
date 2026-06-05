@@ -3,25 +3,23 @@
 import { useEffect, useState } from "react";
 
 interface Summary {
-  todayTokens: number;
-  todayCost: number;
-  todayCount: number;
-  monthTokens: number;
-  monthCost: number;
-  monthCount: number;
+  tokens: number;
+  cost: number;
+  count: number;
+  rangeLabel: string;
   monthlyQuota: number;
   quotaUsed: number;
   quotaRemaining: number;
 }
 
-export default function SummaryCards() {
+export default function SummaryCards({ range }: { range: string }) {
   const [data, setData] = useState<Summary | null>(null);
 
   useEffect(() => {
-    fetch("/api/usage/summary")
+    fetch(`/api/usage/summary?range=${range}`)
       .then((r) => (r.ok ? r.json() : null))
       .then(setData);
-  }, []);
+  }, [range]);
 
   if (!data) {
     return (
@@ -36,16 +34,14 @@ export default function SummaryCards() {
     );
   }
 
-  const formatTokens = (n: number) =>
+  const fmt = (n: number) =>
     n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
-  const quotaPercent = data.monthlyQuota ? Math.min(100, (data.quotaUsed / data.monthlyQuota) * 100) : 0;
-
   const cards = [
-    { label: "今日 Token", value: formatTokens(data.todayTokens), sub: `${data.todayCount} 次调用`, color: "text-blue-600" },
-    { label: "今日花费", value: `¥${data.todayCost.toFixed(2)}`, sub: "", color: "text-green-600" },
-    { label: "本月累计", value: `¥${data.monthCost.toFixed(2)}`, sub: `${formatTokens(data.monthTokens)} tokens`, color: "text-purple-600" },
-    { label: "剩余额度", value: `¥${data.quotaRemaining.toFixed(2)}`, sub: `额度 ¥${data.monthlyQuota}`, color: "text-orange-600" },
+    { label: `${data.rangeLabel}总Token`, value: fmt(data.tokens), sub: `${data.count} 次调用`, color: "text-blue-600" },
+    { label: `${data.rangeLabel}总花费`, value: `¥${data.cost.toFixed(2)}`, sub: "", color: "text-green-600" },
+    { label: "本月已用", value: `¥${data.quotaUsed.toFixed(2)}`, sub: `额度 ¥${data.monthlyQuota}`, color: "text-purple-600" },
+    { label: "本月剩余", value: `¥${data.quotaRemaining.toFixed(2)}`, sub: `额度 ¥${data.monthlyQuota}`, color: "text-orange-600" },
   ];
 
   return (
