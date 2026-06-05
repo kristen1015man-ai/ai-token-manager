@@ -15,7 +15,7 @@ export const users = sqliteTable("users", {
   centerId: text("center_id"),
   employeeId: text("employee_id"),
   apiKey: text("api_key").notNull().unique(),
-  role: text("role", { enum: ["admin", "member"] }).notNull().default("member"),
+  role: text("role", { enum: ["admin", "dept_head", "member"] }).notNull().default("member"),
   status: text("status", { enum: ["active", "disabled"] })
     .notNull()
     .default("active"),
@@ -92,6 +92,28 @@ export const alertLogs = sqliteTable("alert_logs", {
   sentAt: integer("sent_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
+});
+
+// ===== 模型价格表 =====
+export const modelPrices = sqliteTable("model_prices", {
+  id: text("id").primaryKey(),
+  model: text("model").notNull(),
+  channelId: text("channel_id"),
+  inputPerMillion: real("input_per_million").notNull(),
+  outputPerMillion: real("output_per_million").notNull(),
+  cachePerMillion: real("cache_per_million").notNull().default(0),
+  displayName: text("display_name"),
+  deprecated: integer("deprecated", { mode: "boolean" }).notNull().default(false),
+  syncedAt: integer("synced_at", { mode: "timestamp" }),
+  updatedBy: text("updated_by"),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
+// ===== 同步黑名单（防止删除的模型被同步回来） =====
+export const syncBlacklist = sqliteTable("sync_blacklist", {
+  model: text("model").primaryKey(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
 // ===== 管理操作日志表 =====
