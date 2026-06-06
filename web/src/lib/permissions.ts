@@ -4,7 +4,7 @@
  * users.role 存逗号分隔的多角色（如 "admin,finance"）
  * - admin:      全部页面，含设置
  * - finance:    全局概览 + 部门分账（只读，可导出）
- * - dept_manager: 部门排行 + 员工排行 + 部门分账（只读）
+ * - dept_manager: 本部门排行 + 员工排行 + 本部门分账（只读）
  * - member:     我的用量 + API Key
  *
  * 一个人可以同时属于多个角色组，取并集。
@@ -32,7 +32,7 @@ export const ROLE_LABELS: Record<Role, RoleDefinition> = {
   },
   dept_manager: {
     label: "部门负责人",
-    description: "查看排行和部门分账",
+    description: "查看本部门排行和本部门分账",
     color: "bg-amber-50 text-amber-700",
   },
   member: {
