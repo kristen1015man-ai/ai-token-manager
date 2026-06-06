@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "../../../../lib/admin-check";
 import { getDb } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
+import { getBalanceOverview } from "../../../../lib/balance-sync";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireRole("admin", "finance");
@@ -40,6 +41,12 @@ export async function GET(request: NextRequest) {
     params
   );
 
+  // 余额概览（仅管理员可见）
+  let balanceSummary = null;
+  if (request.nextUrl.searchParams.get("includeBalance") === "true") {
+    balanceSummary = await getBalanceOverview();
+  }
+
   return NextResponse.json({
     cost: Number(stats[0]?.values[0]?.[1] ?? 0),
     tokens: Number(stats[0]?.values[0]?.[0] ?? 0),
@@ -52,5 +59,6 @@ export async function GET(request: NextRequest) {
       cost: Number(r[2]),
     })),
     range,
+    balanceSummary,
   });
 }
