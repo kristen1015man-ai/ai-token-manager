@@ -1,7 +1,8 @@
 import { randomBytes } from "crypto";
-import { getDb, saveDb } from "./db";
+import { getDb, saveDb, scheduleSave } from "./db";
 import { channels, usageLogs, quotaRules, users, modelPrices } from "../../../shared/schema";
 import { eq } from "drizzle-orm";
+import { ensureDecrypted } from "./crypto";
 
 // ========== 定价表（从数据库读取，60秒缓存，渠道+模型复合键） ==========
 
@@ -52,6 +53,59 @@ export function invalidatePriceCache(): void {
   cacheExpireAt = 0;
 }
 
+// ========== 渠道缓存（30秒 TTL） ==========
+
+let channelCache: ChannelInfo[] | null = null;
+let channelCacheExpireAt = 0;
+const CHANNEL_CACHE_TTL_MS = 30_000;
+
+async function loadActiveChannels(): Promise<ChannelInfo[]> {
+  const now = Date.now();
+  if (channelCache && now < channelCacheExpireAt) return channelCache;
+
+  const { db } = await getDb();
+  const result = await db.select().from(channels).where(eq(channels.status, "active")).orderBy(channels.priority);
+  channelCache = result.map((ch) => ({
+    id: ch.id,
+    name: ch.name,
+    baseUrl: ch.baseUrl,
+    apiKey: ensureDecrypted(ch.apiKey),
+    models: (typeof ch.models === "string" ? JSON.parse(ch.models) : ch.models) as string[],
+    priority: ch.priority,
+  }));
+  channelCacheExpireAt = now + CHANNEL_CACHE_TTL_MS;
+  return channelCache;
+}
+
+/** 清除渠道缓存（管理后台修改渠道后调用） */
+export function invalidateChannelCache(): void {
+  channelCache = null;
+  channelCacheExpireAt = 0;
+}
+
+// ========== 限额规则缓存（30秒 TTL） ==========
+
+let quotaCache: { rules: Awaited<ReturnType<typeof import("drizzle-orm").eq> extends never ? never : any> } | null = null;
+let quotaCacheExpireAt = 0;
+const QUOTA_CACHE_TTL_MS = 30_000;
+
+async function loadQuotaRules(): Promise<any[]> {
+  const now = Date.now();
+  if (quotaCache && now < quotaCacheExpireAt) return quotaCache.rules;
+
+  const { db } = await getDb();
+  const rules = await db.select().from(quotaRules);
+  quotaCache = { rules };
+  quotaCacheExpireAt = now + QUOTA_CACHE_TTL_MS;
+  return rules;
+}
+
+/** 清除限额缓存（管理后台修改额度后调用） */
+export function invalidateQuotaCache(): void {
+  quotaCache = null;
+  quotaCacheExpireAt = 0;
+}
+
 /**
  * 计算单次请求费用
  * 三级查找链：(channelId, model) → (NULL, model) → 硬编码兜底
@@ -81,13 +135,18 @@ async function calculateCost(channelId: string, model: string, inputTokens: numb
 export async function authenticateUser(apiKey: string) {
   if (!apiKey.startsWith("sk-")) return null;
 
+  // apiKey 可能已加密存储，无法直接 SQL 匹配，需加载所有用户后内存比对
   const { db } = await getDb();
-  const result = await db.select().from(users).where(eq(users.apiKey, apiKey)).limit(1);
-  if (result.length === 0) return null;
+  const allUsers = await db.select().from(users);
 
-  const user = result[0];
-  if (user.status === "disabled") return null;
-  return user;
+  for (const user of allUsers) {
+    const decryptedKey = ensureDecrypted(user.apiKey);
+    if (decryptedKey === apiKey) {
+      if (user.status === "disabled") return null;
+      return user;
+    }
+  }
+  return null;
 }
 
 // ========== 限额检查 ==========
@@ -106,7 +165,7 @@ export async function checkQuota(userId: string): Promise<{ ok: boolean; message
   if (userResult.length === 0) return { ok: false, message: "用户不存在" };
   const user = userResult[0];
 
-  const rules = await db.select().from(quotaRules);
+  const rules = await loadQuotaRules();
   const getUsed = (sql: string, params: unknown[]) => {
     const r = dbAny.exec(sql, params);
     return Number(r[0]?.values[0]?.[0] ?? 0);
@@ -159,47 +218,33 @@ interface ChannelInfo {
 }
 
 async function findChannelForModel(model: string): Promise<ChannelInfo | null> {
-  const { db } = await getDb();
-  const result = await db.select().from(channels).where(eq(channels.status, "active")).orderBy(channels.priority);
-
-  for (const ch of result) {
-    const models: string[] = typeof ch.models === "string" ? JSON.parse(ch.models) : (ch.models as unknown as string[]);
-    if (models.includes(model) || models.includes("*")) {
-      return {
-        id: ch.id, name: ch.name, baseUrl: ch.baseUrl,
-        apiKey: ch.apiKey, models, priority: ch.priority,
-      };
+  const channelList = await loadActiveChannels();
+  for (const ch of channelList) {
+    if (ch.models.includes(model) || ch.models.includes("*")) {
+      return ch;
     }
   }
   return null;
 }
 
 async function findFallbackChannel(model: string, excludeId: string): Promise<ChannelInfo | null> {
-  const { db } = await getDb();
-  const result = await db.select().from(channels).where(eq(channels.status, "active")).orderBy(channels.priority);
-
+  const channelList = await loadActiveChannels();
   let found = false;
-  for (const ch of result) {
+  for (const ch of channelList) {
     if (ch.id === excludeId) { found = true; continue; }
     if (!found) continue;
-    const models: string[] = typeof ch.models === "string" ? JSON.parse(ch.models) : (ch.models as unknown as string[]);
-    if (models.includes(model) || models.includes("*")) {
-      return {
-        id: ch.id, name: ch.name, baseUrl: ch.baseUrl,
-        apiKey: ch.apiKey, models, priority: ch.priority,
-      };
+    if (ch.models.includes(model) || ch.models.includes("*")) {
+      return ch;
     }
   }
   return null;
 }
 
 export async function getAvailableModels(): Promise<string[]> {
-  const { db } = await getDb();
-  const result = await db.select().from(channels).where(eq(channels.status, "active"));
+  const channelList = await loadActiveChannels();
   const modelSet = new Set<string>();
-  for (const ch of result) {
-    const models: string[] = typeof ch.models === "string" ? JSON.parse(ch.models) : (ch.models as unknown as string[]);
-    for (const m of models) { if (m !== "*") modelSet.add(m); }
+  for (const ch of channelList) {
+    for (const m of ch.models) { if (m !== "*") modelSet.add(m); }
   }
   return Array.from(modelSet);
 }
@@ -242,7 +287,7 @@ async function recordUsage(userId: string, model: string, channelId: string, usa
       channelId,
       createdAt: new Date(),
     });
-    await saveDb();
+    scheduleSave(); // 延迟批量写入，避免每次请求都落盘
   } catch (err) {
     console.error("[Proxy] 记录用量失败:", err);
   }

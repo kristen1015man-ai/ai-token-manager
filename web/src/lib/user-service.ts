@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { pinyin } from "pinyin-pro";
 import { users } from "../../../shared/schema";
 import { getDb, saveDb } from "./db";
+import { ensureEncrypted, ensureDecrypted } from "./crypto";
 
 /**
  * 中文名 → 拼音标识（无音调、小写、去空格）
@@ -118,7 +119,7 @@ export async function findOrCreateUser(feishuUserInfo: {
     centerName: feishuUserInfo.center_name || null,
     centerId: feishuUserInfo.center_id || null,
     employeeId: feishuUserInfo.employee_no || null,
-    apiKey,
+    apiKey: ensureEncrypted(apiKey),
     role,
     status: "active",
     monthlyQuota: 200,
@@ -139,15 +140,19 @@ export async function findOrCreateUser(feishuUserInfo: {
 
 /**
  * 根据 API Key 查找用户
+ * apiKey 可能已加密存储，需加载所有用户后内存比对
  */
 export async function findUserByApiKey(apiKey: string) {
   const { db } = await getDb();
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.apiKey, apiKey))
-    .limit(1);
-  return result[0] || null;
+  const allUsers = await db.select().from(users);
+
+  for (const user of allUsers) {
+    const decryptedKey = ensureDecrypted(user.apiKey);
+    if (decryptedKey === apiKey) {
+      return user;
+    }
+  }
+  return null;
 }
 
 /**

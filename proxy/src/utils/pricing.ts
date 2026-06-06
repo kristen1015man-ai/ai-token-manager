@@ -8,17 +8,19 @@
 
 import { getDb } from "../../../shared/db.js";
 import { modelPrices } from "../../../shared/schema.js";
+import { getUsdCnyRate } from "./exchange-rate.js";
 
 export interface ModelPrice {
   inputPerMillion: number;
   outputPerMillion: number;
   cachePerMillion: number;
+  currency: "CNY" | "USD";  // 价格原始币种，USD 时需要乘以汇率转 CNY
 }
 
 // ===== Fallback 价格（数据库无数据时兜底） =====
 const FALLBACK_PRICES: Record<string, ModelPrice> = {
-  "deepseek-chat": { inputPerMillion: 1.0, outputPerMillion: 2.0, cachePerMillion: 0.1 },
-  "deepseek-reasoner": { inputPerMillion: 4.0, outputPerMillion: 16.0, cachePerMillion: 0.4 },
+  "deepseek-chat": { inputPerMillion: 1.0, outputPerMillion: 2.0, cachePerMillion: 0.1, currency: "CNY" },
+  "deepseek-reasoner": { inputPerMillion: 4.0, outputPerMillion: 16.0, cachePerMillion: 0.4, currency: "CNY" },
 };
 
 // ===== 进程内缓存 =====
@@ -46,6 +48,7 @@ async function loadPriceTable(): Promise<Map<string, ModelPrice>> {
         inputPerMillion: row.inputPerMillion,
         outputPerMillion: row.outputPerMillion,
         cachePerMillion: row.cachePerMillion,
+        currency: (row as any).currency === "USD" ? "USD" : "CNY",
       });
     }
     priceCache = map;
@@ -73,9 +76,10 @@ export function invalidatePriceCache(): void {
 }
 
 /**
- * 计算单次请求费用
+ * 计算单次请求费用（统一返回 CNY）
  * 三级查找链：(channelId, model) → (NULL, model) → 硬编码兜底
  * 公式：(非缓存输入 × 输入价 + 缓存Token × 缓存价 + 输出Token × 输出价) / 1,000,000
+ * 如果价格为 USD，自动乘以实时汇率转换为 CNY
  */
 export async function calculateCost(
   channelId: string,
@@ -101,21 +105,37 @@ export async function calculateCost(
     const fallbackKey = `:deepseek-chat`;
     const fallback = prices.get(fallbackKey) || FALLBACK_PRICES["deepseek-chat"];
     const nonCached = Math.max(0, inputTokens - cachedTokens);
-    return (
-      (nonCached * fallback.inputPerMillion +
-        cachedTokens * fallback.cachePerMillion +
-        outputTokens * fallback.outputPerMillion) /
-      1_000_000
-    );
+    const cost = (
+      nonCached * fallback.inputPerMillion +
+      cachedTokens * fallback.cachePerMillion +
+      outputTokens * fallback.outputPerMillion
+    ) / 1_000_000;
+    return convertToCNY(cost, fallback.currency);
   }
 
   const nonCached = Math.max(0, inputTokens - cachedTokens);
-  return (
-    (nonCached * price.inputPerMillion +
-      cachedTokens * price.cachePerMillion +
-      outputTokens * price.outputPerMillion) /
-    1_000_000
-  );
+  const cost = (
+    nonCached * price.inputPerMillion +
+    cachedTokens * price.cachePerMillion +
+    outputTokens * price.outputPerMillion
+  ) / 1_000_000;
+  return convertToCNY(cost, price.currency);
+}
+
+/**
+ * 将费用统一转换为 CNY
+ * USD 价格需要乘以实时汇率
+ */
+async function convertToCNY(cost: number, currency: "CNY" | "USD"): Promise<number> {
+  if (currency === "USD") {
+    try {
+      const { rate } = await getUsdCnyRate();
+      return cost * rate;
+    } catch {
+      return cost * 7.2; // 汇率获取失败时用硬编码
+    }
+  }
+  return cost;
 }
 
 /**
