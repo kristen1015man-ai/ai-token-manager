@@ -94,6 +94,38 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id ON usage_logs(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_usage_logs_created_at ON usage_logs(created_at)`,
     `CREATE INDEX IF NOT EXISTS idx_usage_logs_model ON usage_logs(model)`,
+
+    // 模型价格表（渠道+模型组合定价）
+    `CREATE TABLE IF NOT EXISTS model_prices (
+      id TEXT PRIMARY KEY,
+      model TEXT NOT NULL,
+      channel_id TEXT,
+      input_per_million REAL NOT NULL,
+      output_per_million REAL NOT NULL,
+      cache_per_million REAL NOT NULL DEFAULT 0,
+      display_name TEXT,
+      deprecated INTEGER NOT NULL DEFAULT 0,
+      synced_at INTEGER,
+      updated_by TEXT,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_mp_channel_model ON model_prices(channel_id, model)`,
+    `CREATE INDEX IF NOT EXISTS idx_mp_model ON model_prices(model)`,
+
+    // 同步黑名单（防止删除的模型被同步回来）
+    `CREATE TABLE IF NOT EXISTS sync_blacklist (
+      model TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+
+    // 预警设置表
+    `CREATE TABLE IF NOT EXISTS alert_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+
     `CREATE INDEX IF NOT EXISTS idx_quota_rules_scope_target ON quota_rules(scope, target_id)`,
   ];
 
@@ -110,6 +142,7 @@ async function migrate() {
 
   console.log("Database initialized successfully. Tables created:");
   console.log("  - users, channels, usage_logs, quota_rules, alert_logs, admin_logs");
+  console.log("  - model_prices, sync_blacklist, alert_settings");
 
   sqlite.close();
 }

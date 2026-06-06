@@ -15,7 +15,7 @@ export const users = sqliteTable("users", {
   centerId: text("center_id"),
   employeeId: text("employee_id"),
   apiKey: text("api_key").notNull().unique(),
-  role: text("role", { enum: ["admin", "dept_head", "member"] }).notNull().default("member"),
+  role: text("role").notNull().default("member"),  // 逗号分隔多角色: admin,finance,dept_manager,member
   status: text("status", { enum: ["active", "disabled"] })
     .notNull()
     .default("active"),
@@ -39,6 +39,15 @@ export const channels = sqliteTable("channels", {
   status: text("status", { enum: ["active", "disabled"] })
     .notNull()
     .default("active"),
+  currency: text("currency").notNull().default("CNY"),   // "CNY" | "USD"
+  provider: text("provider"),                               // "deepseek" | "glm" | "openai" | "anthropic" | "siliconflow"
+  balance: real("balance"),                                  // 当前余额（null=从未同步）
+  balanceCurrency: text("balance_currency"),                 // 余额币种 "CNY"|"USD"
+  balanceSyncMode: text("balance_sync_mode"),                // "auto"|"manual"|null（null=按供应商自动判断）
+  balanceSyncedAt: integer("balance_synced_at", { mode: "timestamp" }), // 最后同步时间
+  balanceAlertThreshold: real("balance_alert_threshold"),    // 单渠道预警阈值（null=用全局默认）
+  accessKeyId: text("access_key_id"),                         // 阿里云 AccessKey ID（用于 BSS 余额查询）
+  accessKeySecret: text("access_key_secret"),                 // 阿里云 AccessKey Secret
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -103,6 +112,7 @@ export const modelPrices = sqliteTable("model_prices", {
   outputPerMillion: real("output_per_million").notNull(),
   cachePerMillion: real("cache_per_million").notNull().default(0),
   displayName: text("display_name"),
+  currency: text("currency").notNull().default("CNY"),   // 价格的原始币种 "CNY" | "USD"
   deprecated: integer("deprecated", { mode: "boolean" }).notNull().default(false),
   syncedAt: integer("synced_at", { mode: "timestamp" }),
   updatedBy: text("updated_by"),
@@ -111,8 +121,10 @@ export const modelPrices = sqliteTable("model_prices", {
 });
 
 // ===== 同步黑名单（防止删除的模型被同步回来） =====
+// 复合主键：(model, channel_id) — 支持"全局黑名单"和"渠道级黑名单"
 export const syncBlacklist = sqliteTable("sync_blacklist", {
-  model: text("model").primaryKey(),
+  model: text("model").notNull(),
+  channelId: text("channel_id"),   // NULL = 全局黑名单，非 NULL = 渠道级黑名单
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
