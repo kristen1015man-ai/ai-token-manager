@@ -213,6 +213,12 @@ function handleStreamResponse(
       }
     },
     cancel() {
+      // 客户端断开（页面关闭/导航），记录已收集的用量
+      if (lastUsage) {
+        recordUsage(userId, model, channelId, lastUsage).catch((err) =>
+          console.error("Stream cancel: 用量记录失败:", err)
+        );
+      }
       reader.cancel();
     },
   });

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../../lib/admin-check";
 import { syncChannelBalances, sendBalanceAlert } from "../../../../../lib/balance-sync";
+import { apiHandler } from "../../../../../lib/api-handler";
 
 /**
  * POST /api/admin/channels/balance-sync
  * 手动触发余额同步
  * Body: { channelId?: string }  不传=同步所有自动渠道
  */
-export async function POST(request: NextRequest) {
+export const POST = apiHandler(async (request: NextRequest) => {
   const { error } = await requireAdmin();
   if (error) return error;
 
@@ -29,4 +30,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(result);
-}
+});

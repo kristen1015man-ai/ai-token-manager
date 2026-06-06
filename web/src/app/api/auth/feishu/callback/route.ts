@@ -141,8 +141,12 @@ export async function GET(request: NextRequest) {
     console.error("Feishu OAuth callback error:", error);
     const host = request.headers.get("host") || "ai.seapllo.com";
     const protocol = request.headers.get("x-forwarded-proto") || "https";
+    // 生产环境不暴露内部错误详情，防止信息泄露
+    const detail = process.env.NODE_ENV === "development"
+      ? (error instanceof Error ? error.message : "unknown")
+      : "认证过程中发生错误，请重试";
     return NextResponse.redirect(
-      new URL(`/login?error=auth_failed&detail=${encodeURIComponent(error instanceof Error ? error.message : "unknown")}`, `${protocol}://${host}`)
+      new URL(`/login?error=auth_failed&detail=${encodeURIComponent(detail)}`, `${protocol}://${host}`)
     );
   }
 }

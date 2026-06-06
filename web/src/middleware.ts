@@ -23,13 +23,18 @@ const DANGEROUS_DEFAULTS = [
 const isUnsafeSecret = !JWT_SECRET_RAW || DANGEROUS_DEFAULTS.includes(JWT_SECRET_RAW);
 
 if (isUnsafeSecret && process.env.NODE_ENV === "production") {
-  console.error("[FATAL] JWT_SECRET 未配置，所有鉴权请求将被拒绝");
+  console.error("[FATAL] JWT_SECRET 未配置或使用了默认值，所有鉴权请求将被拒绝");
 }
 
 const DEV_FALLBACK_SECRET = "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6-a7b8-c9d0";
 
+// 生产环境不安全密钥 → 强制拒绝鉴权（不回退到 dev secret）
 const JWT_SECRET = new TextEncoder().encode(
-  isUnsafeSecret ? DEV_FALLBACK_SECRET : JWT_SECRET_RAW
+  isUnsafeSecret && process.env.NODE_ENV === "production"
+    ? crypto.randomUUID()  // 随机值，确保验签永远失败
+    : isUnsafeSecret
+      ? DEV_FALLBACK_SECRET
+      : JWT_SECRET_RAW
 );
 const JWT_ISSUER = "ai-token-manager";
 const JWT_AUDIENCE = "ai-token-manager:dashboard";

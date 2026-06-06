@@ -4,6 +4,7 @@ import { getDb, saveDb } from "../../../../../lib/db";
 import { alertSettings } from "../../../../../../../shared/schema";
 import { eq } from "drizzle-orm";
 import { randomBytes } from "crypto";
+import { apiHandler, apiHandlerNoBody } from "../../../../../lib/api-handler";
 
 // ===== 默认值 =====
 export const DEFAULT_ALERT_SETTINGS: Record<string, string> = {
@@ -17,7 +18,7 @@ export const DEFAULT_ALERT_SETTINGS: Record<string, string> = {
 };
 
 /** GET /api/admin/alerts/settings */
-export async function GET() {
+export const GET = apiHandlerNoBody(async () => {
   const { error } = await requireAdmin();
   if (error) return error;
 
@@ -31,10 +32,10 @@ export async function GET() {
   }
 
   return NextResponse.json({ settings });
-}
+});
 
 /** PUT /api/admin/alerts/settings — 批量更新 */
-export async function PUT(request: NextRequest) {
+export const PUT = apiHandler(async (request: NextRequest) => {
   const { error, session } = await requireAdmin();
   if (error) return error;
 
@@ -64,4 +65,4 @@ export async function PUT(request: NextRequest) {
 
   await saveDb();
   return NextResponse.json({ success: true });
-}
+});

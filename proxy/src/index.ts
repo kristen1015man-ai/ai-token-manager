@@ -14,7 +14,18 @@ const PORT = parseInt(process.env.PROXY_PORT || "3001");
 
 // 全局中间件
 app.use("*", logger());
-app.use("*", cors({ origin: "*" }));
+app.use("*", cors({
+  origin: (origin) => {
+    // 允许管理后台和本地开发访问
+    const allowed = [
+      process.env.WEB_URL || "http://localhost:3000",
+      "http://localhost:3000",
+    ];
+    if (!origin || allowed.includes(origin)) return origin;
+    return null;
+  },
+  credentials: true,
+}));
 
 // 健康检查（不需要认证）
 app.get("/health", (c) => {

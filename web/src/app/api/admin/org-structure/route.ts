@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
 import { getDb } from "../../../../lib/db";
+import { apiHandler } from "../../../../lib/api-handler";
 
 /**
  * 组织架构分析
@@ -9,7 +10,7 @@ import { getDb } from "../../../../lib/db";
  * - edgeCases: 缺失部门级的人员列表
  * - stats: 各层级统计
  */
-export async function GET(request: NextRequest) {
+export const GET = apiHandler(async (request: NextRequest) => {
   const { error } = await requireAdmin();
   if (error) return error;
 
@@ -263,4 +264,4 @@ export async function GET(request: NextRequest) {
       unassigned: unassigned.map(u => ({ id: u.id, name: u.name })),
     },
   });
-}
+});

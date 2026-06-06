@@ -26,10 +26,16 @@ export interface SqliteExec {
 // ========== 延迟批量写入（Debounce） ==========
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let saveInProgress = false;
+let needsReflush = false; // 保存期间有新写入，需要再刷一次
 const DEBOUNCE_MS = 2_000; // 2秒内合并多次写入
 
 function flushToDisk(): void {
-  if (!sqliteInstance || saveInProgress) return;
+  if (!sqliteInstance) return;
+  if (saveInProgress) {
+    // 保存进行中，标记需要再刷一次
+    needsReflush = true;
+    return;
+  }
   saveInProgress = true;
   try {
     const absPath = path.resolve(DB_PATH);
@@ -40,6 +46,11 @@ function flushToDisk(): void {
     fs.writeFileSync(absPath, Buffer.from(sqliteInstance.export()));
   } finally {
     saveInProgress = false;
+    // 如果保存期间有新数据写入，立即再刷一次
+    if (needsReflush) {
+      needsReflush = false;
+      flushToDisk();
+    }
   }
 }
 

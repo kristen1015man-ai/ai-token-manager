@@ -115,9 +115,11 @@ async function migrate() {
 
     // 同步黑名单（防止删除的模型被同步回来）
     `CREATE TABLE IF NOT EXISTS sync_blacklist (
-      model TEXT PRIMARY KEY,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )`,
+      model TEXT NOT NULL,
+      channel_id TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      PRIMARY KEY (model, channel_id)
+    ) WITHOUT ROWID`,
 
     // 预警设置表
     `CREATE TABLE IF NOT EXISTS alert_settings (

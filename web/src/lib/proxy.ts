@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { getDb, saveDb, scheduleSave } from "./db";
 import { channels, usageLogs, quotaRules, users, modelPrices } from "../../../shared/schema";
 import { eq } from "drizzle-orm";
-import { ensureDecrypted } from "./crypto";
+import { ensureDecrypted, safeEqual } from "./crypto";
 
 // ========== 定价表（从数据库读取，60秒缓存，渠道+模型复合键） ==========
 
@@ -141,7 +141,7 @@ export async function authenticateUser(apiKey: string) {
 
   for (const user of allUsers) {
     const decryptedKey = ensureDecrypted(user.apiKey);
-    if (decryptedKey === apiKey) {
+    if (safeEqual(decryptedKey, apiKey)) {
       if (user.status === "disabled") return null;
       return user;
     }
@@ -441,7 +441,15 @@ function handleStreamResponse(
         controller.error(err);
       }
     },
-    cancel() { reader.cancel(); },
+    cancel() {
+      // 客户端断开，记录已收集的用量
+      if (lastUsage) {
+        recordUsage(userId, model, channelId, lastUsage).catch((err) =>
+          console.error("[Proxy] Stream cancel 用量记录失败:", err)
+        );
+      }
+      reader.cancel();
+    },
   });
 
   return new Response(stream, {

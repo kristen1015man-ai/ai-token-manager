@@ -68,8 +68,8 @@ export async function GET(request: NextRequest) {
     message TEXT NOT NULL, sent_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
   dbAny.exec(`CREATE TABLE IF NOT EXISTS alert_settings (
-    id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, value TEXT NOT NULL,
-    updated_by TEXT, updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    key TEXT PRIMARY KEY, value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
   dbAny.exec(`CREATE TABLE admin_logs (
     id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, action TEXT NOT NULL,
@@ -95,8 +95,10 @@ export async function GET(request: NextRequest) {
 
   // ===== 同步黑名单 =====
   dbAny.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (
-    model TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (unixepoch())
-  )`);
+    model TEXT NOT NULL, channel_id TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    PRIMARY KEY (model, channel_id)
+  ) WITHOUT ROWID`);
 
   // ===== 管理员 feishu_id =====
   const ADMIN_IDS = [
@@ -433,8 +435,8 @@ export async function GET(request: NextRequest) {
   ];
   for (let i = 0; i < defaultSettings.length; i++) {
     const [key, value] = defaultSettings[i];
-    dbAny.exec(`INSERT INTO alert_settings VALUES (?, ?, ?, NULL, ?)`,
-      [`as_${String(i).padStart(2, "0")}`, key, value, now]);
+    dbAny.exec(`INSERT OR IGNORE INTO alert_settings (key, value, updated_at) VALUES (?, ?, ?)`,
+      [key, value, now]);
   }
 
   // ===== 操作日志 =====

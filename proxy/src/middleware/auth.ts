@@ -1,12 +1,16 @@
 import { createMiddleware } from "hono/factory";
 import { getDb } from "../../../shared/db.js";
 import { users } from "../../../shared/schema.js";
-import { eq } from "drizzle-orm";
+import { ensureDecrypted, safeEqual } from "../../../shared/crypto.js";
 
 /**
  * API Key 认证中间件
  * 从 Authorization: Bearer sk-emp-xxx 提取 Key
- * 查询数据库验证用户身份和状态
+ *
+ * 注意：users.apiKey 可能以 AES-256-GCM 加密存储（enc:v1: 前缀），
+ * 无法直接 SQL 匹配（因为每次加密的 IV 不同，密文不同），
+ * 所以需要加载所有用户后内存解密比较。
+ * 使用 timingSafeEqual 防止时序攻击。
  */
 export const authMiddleware = createMiddleware(async (c, next) => {
   const authHeader = c.req.header("Authorization");
@@ -37,13 +41,19 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   try {
     const { db } = await getDb();
-    const result = await db
-      .select()
-      .from(users)
-      .where(eq(users.apiKey, apiKey))
-      .limit(1);
+    // apiKey 可能已加密存储，无法直接 SQL 匹配，需加载所有用户后内存比对
+    const allUsers = await db.select().from(users);
 
-    if (result.length === 0) {
+    let matchedUser: typeof allUsers[0] | null = null;
+    for (const user of allUsers) {
+      const decryptedKey = ensureDecrypted(user.apiKey);
+      if (safeEqual(decryptedKey, apiKey)) {
+        matchedUser = user;
+        break;
+      }
+    }
+
+    if (!matchedUser) {
       return c.json(
         {
           error: {
@@ -55,8 +65,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
       );
     }
 
-    const user = result[0];
-    if (user.status === "disabled") {
+    if (matchedUser.status === "disabled") {
       return c.json(
         {
           error: {
@@ -69,9 +78,9 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     }
 
     // 注入用户信息到 context
-    c.set("userId", user.id);
-    c.set("userName", user.name);
-    c.set("userRole", user.role);
+    c.set("userId", matchedUser.id);
+    c.set("userName", matchedUser.name);
+    c.set("userRole", matchedUser.role);
 
     await next();
   } catch (err) {

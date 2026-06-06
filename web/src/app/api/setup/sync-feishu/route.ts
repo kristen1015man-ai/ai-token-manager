@@ -156,8 +156,8 @@ async function executeSync() {
 
   // 确保新表存在（同步不会 drop 表，只做增量）
   dbAny.exec(`CREATE TABLE IF NOT EXISTS alert_settings (
-    id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, value TEXT NOT NULL,
-    updated_by TEXT, updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    key TEXT PRIMARY KEY, value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
 
   const newCols = [

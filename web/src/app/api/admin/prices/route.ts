@@ -39,23 +39,32 @@ async function ensureTable(sqlite: SqliteExec) {
     )
   `);
 
-  // 检查是否有 channel_id 列
+  // 检查是否有 channel_id 列 — 事务保护：重建表过程中崩溃可回滚
   const hasChannelId = hasColumn(sqlite, "model_prices", "channel_id");
   if (!hasChannelId) {
-    sqlite.exec(`
-      CREATE TABLE model_prices_new (
-        id TEXT PRIMARY KEY, model TEXT NOT NULL, channel_id TEXT,
-        input_per_million REAL NOT NULL, output_per_million REAL NOT NULL,
-        cache_per_million REAL NOT NULL DEFAULT 0, display_name TEXT,
-        currency TEXT NOT NULL DEFAULT 'CNY',
-        deprecated INTEGER NOT NULL DEFAULT 0, synced_at INTEGER,
-        updated_by TEXT, updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-        created_at INTEGER NOT NULL DEFAULT (unixepoch())
-      );
-      INSERT INTO model_prices_new SELECT id, model, NULL, input_per_million, output_per_million, cache_per_million, display_name, 'CNY', deprecated, synced_at, updated_by, updated_at, created_at FROM model_prices;
-      DROP TABLE model_prices;
-      ALTER TABLE model_prices_new RENAME TO model_prices;
-    `);
+    try {
+      sqlite.exec(`BEGIN TRANSACTION`);
+      sqlite.exec(`
+        CREATE TABLE model_prices_new (
+          id TEXT PRIMARY KEY, model TEXT NOT NULL, channel_id TEXT,
+          input_per_million REAL NOT NULL, output_per_million REAL NOT NULL,
+          cache_per_million REAL NOT NULL DEFAULT 0, display_name TEXT,
+          currency TEXT NOT NULL DEFAULT 'CNY',
+          deprecated INTEGER NOT NULL DEFAULT 0, synced_at INTEGER,
+          updated_by TEXT, updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+          created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        )
+      `);
+      sqlite.exec(`
+        INSERT INTO model_prices_new SELECT id, model, NULL, input_per_million, output_per_million, cache_per_million, display_name, 'CNY', deprecated, synced_at, updated_by, updated_at, created_at FROM model_prices
+      `);
+      sqlite.exec(`DROP TABLE model_prices`);
+      sqlite.exec(`ALTER TABLE model_prices_new RENAME TO model_prices`);
+      sqlite.exec(`COMMIT`);
+    } catch (e) {
+      try { sqlite.exec(`ROLLBACK`); } catch {}
+      console.error("[ensureTable] model_prices 迁移失败，已回滚:", e);
+    }
   }
 
   // 检查是否有 currency 列（老表升级）
@@ -76,13 +85,18 @@ async function ensureTable(sqlite: SqliteExec) {
     // 检查旧版表是否存在
     const blExists = sqlite.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='sync_blacklist'`);
     if (blExists[0]?.values?.length) {
-      // 旧版有数据，迁移到新版复合主键
-      sqlite.exec(`
-        CREATE TABLE IF NOT EXISTS sync_blacklist_new (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID;
-        INSERT OR IGNORE INTO sync_blacklist_new (model, channel_id, created_at) SELECT model, NULL, created_at FROM sync_blacklist;
-        DROP TABLE sync_blacklist;
-        ALTER TABLE sync_blacklist_new RENAME TO sync_blacklist;
-      `);
+      // 旧版有数据，事务保护迁移到新版复合主键
+      try {
+        sqlite.exec(`BEGIN TRANSACTION`);
+        sqlite.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist_new (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);
+        sqlite.exec(`INSERT OR IGNORE INTO sync_blacklist_new (model, channel_id, created_at) SELECT model, NULL, created_at FROM sync_blacklist`);
+        sqlite.exec(`DROP TABLE sync_blacklist`);
+        sqlite.exec(`ALTER TABLE sync_blacklist_new RENAME TO sync_blacklist`);
+        sqlite.exec(`COMMIT`);
+      } catch (e) {
+        try { sqlite.exec(`ROLLBACK`); } catch {}
+        console.error("[ensureTable] sync_blacklist 迁移失败，已回滚:", e);
+      }
     } else {
       // 全新创建
       sqlite.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);

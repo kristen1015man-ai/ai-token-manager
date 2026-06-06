@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
 import { queryAuditLogs } from "../../../../lib/audit-log";
+import { apiHandler } from "../../../../lib/api-handler";
 
 /**
  * GET /api/admin/audit-logs
@@ -13,7 +14,7 @@ import { queryAuditLogs } from "../../../../lib/audit-log";
  *   limit      - 每页条数（默认 50，最大 200）
  *   offset     - 偏移量
  */
-export async function GET(request: NextRequest) {
+export const GET = apiHandler(async (request: NextRequest) => {
   const { error: authError } = await requireAdmin();
   if (authError) return authError;
 
@@ -28,4 +29,4 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json(result);
-}
+});

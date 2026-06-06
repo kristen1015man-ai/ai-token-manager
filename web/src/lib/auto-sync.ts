@@ -11,6 +11,9 @@
  * 渠道余额同步：
  * - 04:00 凌晨（价格同步之后 1 小时，避免并发）
  *
+ * 异常用量检测：
+ * - 每小时整点（检测 1 小时内突增）
+ *
  * 服务器启动 30 秒后也会执行一次初始同步。
  */
 
@@ -18,6 +21,7 @@ const FEISHU_SYNC_HOURS = [12, 19]; // 每天中午12点、晚上7点
 const FEISHU_SYNC_URL = "http://localhost:3000/api/setup/sync-feishu";
 const PRICE_SYNC_URL = "http://localhost:3000/api/admin/prices/sync";
 const BALANCE_SYNC_URL = "http://localhost:3000/api/admin/channels/balance-sync";
+const ANOMALY_CHECK_URL = "http://localhost:3000/api/admin/anomaly-check";
 
 let started = false;
 
@@ -32,6 +36,7 @@ export function startAutoSync() {
   console.log(`[AutoSync] 飞书同步：每天 ${FEISHU_SYNC_HOURS.map(h => `${String(h).padStart(2, "0")}:00`).join("、")}`);
   console.log(`[AutoSync] 价格同步：每天 03:00`);
   console.log(`[AutoSync] 余额同步：每天 04:00`);
+  console.log(`[AutoSync] 异常检测：每小时`);
 
   // 服务器启动 30 秒后执行一次初始同步
   setTimeout(() => {
@@ -41,10 +46,14 @@ export function startAutoSync() {
     setTimeout(() => triggerBalanceSync("启动同步"), 30_000);
   }, 30_000);
 
+  // 启动 90 秒后执行一次异常检测（等其他初始同步先完成）
+  setTimeout(() => triggerAnomalyCheck("启动检测"), 90_000);
+
   // 计算到下一个同步时间点的延迟
   scheduleFeishuNext();
   schedulePriceNext();
   scheduleBalanceNext();
+  scheduleAnomalyNext();
 }
 
 function scheduleFeishuNext() {
@@ -146,5 +155,45 @@ async function triggerBalanceSync(reason: string) {
     }
   } catch (error) {
     console.error(`[AutoSync] 余额${reason} 请求失败:`, error);
+  }
+}
+
+// ===== 异常用量检测调度（每小时） =====
+
+/**
+ * 计算到下一个整点的延迟
+ * 异常检测每小时运行一次
+ */
+function calcHourlyDelay(): number {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(now.getHours() + 1, 0, 0, 0); // 下一个整点
+  return next.getTime() - now.getTime();
+}
+
+function scheduleAnomalyNext() {
+  const delay = calcHourlyDelay();
+  console.log(`[AutoSync] 异常检测将在 ${Math.round(delay / 60000)} 分钟后执行`);
+
+  setTimeout(() => {
+    triggerAnomalyCheck("定时检测");
+    scheduleAnomalyNext();
+  }, delay);
+}
+
+async function triggerAnomalyCheck(reason: string) {
+  try {
+    console.log(`[AutoSync] ===== 异常检测${reason} 开始 =====`);
+    const resp = await fetch(ANOMALY_CHECK_URL, { method: "POST" });
+    const data = await resp.json() as { checked: number; anomalyCount: number; skipped: number; anomalies: Array<{ userName: string; hourlyCost: number }> };
+    console.log(`[AutoSync] ===== 异常检测${reason} 完成: 检查 ${data.checked} 人, ${data.anomalyCount} 个异常 =====`);
+
+    if (data.anomalies && data.anomalies.length > 0) {
+      data.anomalies.forEach(a => {
+        console.warn(`[AutoSync]   🚨 ${a.userName}: ¥${a.hourlyCost.toFixed(2)}/h`);
+      });
+    }
+  } catch (error) {
+    console.error(`[AutoSync] 异常检测${reason} 请求失败:`, error);
   }
 }
