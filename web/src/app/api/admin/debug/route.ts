@@ -1,22 +1,27 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "../../../../lib/admin-check";
 import { getDb } from "../../../../lib/db";
 
 export async function GET() {
+  // 鉴权：仅管理员可访问
+  const { error: authError } = await requireAdmin();
+  if (authError) return authError;
+
+  // 生产环境禁用 debug 端点
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Debug endpoint disabled in production" }, { status: 403 });
+  }
+
   try {
     const { sqlite } = await getDb();
     const dbAny = sqlite as any;
 
-    // 检查 users 表列
     const cols = dbAny.exec(`PRAGMA table_info(users)`);
     const colNames = (cols[0]?.values ?? []).map((r: unknown[]) => String(r[1]));
 
-    // 检查 users 数量
     const userCount = dbAny.exec(`SELECT COUNT(*) FROM users`);
-
-    // 检查 usage_logs 数量
     const logCount = dbAny.exec(`SELECT COUNT(*) FROM usage_logs`);
 
-    // 简单查询测试
     let testQuery = "FAILED";
     try {
       const test = dbAny.exec(`SELECT u.name, u.department FROM users u LIMIT 1`);

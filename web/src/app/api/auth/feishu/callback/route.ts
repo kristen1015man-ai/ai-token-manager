@@ -37,7 +37,11 @@ export async function GET(request: NextRequest) {
       throw new Error("No user info returned from Feishu");
     }
 
-    console.log("[Feishu OAuth] user info:", JSON.stringify(userInfo));
+    console.log("[Feishu OAuth] user info:", JSON.stringify({
+      open_id: userInfo.open_id,
+      name: userInfo.name,
+      employee_no: userInfo.employee_no,
+    }));
 
     // 3. 获取所有部门并分类三层
     let departmentName: string | undefined;

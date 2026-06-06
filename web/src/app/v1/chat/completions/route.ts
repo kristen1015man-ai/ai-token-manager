@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateUser, checkQuota, checkRateLimit, proxyChatRequest } from "../../../../lib/proxy";
+import { corsOptionsResponse } from "../../../../lib/cors";
 
 /**
  * POST /v1/chat/completions
@@ -64,13 +65,6 @@ export async function POST(request: NextRequest) {
   });
 }
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    },
-  });
+export async function OPTIONS(request: NextRequest) {
+  return corsOptionsResponse(request);
 }

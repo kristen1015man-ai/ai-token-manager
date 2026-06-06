@@ -4,9 +4,11 @@ import { getDb, saveDb } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
 
 /**
- * 确保表有所需的列，没有就加（解决多实例缓存问题）
+ * 确保表有所需的列，没有就加（只在首次调用时执行）
  */
+let columnsEnsured = false;
 function ensureColumns(dbAny: any) {
+  if (columnsEnsured) return false;
   const needed = [
     ["department", "TEXT"],
     ["department_id", "TEXT"],
@@ -26,6 +28,7 @@ function ensureColumns(dbAny: any) {
       } catch { /* duplicate column, ignore */ }
     }
   }
+  if (changed) columnsEnsured = true;
   return changed;
 }
 
@@ -77,7 +80,8 @@ export async function GET(request: NextRequest) {
     LEFT JOIN usage_logs ul ON ${joinCond}`;
 
   if (dept) {
-    query += ` AND ${deptCol} = ?`;
+    // 部门筛选必须放 WHERE，不能放 JOIN ON（LEFT JOIN 会保留所有用户行）
+    query += ` WHERE ${deptCol} = ?`;
     params.push(dept);
   }
 

@@ -4,8 +4,10 @@ import { requireAdmin } from "../../../../lib/admin-check";
 import { getDb, saveDb } from "../../../../lib/db";
 import { quotaRules, users } from "../../../../../../shared/schema";
 import { eq } from "drizzle-orm";
+import { auditLog } from "../../../../lib/audit-log";
+import { apiHandler, apiHandlerNoBody } from "../../../../lib/api-handler";
 
-export async function GET() {
+export const GET = apiHandlerNoBody(async () => {
   const { error } = await requireAdmin();
   if (error) return error;
 
@@ -16,15 +18,23 @@ export async function GET() {
   const allUsers = await db.select({
     id: users.id,
     name: users.name,
+    avatar: users.avatar,
     department: users.department,
     monthlyQuota: users.monthlyQuota,
   }).from(users);
 
-  return NextResponse.json({ rules, users: allUsers });
-}
+  // 从规则中提取公司限额
+  const companyRule = rules.find((r) => r.scope === "company");
+  const companyLimit = companyRule?.monthlyLimit ?? null;
 
-export async function POST(request: NextRequest) {
-  const { error: authError } = await requireAdmin();
+  // 提取部门列表
+  const departments = [...new Set(allUsers.map((u) => u.department).filter(Boolean))] as string[];
+
+  return NextResponse.json({ rules, users: allUsers, companyLimit, departments });
+});
+
+export const POST = apiHandler(async (request: NextRequest) => {
+  const { session, error: authError } = await requireAdmin();
   if (authError) return authError;
 
   const body = await request.json();
@@ -64,5 +74,6 @@ export async function POST(request: NextRequest) {
   }
 
   await saveDb();
+  await auditLog(session.userId, "update", "quota", targetId, { scope, monthlyLimit });
   return NextResponse.json({ success: true });
-}
+});

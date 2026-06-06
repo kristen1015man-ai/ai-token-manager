@@ -4,6 +4,7 @@ import { getDb, saveDb } from "../../../../lib/db";
 import { users } from "../../../../../../shared/schema";
 import { eq } from "drizzle-orm";
 import { generateApiKey } from "../../../../lib/user-service";
+import { ensureEncrypted, ensureDecrypted } from "../../../../lib/crypto";
 
 // 配置命令里的地址用线上域名
 const PROXY_BASE_URL = "https://ai.seapllo.com/v1";
@@ -25,7 +26,7 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const key = result[0].apiKey;
+  const key = ensureDecrypted(result[0].apiKey);
   // 脱敏显示: sk-emp-gmhe-****m2
   const masked = key.slice(0, Math.min(key.indexOf("-", 7) + 1 || 12, 20)) + "****" + key.slice(-4);
 
@@ -58,7 +59,7 @@ export async function POST() {
 
   await db
     .update(users)
-    .set({ apiKey: newKey, updatedAt: new Date() })
+    .set({ apiKey: ensureEncrypted(newKey), updatedAt: new Date() })
     .where(eq(users.id, session.userId));
 
   await saveDb();

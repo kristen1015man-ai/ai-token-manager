@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateUser, checkQuota, checkRateLimit, proxyChatRequest } from "../../../../../../lib/proxy";
+import { corsOptionsResponse } from "../../../../../../lib/cors";
 
 /**
  * POST /api/proxy/v1/chat/completions
@@ -70,15 +71,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * OPTIONS 预检请求支持
+ * OPTIONS 预检请求支持（CORS 白名单）
  */
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Authorization, Content-Type",
-    },
-  });
+export async function OPTIONS(request: NextRequest) {
+  return corsOptionsResponse(request);
 }

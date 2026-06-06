@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, saveDb, resetDb } from "../../../../lib/db";
+import { requireAdmin } from "../../../../lib/admin-check";
 import * as fs from "fs";
 import * as path from "path";
 import { randomBytes } from "crypto";
@@ -8,8 +9,13 @@ import { pinyin } from "pinyin-pro";
 /**
  * 用真实飞书通讯录数据重新填充模拟数据
  * GET /api/setup/seed?force=1 → 删除旧库 + 重建 + 填充
+ * ⚠️ 高危端点：需要管理员鉴权，生产环境需额外 ?force=1 参数
  */
 export async function GET(request: NextRequest) {
+  // 鉴权：仅管理员可访问
+  const { error: authError } = await requireAdmin();
+  if (authError) return authError;
+
   if (process.env.NODE_ENV === "production" && !request.nextUrl.searchParams.get("force")) {
     return NextResponse.json({ error: "Add ?force=1 to seed in production" }, { status: 403 });
   }
@@ -316,13 +322,13 @@ export async function GET(request: NextRequest) {
   // 何广明固定 API Key（方便 dev-login）
   dbAny.exec(`UPDATE users SET api_key = 'sk-heguangming-dev-key' WHERE feishu_id = 'ou_f2e284bb6701647e664c938806b08627'`);
 
-  // ===== 渠道 =====
-  dbAny.exec(`INSERT INTO channels VALUES ('ch_deepseek', 'DeepSeek 官方', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY', '["deepseek-chat","deepseek-reasoner","deepseek-v4-flash","deepseek-v4-pro"]', 0, 'active', ?)`, [regTs]);
-  dbAny.exec(`INSERT INTO channels VALUES ('ch_silicon', '硅基流动', 'https://api.siliconflow.cn', 'YOUR_SILICONFLOW_API_KEY', '["deepseek-ai/deepseek-chat-v3-0324"]', 1, 'active', ?)`, [regTs]);
-  dbAny.exec(`INSERT INTO channels VALUES ('ch_glm', '智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4', 'YOUR_GLM_API_KEY', '["glm-5.1","glm-4-plus","glm-4-flash"]', 2, 'active', ?)`, [regTs]);
-  dbAny.exec(`INSERT INTO channels VALUES ('ch_openai', 'OpenAI 官方', 'https://api.openai.com', 'YOUR_OPENAI_API_KEY', '["gpt-5.5","gpt-4o","gpt-4o-mini"]', 3, 'active', ?)`, [regTs]);
-  // 注意：Anthropic 使用独立 API 格式，需通过格式适配层（后续实现）
-  dbAny.exec(`INSERT INTO channels VALUES ('ch_anthropic', 'Anthropic Claude', 'https://api.anthropic.com', 'YOUR_ANTHROPIC_API_KEY', '["claude-opus-4-8","claude-sonnet-4-6"]', 4, 'inactive', ?)`, [regTs]);
+  // ===== 渠道（含 currency + provider 字段） =====
+  const chCols = "(id, name, base_url, api_key, models, priority, status, created_at, currency, provider)";
+  dbAny.exec(`INSERT INTO channels ${chCols} VALUES ('ch_deepseek', 'DeepSeek 官方', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY', '["deepseek-chat","deepseek-reasoner","deepseek-v4-flash","deepseek-v4-pro"]', 0, 'active', ?, 'CNY', 'deepseek')`, [regTs]);
+  dbAny.exec(`INSERT INTO channels ${chCols} VALUES ('ch_silicon', '硅基流动', 'https://api.siliconflow.cn', 'YOUR_SILICONFLOW_API_KEY', '["deepseek-ai/deepseek-chat-v3-0324"]', 1, 'active', ?, 'CNY', 'siliconflow')`, [regTs]);
+  dbAny.exec(`INSERT INTO channels ${chCols} VALUES ('ch_glm', '智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4', 'YOUR_GLM_API_KEY', '["glm-5.1","glm-4-plus","glm-4-flash"]', 2, 'active', ?, 'CNY', 'glm')`, [regTs]);
+  dbAny.exec(`INSERT INTO channels ${chCols} VALUES ('ch_openai', 'OpenAI 官方', 'https://api.openai.com', 'YOUR_OPENAI_API_KEY', '["gpt-5.5","gpt-4o","gpt-4o-mini"]', 3, 'active', ?, 'USD', 'openai')`, [regTs]);
+  dbAny.exec(`INSERT INTO channels ${chCols} VALUES ('ch_anthropic', 'Anthropic Claude', 'https://api.anthropic.com', 'YOUR_ANTHROPIC_API_KEY', '["claude-opus-4-8","claude-sonnet-4-6"]', 4, 'active', ?, 'USD', 'anthropic')`, [regTs]);
 
   // ===== 生成 30 天 usage_logs =====
   let seed = 42;

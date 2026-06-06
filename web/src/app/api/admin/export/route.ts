@@ -11,11 +11,11 @@ import * as XLSX from "xlsx";
  *
  * - 只按时间段筛选
  * - 按员工汇总（不拆每条调用记录）
- * - 模型统一为 deepseek
- * - 不显示 token，只显示费用
+ * - 不显示 token 和调用次数，只显示费用
  *
  * Sheet 1: 员工费用汇总（按部门+姓名排序）
  * Sheet 2: 部门费用汇总（排名、占比、人均）
+ * Sheet 3: 渠道费用明细（按渠道+模型拆分）
  */
 export async function GET(request: NextRequest) {
   const { error } = await requireRole("admin", "finance", "dept_manager");
@@ -35,10 +35,12 @@ export async function GET(request: NextRequest) {
     params.push(end);
   }
 
+  // ===== 虚拟部门黑名单 =====
+  const VIRTUAL_DEPTS = ["管理部"];
+
   // ===== Sheet 1: 员工费用汇总 =====
   const empResult = dbAny.exec(
     `SELECT u.name, u.department,
-       COUNT(ul.id) as call_count,
        COALESCE(SUM(ul.cost), 0) as total_cost
      FROM users u
      LEFT JOIN usage_logs ul ON ul.user_id = u.id AND ${timeWhere}
@@ -48,25 +50,19 @@ export async function GET(request: NextRequest) {
     params
   );
 
-  const empRows = (empResult[0]?.values ?? []).map((r: unknown[]) => ({
-    "员工姓名": String(r[0] ?? ""),
-    "部门": String(r[1] ?? "未分配"),
-    "调用次数": Number(r[2]),
-    "费用(元)": Number(Number(r[3]).toFixed(2)),
-  }));
-
-  // ===== 虚拟部门黑名单 =====
-  const VIRTUAL_DEPTS = ["管理部"];
-
-  // ===== Sheet 1: 员工费用汇总（过滤虚拟部门） =====
-  const empRowsFiltered = empRows.filter((r: Record<string, string>) => !VIRTUAL_DEPTS.includes(r["部门"]));
+  const empRowsFiltered = (empResult[0]?.values ?? [])
+    .map((r: unknown[]) => ({
+      "员工姓名": String(r[0] ?? ""),
+      "部门": String(r[1] ?? "未分配"),
+      "费用(元)": Number(Number(r[2]).toFixed(2)),
+    }))
+    .filter((r: Record<string, string>) => !VIRTUAL_DEPTS.includes(r["部门"]));
 
   // ===== Sheet 2: 部门费用汇总 =====
   const deptParams = [...params];
   const deptResult = dbAny.exec(
     `SELECT u.department as dept,
        COUNT(DISTINCT u.id) as user_count,
-       COUNT(ul.id) as call_count,
        COALESCE(SUM(ul.cost), 0) as total_cost
      FROM users u
      LEFT JOIN usage_logs ul ON ul.user_id = u.id AND ${timeWhere}
@@ -75,14 +71,12 @@ export async function GET(request: NextRequest) {
     deptParams
   );
 
-  // 部门汇总也过滤虚拟部门，重新计算排名和占比
-  interface DeptRaw { dept: string; userCount: number; callCount: number; totalCost: number }
+  interface DeptRaw { dept: string; userCount: number; totalCost: number }
   const deptRowsRaw: DeptRaw[] = (deptResult[0]?.values ?? [])
     .map((r: unknown[]) => ({
       dept: String(r[0] ?? "未分配"),
       userCount: Number(r[1]),
-      callCount: Number(r[2]),
-      totalCost: Number(r[3]),
+      totalCost: Number(r[2]),
     }))
     .filter((d: DeptRaw) => !VIRTUAL_DEPTS.includes(d.dept));
 
@@ -92,27 +86,61 @@ export async function GET(request: NextRequest) {
     "排名": idx + 1,
     "部门": d.dept,
     "人数": d.userCount,
-    "调用次数": d.callCount,
     "总费用(元)": Number(d.totalCost.toFixed(2)),
     "占比": filteredTotalCost > 0 ? `${((d.totalCost / filteredTotalCost) * 100).toFixed(1)}%` : "0%",
     "人均费用(元)": d.userCount ? Number((d.totalCost / d.userCount).toFixed(2)) : 0,
   }));
+
+  // ===== Sheet 3: 渠道费用明细 =====
+  const channelResult = dbAny.exec(
+    `SELECT c.name as channel_name,
+       ul.model,
+       COALESCE(SUM(ul.cost), 0) as total_cost,
+       COALESCE(SUM(ul.input_tokens), 0) as input_tokens,
+       COALESCE(SUM(ul.output_tokens), 0) as output_tokens
+     FROM usage_logs ul
+     LEFT JOIN channels c ON ul.channel_id = c.id
+     WHERE ${timeWhere.replace(/ul\./g, "ul.")}
+     GROUP BY ul.channel_id, ul.model
+     ORDER BY total_cost DESC`,
+    params
+  );
+
+  const channelTotalCost = (channelResult[0]?.values ?? [])
+    .reduce((sum: number, r: unknown[]) => sum + Number(r[2]), 0);
+
+  const channelRows = (channelResult[0]?.values ?? []).map((r: unknown[]) => {
+    const cost = Number(r[2]);
+    return {
+      "渠道": String(r[0] ?? "未知渠道"),
+      "模型": String(r[1] ?? ""),
+      "费用(元)": Number(cost.toFixed(2)),
+      "占比": channelTotalCost > 0 ? `${((cost / channelTotalCost) * 100).toFixed(1)}%` : "0%",
+      "输入Token": Number(r[3]),
+      "输出Token": Number(r[4]),
+    };
+  });
 
   // ===== 生成 Excel =====
   const wb = XLSX.utils.book_new();
 
   const ws1 = XLSX.utils.json_to_sheet(empRowsFiltered);
   ws1["!cols"] = [
-    { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 12 },
+    { wch: 12 }, { wch: 14 }, { wch: 12 },
   ];
   XLSX.utils.book_append_sheet(wb, ws1, "员工费用汇总");
 
   const ws2 = XLSX.utils.json_to_sheet(deptRows);
   ws2["!cols"] = [
-    { wch: 6 }, { wch: 14 }, { wch: 6 }, { wch: 10 },
-    { wch: 12 }, { wch: 8 }, { wch: 12 },
+    { wch: 6 }, { wch: 14 }, { wch: 6 }, { wch: 12 }, { wch: 8 }, { wch: 12 },
   ];
   XLSX.utils.book_append_sheet(wb, ws2, "部门费用汇总");
+
+  const ws3 = XLSX.utils.json_to_sheet(channelRows);
+  ws3["!cols"] = [
+    { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 12 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws3, "渠道费用明细");
 
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 

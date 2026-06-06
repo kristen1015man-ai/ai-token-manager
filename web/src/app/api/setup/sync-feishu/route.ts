@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "../../../../lib/admin-check";
 import { getDb, saveDb } from "../../../../lib/db";
 import { getAppAccessToken, fetchAllDepartmentsWithParent } from "../../../../lib/feishu";
 import { randomBytes } from "crypto";
@@ -78,6 +79,10 @@ let syncStatus: {
  * GET /api/setup/sync-feishu?run=1 → 启动后台同步，立即返回
  */
 export async function GET(request: NextRequest) {
+  // 鉴权：仅管理员可触发同步
+  const { error: authError } = await requireAdmin();
+  if (authError) return authError;
+
   const shouldRun = request.nextUrl.searchParams.get("run") === "1";
 
   if (!shouldRun) {
@@ -104,6 +109,10 @@ export async function GET(request: NextRequest) {
  * POST /api/setup/sync-feishu → 同步执行（适合 CLI 调用，长超时）
  */
 export async function POST(request: NextRequest) {
+  // 鉴权：仅管理员可触发同步
+  const { error: authError } = await requireAdmin();
+  if (authError) return authError;
+
   try {
     const result = await executeSync();
     return NextResponse.json(result);
