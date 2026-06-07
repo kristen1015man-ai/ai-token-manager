@@ -3,7 +3,9 @@ const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || "";
 const BASE_URL = "https://open.feishu.cn/open-apis";
 
 // 启动时校验：生产环境必须配置飞书应用凭证
-if (process.env.NODE_ENV === "production" && (!FEISHU_APP_ID || !FEISHU_APP_SECRET)) {
+// 构建阶段（next build）环境变量尚未注入，跳过校验
+const isNextBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+if (process.env.NODE_ENV === "production" && !isNextBuildPhase && (!FEISHU_APP_ID || !FEISHU_APP_SECRET)) {
   throw new Error("[FATAL] FEISHU_APP_ID 和 FEISHU_APP_SECRET 必须在生产环境中配置。");
 }
 
