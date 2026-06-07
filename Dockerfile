@@ -7,9 +7,9 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# 强制破坏构建缓存
-ARG CACHEBUST=1
-RUN echo "Build ${CACHEBUST} - $(date)" > /dev/null
+# 强制破坏构建缓存 — 每次部署必须生成新 layer hash
+ARG CACHEBUST=20260607v2
+RUN echo "Force rebuild ${CACHEBUST}" && date
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
