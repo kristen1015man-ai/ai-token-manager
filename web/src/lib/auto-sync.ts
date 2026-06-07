@@ -21,11 +21,15 @@
  */
 
 const FEISHU_SYNC_HOURS = [12, 19]; // 每天中午12点、晚上7点
-const FEISHU_SYNC_URL = "http://localhost:3000/api/setup/sync-feishu";
-const PRICE_SYNC_URL = "http://localhost:3000/api/admin/prices/sync";
-const BALANCE_SYNC_URL = "http://localhost:3000/api/admin/channels/balance-sync";
-const ANOMALY_CHECK_URL = "http://localhost:3000/api/admin/anomaly-check";
-const EMPLOYEE_STATUS_CHECK_URL = "http://localhost:3000/api/admin/employee-status-check";
+
+// 运行时端口：Railway 等平台会覆盖 PORT 环境变量（如 8080），
+// 必须动态读取，否则所有定时任务都会 ECONNREFUSED
+const SYNC_BASE = `http://localhost:${process.env.PORT || 3000}`;
+const FEISHU_SYNC_URL = `${SYNC_BASE}/api/setup/sync-feishu`;
+const PRICE_SYNC_URL = `${SYNC_BASE}/api/admin/prices/sync`;
+const BALANCE_SYNC_URL = `${SYNC_BASE}/api/admin/channels/balance-sync`;
+const ANOMALY_CHECK_URL = `${SYNC_BASE}/api/admin/anomaly-check`;
+const EMPLOYEE_STATUS_CHECK_URL = `${SYNC_BASE}/api/admin/employee-status-check`;
 
 let started = false;
 
@@ -36,7 +40,7 @@ export function startAutoSync() {
   if (started) return;
   started = true;
 
-  console.log(`[AutoSync] 定时同步已启动`);
+  console.log(`[AutoSync] 定时同步已启动 (base=${SYNC_BASE})`);
   console.log(`[AutoSync] 飞书同步：每天 ${FEISHU_SYNC_HOURS.map(h => `${String(h).padStart(2, "0")}:00`).join("、")}`);
   console.log(`[AutoSync] 价格同步：每天 03:00`);
   console.log(`[AutoSync] 余额同步：每天 04:00`);
