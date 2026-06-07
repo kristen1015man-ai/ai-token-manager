@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchApi, ApiError } from "../../lib/fetcher";
 
 interface Detail {
   id: string;
@@ -12,80 +13,118 @@ interface Detail {
   createdAt: string;
 }
 
+interface PageData {
+  items: Detail[];
+  pagination: { totalPages: number };
+}
+
+type State =
+  | { data: PageData; error: null }
+  | { data: null; error: string }
+  | { data: null; error: null };
+
 export default function UsageTable() {
-  const [items, setItems] = useState<Detail[]>([]);
+  const [state, setState] = useState<State>({ data: null, error: null });
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    fetch(`/api/usage/details?page=${page}&size=10`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d) {
-          setItems(d.items);
-          setTotalPages(d.pagination.totalPages);
-        }
-      });
+    setState({ data: null, error: null });
+    fetchApi<PageData>(`/api/usage/details?page=${page}&size=10`)
+      .then((d) => setState({ data: d, error: null }))
+      .catch((err) => setState({ data: null, error: err instanceof ApiError ? err.message : "加载失败" }));
   }, [page]);
 
   const formatTime = (t: string) => {
     const d = new Date(t);
-    return d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
+  // 加载态
+  if (!state.data && !state.error) {
+    return (
+      <div className="glass-card-static p-5">
+        <div className="h-5 glass-skeleton w-20 mb-4" />
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex gap-4">
+              <div className="h-4 glass-skeleton w-20" />
+              <div className="h-4 glass-skeleton w-24" />
+              <div className="h-4 glass-skeleton w-12" />
+              <div className="h-4 glass-skeleton w-12" />
+              <div className="h-4 glass-skeleton w-16" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 错误态
+  if (state.error) {
+    return (
+      <div className="glass-card-static p-5">
+        <h3 className="font-semibold text-gray-800 mb-4">最近调用</h3>
+        <div className="py-12 text-center text-sm text-red-500">加载失败：{state.error}</div>
+      </div>
+    );
+  }
+
+  const { items, pagination } = state.data!;
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="glass-card-static p-5">
       <h3 className="font-semibold text-gray-800 mb-4">最近调用</h3>
       {items.length === 0 ? (
         <div className="py-12 text-center text-gray-400">暂无调用记录</div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="glass-table">
               <thead>
-                <tr className="border-b border-gray-100 text-gray-500">
-                  <th className="text-left py-2 font-medium">时间</th>
-                  <th className="text-left py-2 font-medium">模型</th>
-                  <th className="text-right py-2 font-medium">输入</th>
-                  <th className="text-right py-2 font-medium">输出</th>
-                  <th className="text-right py-2 font-medium">费用</th>
+                <tr>
+                  <th className="text-left">时间</th>
+                  <th className="text-left">模型</th>
+                  <th className="text-right">输入</th>
+                  <th className="text-right">输出</th>
+                  <th className="text-right">费用</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-2 text-gray-600">{formatTime(item.createdAt)}</td>
-                    <td className="py-2">
-                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs">
-                        {item.model}
-                      </span>
+                  <tr key={item.id}>
+                    <td className="py-2.5 text-gray-600">{formatTime(item.createdAt)}</td>
+                    <td className="py-2.5">
+                      <span className="glass-badge" style={{ color: "#6366f1" }}>{item.model}</span>
                     </td>
-                    <td className="py-2 text-right text-gray-600">{item.inputTokens.toLocaleString()}</td>
-                    <td className="py-2 text-right text-gray-600">{item.outputTokens.toLocaleString()}</td>
-                    <td className="py-2 text-right font-medium text-gray-800">
-                      ¥{item.cost.toFixed(4)}
-                    </td>
+                    <td className="py-2.5 text-right text-gray-600">{item.inputTokens.toLocaleString()}</td>
+                    <td className="py-2.5 text-right text-gray-600">{item.outputTokens.toLocaleString()}</td>
+                    <td className="py-2.5 text-right font-medium text-gray-800">¥{item.cost.toFixed(4)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {totalPages > 1 && (
+          {pagination.totalPages > 1 && (
             <div className="flex justify-center gap-2 mt-4">
               <button
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
-                className="px-3 py-1 text-sm rounded-lg border border-gray-200 disabled:opacity-30 hover:bg-gray-50"
+                className="glass-badge px-3 py-1.5 text-sm disabled:opacity-30 cursor-pointer transition-all hover:bg-white/50"
               >
                 上一页
               </button>
-              <span className="px-3 py-1 text-sm text-gray-500">
-                {page} / {totalPages}
+              <span className="px-3 py-1.5 text-sm text-gray-500">
+                {page} / {pagination.totalPages}
               </span>
               <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 text-sm rounded-lg border border-gray-200 disabled:opacity-30 hover:bg-gray-50"
+                onClick={() => setPage(Math.min(pagination.totalPages, page + 1))}
+                disabled={page === pagination.totalPages}
+                className="glass-badge px-3 py-1.5 text-sm disabled:opacity-30 cursor-pointer transition-all hover:bg-white/50"
               >
                 下一页
               </button>

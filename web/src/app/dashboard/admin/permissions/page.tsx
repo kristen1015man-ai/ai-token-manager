@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { fetchApi, ApiError } from "../../../../lib/fetcher";
+import Avatar from "@/components/Avatar";
+import PageLoader from "@/components/PageLoader";
 
 /* ===== 类型 ===== */
 interface User {
@@ -56,28 +59,6 @@ const GROUPS: GroupDef[] = [
   },
 ];
 
-/* ===== 头像组件 ===== */
-const AVATAR_COLORS = [
-  "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-rose-500",
-  "bg-amber-500", "bg-cyan-500", "bg-indigo-500", "bg-teal-500",
-  "bg-pink-500", "bg-sky-500",
-];
-function getAvatarColor(name: string) {
-  return AVATAR_COLORS[name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
-}
-
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string | null; size?: "sm" | "md" }) {
-  const dim = size === "sm" ? "w-7 h-7 text-[10px]" : "w-8 h-8 text-xs";
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt={name} className={`${dim} rounded-full object-cover ring-2 ring-white shadow`} />;
-  }
-  return (
-    <div className={`${dim} rounded-full ${getAvatarColor(name)} flex items-center justify-center text-white font-semibold ring-2 ring-white shadow`}>
-      {name.charAt(0)}
-    </div>
-  );
-}
-
 /* ===== 主组件 ===== */
 export default function PermissionsPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -89,13 +70,15 @@ export default function PermissionsPage() {
 
   const load = () => {
     setLoading(true);
-    fetch("/api/admin/permissions")
-      .then((r) => (r.ok ? r.json() : { users: [] }))
+    fetchApi<{ users: User[] }>("/api/admin/permissions")
       .then((data) => {
         setUsers(data.users || []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setUsers([]);
+        setLoading(false);
+      });
   };
 
   useEffect(load, []);
@@ -114,11 +97,15 @@ export default function PermissionsPage() {
 
   const addRole = async (userId: string, role: string) => {
     setSaving(true);
-    await fetch("/api/admin/permissions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, role }),
-    });
+    try {
+      await fetchApi("/api/admin/permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, role }),
+      });
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : "添加角色失败");
+    }
     setSaving(false);
     load();
   };
@@ -126,11 +113,15 @@ export default function PermissionsPage() {
   const removeRole = async (userId: string, role: string, userName: string, groupLabel: string) => {
     if (!confirm(`确定将 ${userName} 从「${groupLabel}」组中移除？`)) return;
     setSaving(true);
-    await fetch("/api/admin/permissions", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, role }),
-    });
+    try {
+      await fetchApi("/api/admin/permissions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, role }),
+      });
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : "移除角色失败");
+    }
     setSaving(false);
     load();
   };
@@ -146,7 +137,7 @@ export default function PermissionsPage() {
   };
 
   if (loading) {
-    return <div className="animate-pulse p-6 text-gray-400">加载中...</div>;
+    return <PageLoader />;
   }
 
   return (
@@ -166,9 +157,9 @@ export default function PermissionsPage() {
         const isOpen = activeGroup === group.key;
 
         return (
-          <div key={group.key} className={`bg-white rounded-xl border ${group.borderColor} overflow-hidden`}>
+          <div key={group.key} className={`glass-card-static overflow-hidden ${group.borderColor}`}>
             {/* 卡片头部 */}
-            <div className={`px-5 py-4 border-b ${group.borderColor} flex items-center justify-between`}>
+            <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${group.badgeColor}`}>
                   {group.label}
@@ -182,10 +173,8 @@ export default function PermissionsPage() {
                   setActiveGroup(isOpen ? null : group.key);
                   setSearchText("");
                 }}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                  isOpen
-                    ? "bg-gray-100 text-gray-600"
-                    : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                  isOpen ? "text-gray-600 bg-gray-100" : "text-indigo-600 bg-indigo-50"
                 }`}
               >
                 {isOpen ? "收起" : "+ 添加成员"}
@@ -204,7 +193,7 @@ export default function PermissionsPage() {
                       className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group"
                     >
                       <div className="flex items-center gap-3">
-                        <Avatar name={u.name} avatarUrl={u.avatar} size="sm" />
+                        <Avatar name={u.name} size="sm" avatarUrl={u.avatar ?? undefined} />
                         <span className="text-sm font-medium text-gray-800">{u.name}</span>
                         {u.department && (
                           <span className="text-xs text-gray-400">{u.department}</span>
@@ -239,14 +228,14 @@ export default function PermissionsPage() {
 
             {/* 添加成员面板 */}
             {isOpen && (
-              <div ref={addRef} className={`px-5 py-3 border-t ${group.borderColor} ${group.bgColor}/30`}>
+              <div ref={addRef} className={`px-5 py-3 border-t border-gray-100 ${group.bgColor}`}>
                 <div className="relative">
                   <input
                     type="text"
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     placeholder="搜索要添加的员工..."
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white"
+                    className="glass-input w-full text-sm"
                     autoFocus
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
@@ -262,7 +251,7 @@ export default function PermissionsPage() {
                         disabled={saving}
                         className="w-full flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-white text-left transition-colors disabled:opacity-50"
                       >
-                        <Avatar name={u.name} avatarUrl={u.avatar} size="sm" />
+                        <Avatar name={u.name} size="sm" avatarUrl={u.avatar ?? undefined} />
                         <span className="text-sm font-medium text-gray-800">{u.name}</span>
                         {u.department && (
                           <span className="text-xs text-gray-400">{u.department}</span>

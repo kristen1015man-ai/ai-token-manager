@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import TimeRangeFilter from "@/components/TimeRangeFilter";
+import EmptyState from "@/components/EmptyState";
+import { fetchApi } from "../../../../lib/fetcher";
 
 /* ===== 动态部门颜色 ===== */
 const DEPT_COLORS = [
@@ -34,9 +36,9 @@ export default function DepartmentsPage() {
   const [range, setRange] = useState("30d");
 
   useEffect(() => {
-    fetch(`/api/admin/departments?level=department&range=${range}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => setData(d?.departments || []));
+    fetchApi<{ departments: DeptData[] }>(`/api/admin/departments?level=department&range=${range}`)
+      .then((d) => setData(d?.departments || []))
+      .catch(() => setData([]));
   }, [range]);
 
   const totalCost = data.reduce((s, d) => s + Number(d.cost), 0);
@@ -53,10 +55,7 @@ export default function DepartmentsPage() {
     return (
       <div className="space-y-6">
         <h3 className="font-semibold text-gray-800 text-lg">部门用量排行</h3>
-        <div className="bg-white rounded-xl border border-gray-200 py-16 text-center text-gray-400">
-          <div className="text-4xl mb-3">📊</div>
-          <p>暂无数据</p>
-        </div>
+        <EmptyState icon="📊" />
       </div>
     );
   }
@@ -71,7 +70,7 @@ export default function DepartmentsPage() {
 
       {/* ====== 领奖台 TOP 3 ====== */}
       {top3.length > 0 && (
-        <div className="bg-gradient-to-br from-indigo-50 via-white to-amber-50 rounded-2xl border border-gray-200 p-6">
+        <div className="glass-card-static p-6">
           <div className="flex items-end justify-center gap-4">
             {/* 第2名 - 左 */}
             {top3[1] && (
@@ -135,10 +134,10 @@ export default function DepartmentsPage() {
 
       {/* ====== 明细表格 4名以后 ====== */}
       {rest.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="glass-card-static overflow-hidden">
+          <table className="glass-table">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
+              <tr>
                 <th className="text-center py-3 px-4 font-medium text-gray-500 w-12">排名</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-500">部门</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-500">人数</th>

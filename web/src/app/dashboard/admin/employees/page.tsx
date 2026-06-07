@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useMemo } from "react";
 import TimeRangeFilter from "@/components/TimeRangeFilter";
+import Avatar from "@/components/Avatar";
+import EmptyState from "@/components/EmptyState";
+import { fetchApi } from "../../../../lib/fetcher";
 
 /* ===== 动态部门颜色生成 ===== */
 const DEPT_COLOR_POOL = [
@@ -36,28 +39,6 @@ function useDeptColors(deptList: string[]) {
   }, [deptList]);
 }
 
-/* ===== 头像组件 ===== */
-const AVATAR_COLORS = [
-  "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-rose-500",
-  "bg-amber-500", "bg-cyan-500", "bg-indigo-500", "bg-teal-500",
-  "bg-pink-500", "bg-sky-500",
-];
-function getAvatarColor(name: string) {
-  return AVATAR_COLORS[name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
-}
-
-function Avatar({ name, avatarUrl, size = "md" }: { name: string; avatarUrl?: string; size?: "sm" | "md" | "lg" | "xl" }) {
-  const sizes = { sm: "w-8 h-8 text-xs", md: "w-10 h-10 text-sm", lg: "w-14 h-14 text-lg", xl: "w-20 h-20 text-2xl" };
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt={name} className={`${sizes[size]} rounded-full object-cover ring-2 ring-white shadow`} />;
-  }
-  return (
-    <div className={`${sizes[size]} rounded-full ${getAvatarColor(name)} flex items-center justify-center text-white font-semibold ring-2 ring-white shadow`}>
-      {name.charAt(0)}
-    </div>
-  );
-}
-
 interface Employee {
   name: string; department: string; avatar: string;
   tokens: number; cost: number; count: number;
@@ -75,15 +56,15 @@ export default function EmployeesPage() {
     params.set("range", range);
     params.set("level", "department");
     if (dept) params.set("department", dept);
-    fetch(`/api/admin/employees?${params}`)
-      .then((r) => r.ok ? r.json() : null)
+    fetchApi<{ employees: Employee[]; departments: string[] }>(`/api/admin/employees?${params}`)
       .then((d) => {
         const list: Employee[] = d?.employees || [];
         setEmployees(list);
         if (!dept) {
           setAllDepts(d?.departments || []);
         }
-      });
+      })
+      .catch(() => setEmployees([]));
   }, [range, dept]);
 
   function getDeptStyle(deptName: string) {
@@ -105,7 +86,7 @@ export default function EmployeesPage() {
           <select
             value={dept}
             onChange={(e) => setDept(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white"
+            className="glass-input text-sm !py-1.5 !px-3"
           >
             <option value="">全部部门</option>
             {allDepts.map((d) => (<option key={d} value={d}>{d}</option>))}
@@ -114,20 +95,17 @@ export default function EmployeesPage() {
       </div>
 
       {employees.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 py-16 text-center text-gray-400">
-          <div className="text-4xl mb-3">📊</div>
-          <p>暂无数据</p>
-        </div>
+        <EmptyState icon="📊" />
       ) : (
         <>
           {/* ====== 领奖台 TOP 3 ====== */}
           {top3.length > 0 && (
-            <div className="bg-gradient-to-br from-indigo-50 via-white to-amber-50 rounded-2xl border border-gray-200 p-6">
+            <div className="glass-card-static p-6">
               <div className="flex items-end justify-center gap-4">
                 {/* 第2名 - 左 */}
                 {top3[1] && (
                   <div className="flex flex-col items-center w-1/3 max-w-[200px]">
-                    <Avatar name={top3[1].name} avatarUrl={top3[1].avatar} size="lg" />
+                    <Avatar name={top3[1].name} size="lg" avatarUrl={top3[1].avatar} />
                     <div className="mt-2 text-center">
                       <p className="font-bold text-gray-800 text-sm">{top3[1].name}</p>
                       <span className={getDeptStyle(top3[1].department || "未分配")}>
@@ -145,7 +123,7 @@ export default function EmployeesPage() {
                 {top3[0] && (
                   <div className="flex flex-col items-center w-1/3 max-w-[220px]">
                     <div className="relative">
-                      <Avatar name={top3[0].name} avatarUrl={top3[0].avatar} size="xl" />
+                      <Avatar name={top3[0].name} size="xl" avatarUrl={top3[0].avatar} />
                       <span className="absolute -top-2 -right-2 text-2xl">👑</span>
                     </div>
                     <div className="mt-2 text-center">
@@ -165,7 +143,7 @@ export default function EmployeesPage() {
                 {/* 第3名 - 右 */}
                 {top3[2] && (
                   <div className="flex flex-col items-center w-1/3 max-w-[200px]">
-                    <Avatar name={top3[2].name} avatarUrl={top3[2].avatar} size="lg" />
+                    <Avatar name={top3[2].name} size="lg" avatarUrl={top3[2].avatar} />
                     <div className="mt-2 text-center">
                       <p className="font-bold text-gray-800 text-sm">{top3[2].name}</p>
                       <span className={getDeptStyle(top3[2].department || "未分配")}>
@@ -184,10 +162,10 @@ export default function EmployeesPage() {
 
           {/* ====== 明细列表 4名以后 ====== */}
           {rest.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="glass-card-static overflow-hidden">
+              <table className="glass-table">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
+                  <tr>
                     <th className="text-center py-3 px-4 font-medium text-gray-500 w-12">排名</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-500">员工</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-500">部门</th>
@@ -202,7 +180,7 @@ export default function EmployeesPage() {
                       <td className="text-center py-3 px-4 text-gray-400 font-medium">{i + 4}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <Avatar name={e.name} avatarUrl={e.avatar} size="sm" />
+                          <Avatar name={e.name} size="md" avatarUrl={e.avatar} />
                           <p className="font-medium text-gray-800">{e.name}</p>
                         </div>
                       </td>
