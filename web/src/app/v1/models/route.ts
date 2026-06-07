@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
   try {
     modelList = await getAvailableModels();
     if (modelList.length === 0) modelList = ["deepseek-chat", "deepseek-reasoner"];
-  } catch {
+  } catch (err) {
+    console.warn("[Models] 获取模型列表失败，使用默认列表:", err);
     modelList = ["deepseek-chat", "deepseek-reasoner"];
   }
 

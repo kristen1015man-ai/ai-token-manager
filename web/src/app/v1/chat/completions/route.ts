@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
+    console.warn("[ChatCompletions] 无效的 JSON 请求体");
     return Response.json(
       { error: { message: "无效的 JSON 请求体", type: "invalid_request_error" } },
       { status: 400 }
