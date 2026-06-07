@@ -11,7 +11,11 @@ const DANGEROUS_DEFAULTS = [
 
 const isUnsafeSecret = !JWT_SECRET_RAW || DANGEROUS_DEFAULTS.includes(JWT_SECRET_RAW);
 
-if (isUnsafeSecret && process.env.NODE_ENV === "production") {
+// 构建阶段（next build / static generation）环境变量尚未注入，跳过致命错误
+// 运行时 Railway 会注入 JWT_SECRET，此时 isUnsafeSecret=false 不会进入此分支
+const isNextBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
+if (isUnsafeSecret && process.env.NODE_ENV === "production" && !isNextBuildPhase) {
   throw new Error(
     "[FATAL] JWT_SECRET 未配置或使用了不安全的默认值。请在环境变量中设置一个强随机密钥（至少 32 字符）。"
   );
