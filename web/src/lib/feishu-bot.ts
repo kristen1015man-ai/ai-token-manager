@@ -47,6 +47,44 @@ export async function sendGroupMessage(chatId: string, text: string) {
 }
 
 /**
+ * 发送飞书交互式卡片消息（私聊）
+ * 用于异常告警等富文本通知
+ */
+export async function sendCardMessage(
+  receiveId: string,
+  receiveIdType: "open_id" | "chat_id",
+  card: {
+    title: string;
+    template?: "red" | "orange" | "blue" | "green";
+    elements: string[];  // Markdown 内容行
+  }
+) {
+  try {
+    await client.im.v1.message.create({
+      params: { receive_id_type: receiveIdType },
+      data: {
+        receive_id: receiveId,
+        msg_type: "interactive",
+        content: JSON.stringify({
+          config: { wide_screen_mode: true },
+          header: {
+            title: { tag: "plain_text", content: card.title },
+            template: card.template || "blue",
+          },
+          elements: card.elements.map((md) => ({
+            tag: "div",
+            text: { tag: "lark_md", content: md },
+          })),
+        }),
+      },
+    });
+    console.log(`[FeishuBot] Card sent to ${receiveIdType}=${receiveId}`);
+  } catch (err) {
+    console.error("[FeishuBot] Failed to send card:", err);
+  }
+}
+
+/**
  * 生成额度预警消息
  */
 export function formatQuotaAlert(params: {

@@ -16,6 +16,7 @@ import { getDb, saveDb } from "./db";
 import { usageLogs, users, alertLogs, alertSettings } from "../../../shared/schema";
 import { eq, gte, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { sendCardMessage } from "./feishu-bot";
 
 // ===== 常量 =====
 const ANOMALY_MULTIPLIER = 5; // DEV-PLAN: 7 天小时均值的 5 倍
