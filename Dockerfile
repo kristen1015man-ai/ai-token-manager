@@ -1,7 +1,7 @@
 # ===== AI Token Manager - Web + API =====
 # 单服务部署：Next.js 管理后台
 # Railway 从根目录的 Dockerfile 构建
-# v3: dynamic column detection, full rebuild 2026-06-03
+# v4: fix health route, force rebuild 2026-06-07
 
 # ---- Build Stage ----
 FROM node:22-alpine AS builder
