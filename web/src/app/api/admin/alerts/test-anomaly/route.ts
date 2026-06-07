@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "../../../../../lib/admin-check";
 import { getDb } from "../../../../../lib/db";
 import { users } from "../../../../../../../shared/schema";
 import { eq } from "drizzle-orm";
@@ -9,10 +8,22 @@ import { sendCardMessage } from "../../../../../lib/feishu-bot";
  * POST /api/admin/alerts/test-anomaly
  * 发送模拟异常用量告警到飞书（私聊给指定用户）
  * Body: { userName?: string }  默认 "何广明"
+ *
+ * 认证：INTERNAL_API_KEY Bearer token 或管理员 session
  */
 export async function POST(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  // 认证：INTERNAL_API_KEY 或管理员 session
+  const authHeader = request.headers.get("Authorization") || "";
+  const internalKey = process.env.INTERNAL_API_KEY;
+
+  if (internalKey && authHeader === `Bearer ${internalKey}`) {
+    // Internal API 调用 — 通过
+  } else {
+    // 尝试 session 认证
+    const { requireAdmin } = await import("../../../../../lib/admin-check");
+    const { error } = await requireAdmin();
+    if (error) return error;
+  }
 
   const body = await request.json().catch(() => ({}));
   const targetName = (body as { userName?: string }).userName || "何广明";
