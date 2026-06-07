@@ -65,7 +65,8 @@ export async function proxyChatRequest(
     usedChannel = fallback;
     try {
       response = await sendUpstreamRequest(fallback, upstreamBody, stream);
-    } catch {
+    } catch (fallbackErr) {
+      console.error(`[Proxy] Fallback channel ${fallback.name} also failed:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
       return new Response(
         JSON.stringify({
           error: {
@@ -132,8 +133,8 @@ async function handleNonStreamResponse(
 
   try {
     parsed = JSON.parse(bodyText);
-  } catch {
-    // 上游返回的不是 JSON，直接透传
+  } catch (err) {
+    console.warn("[Proxy] 上游响应非 JSON，直接透传:", err instanceof Error ? err.message : String(err));
     return new Response(bodyText, {
       status: upstreamResponse.status,
       headers: { "Content-Type": "application/json" },

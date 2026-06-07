@@ -8,7 +8,7 @@
  * 位于 shared/ 以便 proxy 和 web 共同使用
  */
 
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
@@ -134,4 +134,19 @@ export function safeEqual(a: string, b: string): boolean {
     return false;
   }
   return timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * 生成可搜索的 HMAC-SHA256 哈希
+ * 用于 API Key 等需要 SQL WHERE 精确匹配的场景
+ * 与加密不同：加密用随机 IV（不可搜索），哈希是确定性的（可搜索）
+ *
+ * 注意：此哈希是单向的，不可逆。用于数据库索引查找，不用于存储原始凭据。
+ * 原始凭据仍然用 AES-256-GCM 加密存储，hash 仅作为查找索引。
+ */
+export function searchableHash(plaintext: string): string {
+  const key = getEncryptionKey();
+  // 密钥未配置时用固定派生密钥（开发模式）
+  const hmacKey = key || scryptSync("dev-only-searchable-hash", "searchable-hash-salt-v1", 32);
+  return createHmac("sha256", hmacKey).update(plaintext, "utf8").digest("hex");
 }

@@ -67,16 +67,16 @@ export async function getUsdCnyRate(): Promise<{ rate: number; source: string }>
       const result = await fetchFromErApi();
       cached = result;
       return result;
-    } catch {
-      // fallback
+    } catch (err) {
+      console.warn("[ExchangeRate] open.er-api.com 获取失败，尝试备用源:", err instanceof Error ? err.message : err);
     }
 
     try {
       const result = await fetchFromExchangeRateApi();
       cached = result;
       return result;
-    } catch {
-      // fallback
+    } catch (err) {
+      console.warn("[ExchangeRate] exchangerate-api.com 也失败:", err instanceof Error ? err.message : err);
     }
 
     if (cached) {

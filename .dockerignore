@@ -1,0 +1,45 @@
+# 依赖（构建阶段会重新安装）
+node_modules/
+**/node_modules/
+
+# 构建产物
+.next/
+**/.next/
+dist/
+out/
+.turbo/
+
+# 环境变量（敏感信息不入镜像）
+.env
+.env.local
+.env.production
+
+# 数据库文件
+*.db
+*.sqlite
+data.db
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Claude / 开发工具
+.claude/
+docs/
+*.md
+!shared/README.md
+
+# 日志
+*.log
+npm-debug.log*
+
+# 临时文件
+*.tmp
+*.tsbuildinfo
+cookies.txt

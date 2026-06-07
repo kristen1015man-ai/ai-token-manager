@@ -9,10 +9,15 @@ services:
     environment:
       - DATABASE_URL=/data/data.db
       - PROXY_PORT=3001
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      # ENV-02: JWT_SECRET 不提供默认值，强制用户在 .env 中设置
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - WEB_URL=${WEB_URL:-http://localhost:3000}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # 敏感字段加密密钥（可选，未配置则明文存储）
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     volumes:
-      - proxy-data:/data
+      # ENV-01: 两个服务共享同一个数据库文件，必须用同一个 volume
+      - app-data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
@@ -34,15 +39,26 @@ services:
       - FEISHU_REDIRECT_URI=${FEISHU_REDIRECT_URI}
       - NEXT_PUBLIC_FEISHU_APP_ID=${FEISHU_APP_ID}
       - NEXT_PUBLIC_FEISHU_REDIRECT_URI=${FEISHU_REDIRECT_URI}
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      # ENV-02: JWT_SECRET 不提供默认值，强制用户在 .env 中设置
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - ADMIN_EMAILS=${ADMIN_EMAILS:-admin@yourcompany.com}
+      # Web → Proxy 内部通信地址（Docker 网络用服务名）
+      - PROXY_BASE_URL=http://proxy:3001
+      # 敏感字段加密密钥（可选）
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     volumes:
-      - shared-data:/data
+      # ENV-01: 与 proxy 共享同一个 volume，确保读写同一个 data.db
+      - app-data:/data
     depends_on:
       proxy:
         condition: service_healthy
+    # ENV-03: 添加 healthcheck
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
 volumes:
-  proxy-data:
-  shared-data:
+  app-data:

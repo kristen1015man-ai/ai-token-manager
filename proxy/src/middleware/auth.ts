@@ -1,16 +1,15 @@
 import { createMiddleware } from "hono/factory";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../shared/db.js";
 import { users } from "../../../shared/schema.js";
-import { ensureDecrypted, safeEqual } from "../../../shared/crypto.js";
+import { ensureDecrypted, safeEqual, searchableHash } from "../../../shared/crypto.js";
 
 /**
  * API Key 认证中间件
  * 从 Authorization: Bearer sk-emp-xxx 提取 Key
  *
- * 注意：users.apiKey 可能以 AES-256-GCM 加密存储（enc:v1: 前缀），
- * 无法直接 SQL 匹配（因为每次加密的 IV 不同，密文不同），
- * 所以需要加载所有用户后内存解密比较。
- * 使用 timingSafeEqual 防止时序攻击。
+ * SEC-02: 使用 HMAC-SHA256 hash 做 SQL WHERE 精确匹配，避免全表扫描。
+ * 找到后仍做 timing-safe 二次验证（防碰撞）。
  */
 export const authMiddleware = createMiddleware(async (c, next) => {
   const authHeader = c.req.header("Authorization");
@@ -41,19 +40,30 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   try {
     const { db } = await getDb();
-    // apiKey 可能已加密存储，无法直接 SQL 匹配，需加载所有用户后内存比对
-    const allUsers = await db.select().from(users);
+    // SEC-02: hash → SQL 精确匹配，不再全表扫描
+    const hash = searchableHash(apiKey);
+    const candidates = await db
+      .select()
+      .from(users)
+      .where(eq(users.apiKeyHash, hash))
+      .limit(1);
 
-    let matchedUser: typeof allUsers[0] | null = null;
-    for (const user of allUsers) {
-      const decryptedKey = ensureDecrypted(user.apiKey);
-      if (safeEqual(decryptedKey, apiKey)) {
-        matchedUser = user;
-        break;
-      }
+    if (candidates.length === 0) {
+      return c.json(
+        {
+          error: {
+            message: "Invalid API key",
+            type: "authentication_error",
+          },
+        },
+        401
+      );
     }
 
-    if (!matchedUser) {
+    // 二次验证：timing-safe 比对确认（防碰撞）
+    const matchedUser = candidates[0];
+    const decryptedKey = ensureDecrypted(matchedUser.apiKey);
+    if (!safeEqual(decryptedKey, apiKey)) {
       return c.json(
         {
           error: {

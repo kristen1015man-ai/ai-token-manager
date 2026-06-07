@@ -48,7 +48,7 @@ async function loadPriceTable(): Promise<Map<string, ModelPrice>> {
         inputPerMillion: row.inputPerMillion,
         outputPerMillion: row.outputPerMillion,
         cachePerMillion: row.cachePerMillion,
-        currency: (row as any).currency === "USD" ? "USD" : "CNY",
+        currency: row.currency === "USD" ? "USD" : "CNY",
       });
     }
     priceCache = map;
@@ -131,7 +131,8 @@ async function convertToCNY(cost: number, currency: "CNY" | "USD"): Promise<numb
     try {
       const { rate } = await getUsdCnyRate();
       return cost * rate;
-    } catch {
+    } catch (err) {
+      console.warn("[Pricing] USD/CNY 汇率获取失败，使用硬编码 7.2:", err instanceof Error ? err.message : err);
       return cost * 7.2; // 汇率获取失败时用硬编码
     }
   }

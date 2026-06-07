@@ -8,7 +8,8 @@ chat.post("/", async (c) => {
 
   try {
     body = await c.req.json();
-  } catch {
+  } catch (err) {
+    console.warn("[Chat] Invalid JSON body:", err instanceof Error ? err.message : String(err));
     return c.json(
       {
         error: {

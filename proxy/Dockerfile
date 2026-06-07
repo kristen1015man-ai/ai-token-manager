@@ -28,12 +28,16 @@ RUN pnpm install --frozen-lockfile --prod
 COPY shared/ shared/
 COPY proxy/ proxy/
 
-# 创建数据目录
-RUN mkdir -p /data
+# DOCKER-01: 非 root 用户运行
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 appuser && \
+    mkdir -p /data && chown appuser:appgroup /data
 
 WORKDIR /app/proxy
 
 ENV NODE_ENV=production
 EXPOSE 3001
+
+USER appuser
 
 CMD ["node", "--experimental-strip-types", "src/index.ts"]

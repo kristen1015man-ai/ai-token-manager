@@ -27,6 +27,10 @@ export async function getDb() {
   }
 
   const sqlite = buffer ? new SQL.Database(buffer) : new SQL.Database();
+
+  // INTG-01: 启用外键约束（SQLite 默认关闭）
+  sqlite.run("PRAGMA foreign_keys = ON");
+
   const db = drizzle(sqlite, { schema });
 
   dbInstance = db;

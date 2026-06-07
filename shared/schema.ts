@@ -15,6 +15,7 @@ export const users = sqliteTable("users", {
   centerId: text("center_id"),
   employeeId: text("employee_id"),
   apiKey: text("api_key").notNull().unique(),
+  apiKeyHash: text("api_key_hash"),  // HMAC-SHA256 可搜索哈希，用于 SQL WHERE 精确匹配
   role: text("role").notNull().default("member"),  // 逗号分隔多角色: admin,finance,dept_manager,member
   status: text("status", { enum: ["active", "disabled"] })
     .notNull()
