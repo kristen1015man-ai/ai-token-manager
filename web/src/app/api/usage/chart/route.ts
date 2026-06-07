@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "../../../../lib/auth";
-import { getDb } from "../../../../lib/db";
+import { getDb, getRawExec } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
 
 export async function GET(request: NextRequest) {
@@ -24,8 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { sqlite } = await getDb();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dbAny = sqlite as any;
+  const db = getRawExec(sqlite);
 
   let where = `user_id = ? AND created_at >= ?`;
   const params: unknown[] = [session.userId, start];
@@ -34,7 +33,7 @@ export async function GET(request: NextRequest) {
     params.push(end);
   }
 
-  const result = dbAny.exec(
+  const result = db.exec(
     `SELECT
       strftime('${groupFormat}', created_at, 'unixepoch', 'localtime') as time_slot,
       SUM(total_tokens) as tokens,

@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "../../../../lib/admin-check";
-import { getDb, saveDb } from "../../../../lib/db";
+import { getDb, getRawExec } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
-
-function ensureColumns(dbAny: any) {
-  const needed = [
-    ["department", "TEXT"], ["department_id", "TEXT"],
-    ["group_name", "TEXT"], ["group_id", "TEXT"],
-    ["center_name", "TEXT"], ["center_id", "TEXT"],
-  ];
-  const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
-  const existing = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
-  let changed = false;
-  for (const [col, type] of needed) {
-    if (!existing.has(col)) {
-      try { dbAny.exec(`ALTER TABLE users ADD COLUMN ${col} ${type}`); changed = true; } catch {}
-    }
-  }
-  return changed;
-}
 
 export async function GET(request: NextRequest) {
   const { error } = await requireRole("admin", "finance", "dept_manager");
@@ -27,15 +10,11 @@ export async function GET(request: NextRequest) {
   const level = request.nextUrl.searchParams.get("level") || "department";
   const range = request.nextUrl.searchParams.get("range") || "30d";
   const { sqlite } = await getDb();
-  const dbAny = sqlite as any;
-
-  if (ensureColumns(dbAny)) {
-    await saveDb();
-  }
+  const db = getRawExec(sqlite);
 
   const { start: startTime, end: rangeEnd } = getTimeRange(range);
 
-  const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
+  const colInfo = db.exec(`PRAGMA table_info(users)`);
   const cols = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
 
   let deptCol = "u.department";
@@ -52,7 +31,7 @@ export async function GET(request: NextRequest) {
     sqlParams.push(rangeEnd);
   }
 
-  const depts = dbAny.exec(
+  const depts = db.exec(
     `SELECT ${deptCol} as dept_label,
        COUNT(DISTINCT u.id) as user_count,
        COALESCE(SUM(ul.total_tokens), 0) as tokens,

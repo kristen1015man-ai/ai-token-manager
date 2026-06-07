@@ -9,4 +9,5 @@ export {
   ensureEncrypted,
   ensureDecrypted,
   safeEqual,
-} from "../../../shared/crypto.js";
+  searchableHash,
+} from "../../../shared/crypto";

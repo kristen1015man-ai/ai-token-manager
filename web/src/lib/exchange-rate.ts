@@ -76,16 +76,16 @@ export async function getUsdCnyRate(): Promise<{ rate: number; source: string }>
       const result = await fetchFromErApi();
       cached = result;
       return result;
-    } catch {
-      // fallback 到第二个 API
+    } catch (err) {
+      console.warn("[ExchangeRate] 第一个 API (er-api) 失败，fallback:", err);
     }
 
     try {
       const result = await fetchFromExchangeRateApi();
       cached = result;
       return result;
-    } catch {
-      // fallback 到过期缓存或硬编码
+    } catch (err) {
+      console.warn("[ExchangeRate] 第二个 API 也失败，使用缓存或硬编码:", err);
     }
 
     if (cached) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb, saveDb, resetDb } from "../../../../lib/db";
+import { getDb, saveDb, resetDb, type SqliteExec } from "../../../../lib/db";
 
 // 与 cleanup-preview 相同的映射
 const GROUP_TO_DEPT: Record<string, string> = {
@@ -52,9 +52,9 @@ export async function POST() {
   if (error) return error;
 
   const { sqlite } = await getDb();
-  const dbAny = sqlite as any;
+  const dbAny = sqlite as unknown as SqliteExec;
 
-  // 读取所有用户
+  // 读取所有用户（事务外读取）
   const result = dbAny.exec(`
     SELECT id, feishu_id, name, department, group_name, center_name
     FROM users
@@ -86,42 +86,53 @@ export async function POST() {
   let deletedCount = 0;
   const changes: string[] = [];
 
-  // Step 1: 更新所有用户的 department
-  for (const u of users) {
-    if (u.department !== u.newDept) {
-      dbAny.exec(`UPDATE users SET department = ? WHERE id = ?`, [u.newDept, u.id]);
-      changes.push(`${u.name}: "${u.department}" → "${u.newDept}"`);
-      updatedCount++;
+  // TXN-02: 所有写操作包裹在事务中，崩溃时可回滚
+  try {
+    dbAny.exec(`BEGIN TRANSACTION`);
+
+    // Step 1: 更新所有用户的 department
+    for (const u of users) {
+      if (u.department !== u.newDept) {
+        dbAny.exec(`UPDATE users SET department = ? WHERE id = ?`, [u.newDept, u.id]);
+        changes.push(`${u.name}: "${u.department}" → "${u.newDept}"`);
+        updatedCount++;
+      }
     }
-  }
 
-  // Step 2: 去重 — 同一部门下同名人，保留有 feishu_id 的
-  const deptNameGroups = new Map<string, UserRecord[]>();
-  for (const u of users) {
-    const key = `${u.name}|${u.newDept}`;
-    if (!deptNameGroups.has(key)) deptNameGroups.set(key, []);
-    deptNameGroups.get(key)!.push(u);
-  }
-
-  for (const [key, group] of deptNameGroups) {
-    if (group.length <= 1) continue;
-
-    // 排序：有 feishu_id 的排前面，id 短的排前面（seed user id format: u_xxx）
-    group.sort((a, b) => {
-      if (!!a.feishu_id !== !!b.feishu_id) return a.feishu_id ? -1 : 1;
-      return a.id.length - b.id.length;
-    });
-
-    const keep = group[0];
-    for (let i = 1; i < group.length; i++) {
-      const dup = group[i];
-      // 把 dup 的 usage_logs 转移到 keep
-      dbAny.exec(`UPDATE usage_logs SET user_id = ? WHERE user_id = ?`, [keep.id, dup.id]);
-      // 删除重复用户
-      dbAny.exec(`DELETE FROM users WHERE id = ?`, [dup.id]);
-      changes.push(`去重: ${dup.name}(${dup.id}) → 合并到 ${keep.id}`);
-      deletedCount++;
+    // Step 2: 去重 — 同一部门下同名人，保留有 feishu_id 的
+    const deptNameGroups = new Map<string, UserRecord[]>();
+    for (const u of users) {
+      const key = `${u.name}|${u.newDept}`;
+      if (!deptNameGroups.has(key)) deptNameGroups.set(key, []);
+      deptNameGroups.get(key)!.push(u);
     }
+
+    for (const [key, group] of deptNameGroups) {
+      if (group.length <= 1) continue;
+
+      // 排序：有 feishu_id 的排前面，id 短的排前面（seed user id format: u_xxx）
+      group.sort((a, b) => {
+        if (!!a.feishu_id !== !!b.feishu_id) return a.feishu_id ? -1 : 1;
+        return a.id.length - b.id.length;
+      });
+
+      const keep = group[0];
+      for (let i = 1; i < group.length; i++) {
+        const dup = group[i];
+        // 把 dup 的 usage_logs 转移到 keep
+        dbAny.exec(`UPDATE usage_logs SET user_id = ? WHERE user_id = ?`, [keep.id, dup.id]);
+        // 删除重复用户
+        dbAny.exec(`DELETE FROM users WHERE id = ?`, [dup.id]);
+        changes.push(`去重: ${dup.name}(${dup.id}) → 合并到 ${keep.id}`);
+        deletedCount++;
+      }
+    }
+
+    dbAny.exec(`COMMIT`);
+  } catch (err) {
+    try { dbAny.exec(`ROLLBACK`); } catch {}
+    console.error("[Cleanup] 事务执行失败，已回滚:", err);
+    return NextResponse.json({ error: "清理操作失败，已回滚所有变更" }, { status: 500 });
   }
 
   await saveDb();

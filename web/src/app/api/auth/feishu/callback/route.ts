@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { timingSafeEqual } from "crypto";
 import { getUserAccessToken, getUserInfo, getUserDetail, getDepartmentInfo, getAppAccessToken } from "../../../../../lib/feishu";
 import { findOrCreateUser } from "../../../../../lib/user-service";
 import { createSession } from "../../../../../lib/auth";
+
+/**
+ * 时序安全字符串比较（防 timing attack）
+ */
+function safeEqualString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  const bufA = Buffer.from(a, "utf-8");
+  const bufB = Buffer.from(b, "utf-8");
+  return timingSafeEqual(bufA, bufB);
+}
 
 /**
  * 根据部门名称简单分类
@@ -17,12 +29,26 @@ function classifyDeptByName(name: string): "center" | "department" | "group" {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  const state = searchParams.get("state");
 
   if (!code) {
     const host = request.headers.get("host") || "ai.seapllo.com";
     const protocol = request.headers.get("x-forwarded-proto") || "https";
     return NextResponse.redirect(new URL("/login?error=no_code", `${protocol}://${host}`));
   }
+
+  // 验证 OAuth state 防 CSRF
+  const cookieStore = await cookies();
+  const savedState = cookieStore.get("feishu_oauth_state")?.value;
+  if (!state || !savedState || !safeEqualString(state, savedState)) {
+    console.warn("[Feishu OAuth] State validation failed", { hasState: !!state, hasCookie: !!savedState });
+    const host = request.headers.get("host") || "ai.seapllo.com";
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    return NextResponse.redirect(new URL("/login?error=invalid_state", `${protocol}://${host}`));
+  }
+
+  // state 验证通过后清除 cookie（一次性使用）
+  cookieStore.delete("feishu_oauth_state");
 
   try {
     // 1. 用 code 换 access_token
@@ -69,8 +95,8 @@ export async function GET(request: NextRequest) {
               const level = classifyDeptByName(deptInfo.name);
               classified[level].push(did);
             }
-          } catch {
-            // 跳过获取失败的部门
+          } catch (err) {
+            console.warn("[Auth/Feishu] 获取部门信息失败，跳过:", err);
           }
         }
 

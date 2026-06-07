@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, type SqliteExec } from "../../../../lib/db";
 import { apiHandler } from "../../../../lib/api-handler";
 
 /**
@@ -15,7 +15,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
   if (error) return error;
 
   const { sqlite } = await getDb();
-  const dbAny = sqlite as any;
+  const dbAny = sqlite as unknown as SqliteExec;
 
   // 确保列存在
   const colInfo = dbAny.exec(`PRAGMA table_info(users)`);

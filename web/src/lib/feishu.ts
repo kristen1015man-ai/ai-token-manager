@@ -176,7 +176,8 @@ export async function getUserDepartmentIds(appToken: string, openId: string): Pr
     if (data.code !== 0) return [];
     const user = data.data?.user;
     return user?.department_ids || [];
-  } catch {
+  } catch (err) {
+    console.warn("[Feishu] 获取用户部门列表失败:", err);
     return [];
   }
 }

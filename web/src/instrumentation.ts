@@ -7,6 +7,13 @@
 export async function register() {
   // 仅在 Node.js 运行时执行（跳过 Edge）
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // 启动时确保辅助表（model_prices、sync_blacklist、channels 列迁移）
+    const { ensureAllTables } = await import("./lib/ensure-tables");
+    await ensureAllTables();
+
+    const { backfillApiKeyHash } = await import("./lib/backfill-api-key-hash");
+    await backfillApiKeyHash();
+
     const { startAutoSync } = await import("./lib/auto-sync");
     startAutoSync();
   }

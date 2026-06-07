@@ -1,36 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "../../../../lib/admin-check";
-import { getDb, saveDb } from "../../../../lib/db";
+import { getDb, getRawExec } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
-
-/**
- * 确保表有所需的列，没有就加（只在首次调用时执行）
- */
-let columnsEnsured = false;
-function ensureColumns(dbAny: any) {
-  if (columnsEnsured) return false;
-  const needed = [
-    ["department", "TEXT"],
-    ["department_id", "TEXT"],
-    ["group_name", "TEXT"],
-    ["group_id", "TEXT"],
-    ["center_name", "TEXT"],
-    ["center_id", "TEXT"],
-  ];
-  const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
-  const existing = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
-  let changed = false;
-  for (const [col, type] of needed) {
-    if (!existing.has(col)) {
-      try {
-        dbAny.exec(`ALTER TABLE users ADD COLUMN ${col} ${type}`);
-        changed = true;
-      } catch { /* duplicate column, ignore */ }
-    }
-  }
-  if (changed) columnsEnsured = true;
-  return changed;
-}
 
 export async function GET(request: NextRequest) {
   const { error } = await requireRole("admin", "dept_manager");
@@ -40,17 +11,12 @@ export async function GET(request: NextRequest) {
   const range = request.nextUrl.searchParams.get("range") || "30d";
   const level = request.nextUrl.searchParams.get("level") || "department";
   const { sqlite } = await getDb();
-  const dbAny = sqlite as any;
-
-  // 确保 schema 正确
-  if (ensureColumns(dbAny)) {
-    await saveDb();
-  }
+  const db = getRawExec(sqlite);
 
   const { start: startTime, end: rangeEnd } = getTimeRange(range);
 
   // 动态选列
-  const colInfo = dbAny.exec(`PRAGMA table_info(users)`);
+  const colInfo = db.exec(`PRAGMA table_info(users)`);
   const cols = new Set((colInfo[0]?.values ?? []).map((r: unknown[]) => String(r[1])));
 
   let deptCol = "u.department";
@@ -87,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   query += ` GROUP BY u.id ORDER BY cost DESC`;
 
-  const result = dbAny.exec(query, params);
+  const result = db.exec(query, params);
 
   const employees = (result[0]?.values ?? []).map((r: unknown[]) => ({
     name: String(r[0]),
@@ -102,7 +68,7 @@ export async function GET(request: NextRequest) {
   // bareCol 不带表别名，用于直接查 users 表的场景
   // 虚拟部门黑名单
   const VIRTUAL_DEPTS = ["管理部"];
-  const deptListResult = dbAny.exec(
+  const deptListResult = db.exec(
     `SELECT DISTINCT ${bareCol} FROM users WHERE ${bareCol} IS NOT NULL AND ${bareCol} != '' ORDER BY ${bareCol}`
   );
   const departments = (deptListResult[0]?.values ?? [])

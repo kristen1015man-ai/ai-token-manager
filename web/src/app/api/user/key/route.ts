@@ -4,7 +4,7 @@ import { getDb, saveDb } from "../../../../lib/db";
 import { users } from "../../../../../../shared/schema";
 import { eq } from "drizzle-orm";
 import { generateApiKey } from "../../../../lib/user-service";
-import { ensureEncrypted, ensureDecrypted } from "../../../../lib/crypto";
+import { ensureEncrypted, ensureDecrypted, searchableHash } from "../../../../lib/crypto";
 
 // 配置命令里的地址用线上域名
 const PROXY_BASE_URL = "https://ai.seapllo.com/v1";
@@ -30,10 +30,9 @@ export async function GET() {
   // 脱敏显示: sk-emp-gmhe-****m2
   const masked = key.slice(0, Math.min(key.indexOf("-", 7) + 1 || 12, 20)) + "****" + key.slice(-4);
 
+  // SEC-03: GET 请求不返回明文 API Key，防止 XSS/日志泄露
   return NextResponse.json({
-    apiKey: key,
     maskedKey: masked,
-    configCommand: `export OPENAI_API_KEY=${key}\nexport OPENAI_BASE_URL=${PROXY_BASE_URL}`,
     proxyUrl: PROXY_BASE_URL,
   });
 }
@@ -59,7 +58,7 @@ export async function POST() {
 
   await db
     .update(users)
-    .set({ apiKey: ensureEncrypted(newKey), updatedAt: new Date() })
+    .set({ apiKey: ensureEncrypted(newKey), apiKeyHash: searchableHash(newKey), updatedAt: new Date() })
     .where(eq(users.id, session.userId));
 
   await saveDb();

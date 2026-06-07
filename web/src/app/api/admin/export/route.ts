@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireRole } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, type SqliteExec } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
 import * as XLSX from "xlsx";
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const { start, end, label } = getTimeRange(range);
 
   const { sqlite } = await getDb();
-  const dbAny = sqlite as any;
+  const dbAny = sqlite as unknown as SqliteExec;
 
   // 构建时间条件
   let timeWhere = `ul.created_at >= ?`;
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       "部门": String(r[1] ?? "未分配"),
       "费用(元)": Number(Number(r[2]).toFixed(2)),
     }))
-    .filter((r: Record<string, string>) => !VIRTUAL_DEPTS.includes(r["部门"]));
+    .filter((r) => !VIRTUAL_DEPTS.includes(r["部门"]));
 
   // ===== Sheet 2: 部门费用汇总 =====
   const deptParams = [...params];

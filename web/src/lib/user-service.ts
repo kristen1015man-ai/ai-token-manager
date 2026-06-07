@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { pinyin } from "pinyin-pro";
 import { users } from "../../../shared/schema";
 import { getDb, saveDb } from "./db";
-import { ensureEncrypted, ensureDecrypted } from "./crypto";
+import { ensureEncrypted, ensureDecrypted, safeEqual, searchableHash } from "./crypto";
 
 /**
  * 中文名 → 拼音标识（无音调、小写、去空格）
@@ -62,7 +62,20 @@ export async function findOrCreateUser(feishuUserInfo: {
     const current = existing[0];
 
     // 更新用户信息，但保留已有的三层数据（除非传入新值）
-    const updateData: Record<string, any> = {
+    const updateData: {
+      name: string;
+      avatar: string | null;
+      email: string | null;
+      employeeId: string | null;
+      role: string;
+      updatedAt: Date;
+      department?: string | null;
+      departmentId?: string | null;
+      groupName?: string | null;
+      groupId?: string | null;
+      centerName?: string | null;
+      centerId?: string | null;
+    } = {
       name: feishuUserInfo.name || current.name,
       avatar: feishuUserInfo.avatar_url || current.avatar,
       email: feishuUserInfo.email || current.email,
@@ -120,6 +133,7 @@ export async function findOrCreateUser(feishuUserInfo: {
     centerId: feishuUserInfo.center_id || null,
     employeeId: feishuUserInfo.employee_no || null,
     apiKey: ensureEncrypted(apiKey),
+    apiKeyHash: searchableHash(apiKey),
     role,
     status: "active",
     monthlyQuota: 200,
@@ -140,17 +154,25 @@ export async function findOrCreateUser(feishuUserInfo: {
 
 /**
  * 根据 API Key 查找用户
- * apiKey 可能已加密存储，需加载所有用户后内存比对
+ * SEC-02: 使用 HMAC-SHA256 hash 做 SQL WHERE 精确匹配，避免全表扫描
+ * hash 为确定性映射，可用于索引查找；找到后仍做 safeEqual 二次验证
  */
 export async function findUserByApiKey(apiKey: string) {
   const { db } = await getDb();
-  const allUsers = await db.select().from(users);
+  const hash = searchableHash(apiKey);
+  const candidates = await db
+    .select()
+    .from(users)
+    .where(eq(users.apiKeyHash, hash))
+    .limit(1);
 
-  for (const user of allUsers) {
-    const decryptedKey = ensureDecrypted(user.apiKey);
-    if (decryptedKey === apiKey) {
-      return user;
-    }
+  if (candidates.length === 0) return null;
+
+  // 二次验证：hash 碰撞理论上可能，用 timing-safe 比对确认
+  const user = candidates[0];
+  const decryptedKey = ensureDecrypted(user.apiKey);
+  if (safeEqual(decryptedKey, apiKey)) {
+    return user;
   }
   return null;
 }

@@ -6,145 +6,12 @@ import { modelPrices, channels, syncBlacklist } from "../../../../../../shared/s
 import { eq, and, isNull } from "drizzle-orm";
 import { apiHandler, apiHandlerNoBody } from "../../../../lib/api-handler";
 
-/** ensureTable 只执行一次（DDL 是幂等的，无需每次请求都跑） */
-let tableEnsured = false;
-
-/** 检查表中是否有某列 */
-function hasColumn(sqlite: SqliteExec, table: string, col: string): boolean {
-  const cols = sqlite.exec(`PRAGMA table_info(${table})`);
-  return cols[0]?.values?.some((c) => c[1] === col) ?? false;
-}
-
-/** 确保 model_prices 表存在且有完整列 */
-async function ensureTable(sqlite: SqliteExec) {
-  if (tableEnsured) return;
-  tableEnsured = true;
-
-  // 创建表（如不存在）— 包含 currency 列
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS model_prices (
-      id TEXT PRIMARY KEY,
-      model TEXT NOT NULL,
-      channel_id TEXT,
-      input_per_million REAL NOT NULL,
-      output_per_million REAL NOT NULL,
-      cache_per_million REAL NOT NULL DEFAULT 0,
-      display_name TEXT,
-      currency TEXT NOT NULL DEFAULT 'CNY',
-      deprecated INTEGER NOT NULL DEFAULT 0,
-      synced_at INTEGER,
-      updated_by TEXT,
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `);
-
-  // 检查是否有 channel_id 列 — 事务保护：重建表过程中崩溃可回滚
-  const hasChannelId = hasColumn(sqlite, "model_prices", "channel_id");
-  if (!hasChannelId) {
-    try {
-      sqlite.exec(`BEGIN TRANSACTION`);
-      sqlite.exec(`
-        CREATE TABLE model_prices_new (
-          id TEXT PRIMARY KEY, model TEXT NOT NULL, channel_id TEXT,
-          input_per_million REAL NOT NULL, output_per_million REAL NOT NULL,
-          cache_per_million REAL NOT NULL DEFAULT 0, display_name TEXT,
-          currency TEXT NOT NULL DEFAULT 'CNY',
-          deprecated INTEGER NOT NULL DEFAULT 0, synced_at INTEGER,
-          updated_by TEXT, updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-          created_at INTEGER NOT NULL DEFAULT (unixepoch())
-        )
-      `);
-      sqlite.exec(`
-        INSERT INTO model_prices_new SELECT id, model, NULL, input_per_million, output_per_million, cache_per_million, display_name, 'CNY', deprecated, synced_at, updated_by, updated_at, created_at FROM model_prices
-      `);
-      sqlite.exec(`DROP TABLE model_prices`);
-      sqlite.exec(`ALTER TABLE model_prices_new RENAME TO model_prices`);
-      sqlite.exec(`COMMIT`);
-    } catch (e) {
-      try { sqlite.exec(`ROLLBACK`); } catch {}
-      console.error("[ensureTable] model_prices 迁移失败，已回滚:", e);
-    }
-  }
-
-  // 检查是否有 currency 列（老表升级）
-  if (!hasColumn(sqlite, "model_prices", "currency")) {
-    sqlite.exec(`ALTER TABLE model_prices ADD COLUMN currency TEXT NOT NULL DEFAULT 'CNY'`);
-  }
-
-  // 唯一索引
-  try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_mp_channel_model ON model_prices(channel_id, model)"); } catch {}
-  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_mp_model ON model_prices(model)"); } catch {}
-
-  // sync_blacklist 表 — 迁移到复合主键 (model, channel_id)
-  const blHasChannelId = hasColumn(sqlite, "sync_blacklist", "channel_id");
-  if (blHasChannelId) {
-    // 已经是新版复合主键，确保表存在
-    sqlite.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);
-  } else {
-    // 检查旧版表是否存在
-    const blExists = sqlite.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='sync_blacklist'`);
-    if (blExists[0]?.values?.length) {
-      // 旧版有数据，事务保护迁移到新版复合主键
-      try {
-        sqlite.exec(`BEGIN TRANSACTION`);
-        sqlite.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist_new (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);
-        sqlite.exec(`INSERT OR IGNORE INTO sync_blacklist_new (model, channel_id, created_at) SELECT model, NULL, created_at FROM sync_blacklist`);
-        sqlite.exec(`DROP TABLE sync_blacklist`);
-        sqlite.exec(`ALTER TABLE sync_blacklist_new RENAME TO sync_blacklist`);
-        sqlite.exec(`COMMIT`);
-      } catch (e) {
-        try { sqlite.exec(`ROLLBACK`); } catch {}
-        console.error("[ensureTable] sync_blacklist 迁移失败，已回滚:", e);
-      }
-    } else {
-      // 全新创建
-      sqlite.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);
-    }
-  }
-
-  // channels 表新增 currency 和 provider 列
-  if (!hasColumn(sqlite, "channels", "currency")) {
-    sqlite.exec(`ALTER TABLE channels ADD COLUMN currency TEXT NOT NULL DEFAULT 'CNY'`);
-  }
-  if (!hasColumn(sqlite, "channels", "provider")) {
-    sqlite.exec(`ALTER TABLE channels ADD COLUMN provider TEXT`);
-  }
-
-  // 修复旧数据：seed 时 INSERT 没指定列名导致 currency 值为字面量 "currency"
-  try {
-    const bad = sqlite.exec(`SELECT COUNT(*) FROM channels WHERE currency = 'currency'`);
-    if ((bad[0]?.values?.[0]?.[0] as number | undefined ?? 0) > 0) {
-      // 根据渠道 id 判断正确币种
-      sqlite.exec(`UPDATE channels SET currency = 'USD' WHERE id IN ('ch_openai', 'ch_anthropic') AND currency = 'currency'`);
-      sqlite.exec(`UPDATE channels SET currency = 'CNY' WHERE currency = 'currency'`);
-      console.log("[ensureTable] 已修复 channels.currency 错误值");
-    }
-  } catch {
-    // 不影响启动
-  }
-
-  // 如果表为空，插入基础价格
-  const count = sqlite.exec("SELECT COUNT(*) FROM model_prices");
-  if (count[0]?.values?.[0]?.[0] === 0) {
-    sqlite.exec(`
-      INSERT OR IGNORE INTO model_prices (id, model, channel_id, input_per_million, output_per_million, cache_per_million, display_name, currency, deprecated, synced_at, updated_by, updated_at, created_at) VALUES
-      ('price_ds_chat', 'deepseek-chat', NULL, 1.0, 2.0, 0.1, 'DeepSeek Chat', 'CNY', 0, unixepoch(), 'seed', unixepoch(), unixepoch()),
-      ('price_ds_reasoner', 'deepseek-reasoner', NULL, 4.0, 16.0, 0.4, 'DeepSeek Reasoner', 'CNY', 0, unixepoch(), 'seed', unixepoch(), unixepoch()),
-      ('price_ds_v3', 'deepseek-v3', NULL, 2.0, 8.0, 0.2, 'DeepSeek V3', 'CNY', 0, unixepoch(), 'seed', unixepoch(), unixepoch()),
-      ('price_glm4_flash', 'glm-4-flash', NULL, 0.1, 0.1, 0, 'GLM-4 Flash', 'CNY', 0, unixepoch(), 'seed', unixepoch(), unixepoch()),
-      ('price_glm4_plus', 'glm-4-plus', NULL, 50, 50, 0, 'GLM-4 Plus', 'CNY', 0, unixepoch(), 'seed', unixepoch(), unixepoch())
-    `);
-  }
-}
-
 /** 获取所有模型价格 */
 export const GET = apiHandlerNoBody(async () => {
   const { error } = await requireAdmin();
   if (error) return error;
 
-  const { db, sqlite } = await getDb();
-  await ensureTable(sqlite as unknown as SqliteExec);
+  const { db } = await getDb();
 
   const priceList = await db.select().from(modelPrices);
 
@@ -162,7 +29,8 @@ export const GET = apiHandlerNoBody(async () => {
   try {
     const { getUsdCnyRate } = await import("../../../../lib/exchange-rate");
     exchangeRate = await getUsdCnyRate();
-  } catch {
+  } catch (err) {
+    console.warn("[Prices] 获取汇率失败:", err);
     exchangeRate = null;
   }
 
@@ -193,8 +61,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     return NextResponse.json({ error: "缺少 inputPerMillion 或 outputPerMillion" }, { status: 400 });
   }
 
-  const { db, sqlite } = await getDb();
-  await ensureTable(sqlite as unknown as SqliteExec);
+  const { db } = await getDb();
 
   // 唯一性检查：(channelId, model) 组合不能重复
   const normalizedChannelId = channelId || null;
@@ -280,16 +147,25 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
 
   const price = rows[0];
 
-  // 加入同步黑名单（全局和渠道级都加入）
+  // TXN-02: 黑名单插入 + 价格删除包裹在事务中
+  const sqliteAny = sqlite as unknown as SqliteExec & { exec(sql: string, params?: unknown[]): void };
   try {
+    sqliteAny.exec(`BEGIN TRANSACTION`);
+    // 加入同步黑名单（全局和渠道级都加入）
     await db.insert(syncBlacklist).values({
       model: price.model,
       channelId: price.channelId || null,  // NULL = 全局黑名单
       createdAt: new Date(),
     }).onConflictDoNothing();
-  } catch {}
 
-  await db.delete(modelPrices).where(eq(modelPrices.id, id));
+    await db.delete(modelPrices).where(eq(modelPrices.id, id));
+    sqliteAny.exec(`COMMIT`);
+  } catch (err) {
+    try { sqliteAny.exec(`ROLLBACK`); } catch {}
+    console.error("[Prices] DELETE 事务失败，已回滚:", err);
+    return NextResponse.json({ error: "删除失败，请稍后重试" }, { status: 500 });
+  }
+
   await saveDb();
 
   return NextResponse.json({ success: true });

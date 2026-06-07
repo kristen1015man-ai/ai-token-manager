@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, type SqliteExec } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
 import { getBalanceOverview } from "../../../../lib/balance-sync";
 
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   const range = request.nextUrl.searchParams.get("range") || "30d";
   const { sqlite } = await getDb();
-  const dbAny = sqlite as any;
+  const dbAny = sqlite as unknown as SqliteExec;
 
   const { start, end, label } = getTimeRange(range);
 

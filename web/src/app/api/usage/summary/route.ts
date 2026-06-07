@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "../../../../lib/auth";
-import { getDb } from "../../../../lib/db";
+import { getDb, getRawExec } from "../../../../lib/db";
 import { getTimeRange } from "../../../../lib/time-range";
 
 export async function GET(request: NextRequest) {
@@ -13,8 +13,7 @@ export async function GET(request: NextRequest) {
   const { start, end, label } = getTimeRange(range);
 
   const { sqlite } = await getDb();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dbAny = sqlite as any;
+  const db = getRawExec(sqlite);
   const now = new Date();
 
   // 按时间范围统计
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
     params.push(end);
   }
 
-  const rangeStats = dbAny.exec(
+  const rangeStats = db.exec(
     `SELECT COALESCE(SUM(total_tokens), 0), COALESCE(SUM(cost), 0), COUNT(*)
      FROM usage_logs WHERE ${where}`,
     params
@@ -33,14 +32,14 @@ export async function GET(request: NextRequest) {
 
   // 本月额度（始终取当月）
   const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
-  const monthStats = dbAny.exec(
+  const monthStats = db.exec(
     `SELECT COALESCE(SUM(cost), 0) FROM usage_logs WHERE user_id = ? AND created_at >= ?`,
     [session.userId, monthStart]
   );
   const monthCost = Number(monthStats[0]?.values[0]?.[0] ?? 0);
 
   // 用户配额
-  const userInfo = dbAny.exec(
+  const userInfo = db.exec(
     `SELECT COALESCE(monthly_quota, 500) FROM users WHERE id = ?`,
     [session.userId]
   );

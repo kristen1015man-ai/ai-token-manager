@@ -67,32 +67,9 @@ async function getSettings(): Promise<{
   };
 }
 
-/** 7 天用量（按用户汇总） */
-async function getSevenDayUsage(
-  since: Date
-): Promise<Map<string, number>> {
+/** 按用户汇总指定时间段内的用量 */
+async function getUsageByUser(since: Date): Promise<Map<string, number>> {
   const { db } = await getDb();
-
-  const rows = await db
-    .select({
-      userId: usageLogs.userId,
-      totalCost: sql<number>`COALESCE(SUM(${usageLogs.cost}), 0)`,
-    })
-    .from(usageLogs)
-    .where(gte(usageLogs.createdAt, since))
-    .groupBy(usageLogs.userId);
-
-  const map = new Map<string, number>();
-  for (const r of rows) map.set(r.userId, r.totalCost);
-  return map;
-}
-
-/** 1 小时用量（按用户汇总） */
-async function getHourlyUsage(
-  since: Date
-): Promise<Map<string, number>> {
-  const { db } = await getDb();
-
   const rows = await db
     .select({
       userId: usageLogs.userId,
@@ -219,8 +196,8 @@ export async function detectAnomalies(): Promise<AnomalyCheckResult> {
 
   // 1. 批量查询用量（2 条 SQL，不逐用户查询）
   const [sevenDayMap, hourlyMap] = await Promise.all([
-    getSevenDayUsage(sevenDaysAgo),
-    getHourlyUsage(oneHourAgo),
+    getUsageByUser(sevenDaysAgo),
+    getUsageByUser(oneHourAgo),
   ]);
 
   // 2. 获取活跃用户

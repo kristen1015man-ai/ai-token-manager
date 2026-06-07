@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../../lib/admin-check";
-import { getDb } from "../../../../../lib/db";
+import { getDb, getRawExec } from "../../../../../lib/db";
 import { getTimeRange } from "../../../../../lib/time-range";
 
 /**
@@ -15,8 +15,7 @@ export async function GET(request: NextRequest) {
   const { start, end } = getTimeRange(range);
 
   const { sqlite } = await getDb();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dbAny = sqlite as any;
+  const db = getRawExec(sqlite);
 
   let where = `created_at >= ?`;
   const params: unknown[] = [start];
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
     params.push(end);
   }
 
-  const result = dbAny.exec(
+  const result = db.exec(
     `SELECT model,
        COALESCE(SUM(total_tokens), 0) as tokens,
        COALESCE(SUM(cost), 0) as cost,

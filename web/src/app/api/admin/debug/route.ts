@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, getRawExec } from "../../../../lib/db";
 
 export async function GET() {
   // 鉴权：仅管理员可访问
@@ -14,20 +14,20 @@ export async function GET() {
 
   try {
     const { sqlite } = await getDb();
-    const dbAny = sqlite as any;
+    const db = getRawExec(sqlite);
 
-    const cols = dbAny.exec(`PRAGMA table_info(users)`);
+    const cols = db.exec(`PRAGMA table_info(users)`);
     const colNames = (cols[0]?.values ?? []).map((r: unknown[]) => String(r[1]));
 
-    const userCount = dbAny.exec(`SELECT COUNT(*) FROM users`);
-    const logCount = dbAny.exec(`SELECT COUNT(*) FROM usage_logs`);
+    const userCount = db.exec(`SELECT COUNT(*) FROM users`);
+    const logCount = db.exec(`SELECT COUNT(*) FROM usage_logs`);
 
     let testQuery = "FAILED";
     try {
-      const test = dbAny.exec(`SELECT u.name, u.department FROM users u LIMIT 1`);
+      db.exec(`SELECT u.name, u.department FROM users u LIMIT 1`);
       testQuery = "OK - department column exists";
-    } catch (e: any) {
-      testQuery = `FAILED: ${e.message}`;
+    } catch (e: unknown) {
+      testQuery = `FAILED: ${e instanceof Error ? e.message : String(e)}`;
     }
 
     return NextResponse.json({
@@ -36,7 +36,10 @@ export async function GET() {
       logCount: logCount[0]?.values?.[0]?.[0] ?? 0,
       departmentTest: testQuery,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Internal error" },
+      { status: 500 }
+    );
   }
 }

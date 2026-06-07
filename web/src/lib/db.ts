@@ -20,7 +20,17 @@ let sqliteInstance: InstanceType<Awaited<ReturnType<typeof initSqlJs>>["Database
  * 使用时：ensureBalanceColumns(sqlite as SqliteExec)
  */
 export interface SqliteExec {
-  exec(sql: string): { values: unknown[][] }[];
+  exec(sql: string, params?: unknown[]): { columns: string[]; values: unknown[][] }[];
+  run(sql: string, params?: unknown[]): void;
+}
+
+/**
+ * 获取 sqlite 原生 exec/run 接口。
+ * sql.js 的 TS 类型定义未声明 exec()，但运行时确实存在。
+ * 统一通过此函数做类型转换，避免在各 API route 中重复 `as unknown as SqliteExec`。
+ */
+export function getRawExec(sqlite: InstanceType<Awaited<ReturnType<typeof initSqlJs>>["Database"]>): SqliteExec {
+  return sqlite as unknown as SqliteExec;
 }
 
 // ========== 延迟批量写入（Debounce） ==========
@@ -71,6 +81,10 @@ export async function getDb() {
   }
 
   const sqlite = buffer ? new SQL.Database(buffer) : new SQL.Database();
+
+  // INTG-01: 启用外键约束（SQLite 默认关闭）
+  sqlite.run("PRAGMA foreign_keys = ON");
+
   const db = drizzle(sqlite, { schema });
 
   dbInstance = db;

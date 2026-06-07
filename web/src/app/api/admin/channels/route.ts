@@ -1,53 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb, saveDb, type SqliteExec } from "../../../../lib/db";
+import { getDb, saveDb } from "../../../../lib/db";
 import { channels } from "../../../../../../shared/schema";
 import { eq } from "drizzle-orm";
 import { ensureEncrypted, ensureDecrypted } from "../../../../lib/crypto";
 import { auditLog } from "../../../../lib/audit-log";
 import { apiHandler, apiHandlerNoBody } from "../../../../lib/api-handler";
 
-/** 允许执行 PRAGMA table_info 的安全表名白名单 */
-const SAFE_TABLE_NAMES = new Set(["channels", "users", "admin_logs", "quota_rules", "usage_logs", "prices"]);
-
-/** 检查表中是否有某列（仅允许白名单表名） */
-function hasColumn(sqlite: SqliteExec, table: string, col: string): boolean {
-  if (!SAFE_TABLE_NAMES.has(table)) {
-    throw new Error(`Unsafe table name in PRAGMA: ${table}`);
-  }
-  const cols = sqlite.exec(`PRAGMA table_info(${table})`);
-  return cols[0]?.values?.some((c) => c[1] === col) ?? false;
-}
-
-/** 确保 channels 表有余额相关新列 */
-let balanceMigrationDone = false;
-async function ensureBalanceColumns(sqlite: SqliteExec) {
-  if (balanceMigrationDone) return;
-  const newCols: [string, string][] = [
-    ["balance", "REAL"],
-    ["balance_currency", "TEXT"],
-    ["balance_sync_mode", "TEXT"],
-    ["balance_synced_at", "INTEGER"],
-    ["balance_alert_threshold", "REAL"],
-    ["access_key_id", "TEXT"],
-    ["access_key_secret", "TEXT"],
-  ];
-  for (const [col, type] of newCols) {
-    if (!hasColumn(sqlite, "channels", col)) {
-      sqlite.exec(`ALTER TABLE channels ADD COLUMN ${col} ${type}`);
-      console.log(`[Migration] channels 表新增列: ${col}`);
-    }
-  }
-  balanceMigrationDone = true;
-}
-
 export const GET = apiHandlerNoBody(async () => {
   const { error } = await requireAdmin();
   if (error) return error;
 
-  const { db, sqlite } = await getDb();
-  await ensureBalanceColumns(sqlite as unknown as SqliteExec);
+  const { db } = await getDb();
   const list = await db.select().from(channels).orderBy(channels.priority);
 
   return NextResponse.json({
@@ -74,8 +39,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const { db, sqlite } = await getDb();
-  await ensureBalanceColumns(sqlite as unknown as SqliteExec);
+  const { db } = await getDb();
   const channelId = randomBytes(8).toString("hex");
   await db.insert(channels).values({
     id: channelId,
@@ -108,8 +72,7 @@ export const PUT = apiHandler(async (request: NextRequest) => {
     return NextResponse.json({ error: "Missing channel id" }, { status: 400 });
   }
 
-  const { db, sqlite } = await getDb();
-  await ensureBalanceColumns(sqlite as unknown as SqliteExec);
+  const { db } = await getDb();
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name;
   if (baseUrl !== undefined) updateData.baseUrl = baseUrl;
@@ -149,8 +112,7 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
     return NextResponse.json({ error: "Missing channel id" }, { status: 400 });
   }
 
-  const { db, sqlite } = await getDb();
-  await ensureBalanceColumns(sqlite as unknown as SqliteExec);
+  const { db } = await getDb();
   await db.delete(channels).where(eq(channels.id, id));
   await saveDb();
 

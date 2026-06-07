@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
-import { getDb } from "../../../../lib/db";
+import { getDb, type SqliteExec } from "../../../../lib/db";
 
 /**
  * 部门级数据清洗预览
@@ -65,7 +65,7 @@ export async function GET() {
   if (error) return error;
 
   const { sqlite } = await getDb();
-  const dbAny = sqlite as any;
+  const dbAny = sqlite as unknown as SqliteExec;
 
   // 查所有用户
   const result = dbAny.exec(`

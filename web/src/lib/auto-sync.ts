@@ -11,6 +11,9 @@
  * 渠道余额同步：
  * - 04:00 凌晨（价格同步之后 1 小时，避免并发）
  *
+ * 员工状态检查（离职自动停用）：
+ * - 20:00 晚上（在 19:00 飞书同步之后，确保通讯录最新）
+ *
  * 异常用量检测：
  * - 每小时整点（检测 1 小时内突增）
  *
@@ -22,6 +25,7 @@ const FEISHU_SYNC_URL = "http://localhost:3000/api/setup/sync-feishu";
 const PRICE_SYNC_URL = "http://localhost:3000/api/admin/prices/sync";
 const BALANCE_SYNC_URL = "http://localhost:3000/api/admin/channels/balance-sync";
 const ANOMALY_CHECK_URL = "http://localhost:3000/api/admin/anomaly-check";
+const EMPLOYEE_STATUS_CHECK_URL = "http://localhost:3000/api/admin/employee-status-check";
 
 let started = false;
 
@@ -36,6 +40,7 @@ export function startAutoSync() {
   console.log(`[AutoSync] 飞书同步：每天 ${FEISHU_SYNC_HOURS.map(h => `${String(h).padStart(2, "0")}:00`).join("、")}`);
   console.log(`[AutoSync] 价格同步：每天 03:00`);
   console.log(`[AutoSync] 余额同步：每天 04:00`);
+  console.log(`[AutoSync] 员工状态检查：每天 20:00`);
   console.log(`[AutoSync] 异常检测：每小时`);
 
   // 服务器启动 30 秒后执行一次初始同步
@@ -49,11 +54,15 @@ export function startAutoSync() {
   // 启动 90 秒后执行一次异常检测（等其他初始同步先完成）
   setTimeout(() => triggerAnomalyCheck("启动检测"), 90_000);
 
+  // 启动 120 秒后执行一次员工状态检查（等飞书同步先完成）
+  setTimeout(() => triggerEmployeeStatusCheck("启动检测"), 120_000);
+
   // 计算到下一个同步时间点的延迟
   scheduleFeishuNext();
   schedulePriceNext();
   scheduleBalanceNext();
   scheduleAnomalyNext();
+  scheduleEmployeeStatusNext();
 }
 
 function scheduleFeishuNext() {
@@ -195,5 +204,39 @@ async function triggerAnomalyCheck(reason: string) {
     }
   } catch (error) {
     console.error(`[AutoSync] 异常检测${reason} 请求失败:`, error);
+  }
+}
+
+// ===== 员工状态检查调度（每天 20:00） =====
+
+function scheduleEmployeeStatusNext() {
+  const delay = calcNextDelay([20]);
+  console.log(`[AutoSync] 员工状态检查将在 ${Math.round(delay / 60000)} 分钟后执行`);
+
+  setTimeout(() => {
+    triggerEmployeeStatusCheck("定时检查");
+    scheduleEmployeeStatusNext();
+  }, delay);
+}
+
+async function triggerEmployeeStatusCheck(reason: string) {
+  try {
+    console.log(`[AutoSync] ===== 员工状态${reason} 开始 =====`);
+    const internalKey = process.env.INTERNAL_API_KEY;
+    const headers: Record<string, string> = {};
+    if (internalKey) {
+      headers["Authorization"] = `Bearer ${internalKey}`;
+    }
+    const resp = await fetch(EMPLOYEE_STATUS_CHECK_URL, { method: "POST", headers });
+    const data = await resp.json() as { checked: number; disabled: number; users: Array<{ name: string; reason: string }> };
+    console.log(`[AutoSync] ===== 员工状态${reason} 完成: 检查 ${data.checked} 人, 停用 ${data.disabled} 人 =====`);
+
+    if (data.users && data.users.length > 0) {
+      data.users.forEach(u => {
+        console.warn(`[AutoSync]   🚫 ${u.name}: ${u.reason}`);
+      });
+    }
+  } catch (error) {
+    console.error(`[AutoSync] 员工状态${reason} 请求失败:`, error);
   }
 }
