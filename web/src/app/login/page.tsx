@@ -4,34 +4,32 @@ import "./login-anim.css";
 export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
-  const feishuAppId = process.env.NEXT_PUBLIC_FEISHU_APP_ID || "";
-  const redirectUri = process.env.NEXT_PUBLIC_FEISHU_REDIRECT_URI || "";
-  const feishuAuthUrl = `https://open.feishu.cn/open-apis/authen/v1/authorize?app_id=${feishuAppId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=login`;
+  const feishuAuthUrl = "/api/auth/feishu/start";
 
   return (
     <div className="login-bg min-h-screen flex items-center justify-center">
       {/* 中心光晕 */}
       <div className="login-glow" />
 
-      {/* 粒子光效 */}
-      {Array.from({ length: 30 }).map((_, i) => (
+      {/* 浮动光球 */}
+      <div className="login-orb login-orb-1" />
+      <div className="login-orb login-orb-2" />
+      <div className="login-orb login-orb-3" />
+
+      {/* 粒子光效 — 精简到 12 个 */}
+      {Array.from({ length: 12 }).map((_, i) => (
         <div key={i} className="login-particle" style={{
-          left: `${Math.random() * 100}%`,
-          top: `${Math.random() * 100}%`,
-          animationDelay: `${Math.random() * 6}s`,
-          animationDuration: `${4 + Math.random() * 6}s`,
-          width: `${1 + Math.random() * 3}px`,
-          height: `${1 + Math.random() * 3}px`,
-          opacity: 0.2 + Math.random() * 0.5,
+          left: `${15 + Math.random() * 70}%`,
+          top: `${20 + Math.random() * 60}%`,
+          animationDelay: `${Math.random() * 8}s`,
+          animationDuration: `${5 + Math.random() * 6}s`,
+          width: `${1 + Math.random() * 2}px`,
+          height: `${1 + Math.random() * 2}px`,
+          opacity: 0.2 + Math.random() * 0.4,
         }} />
       ))}
 
-      {/* 轨道环 */}
-      <div className="login-orbit login-orbit-1"><span className="login-orbit-dot" /></div>
-      <div className="login-orbit login-orbit-2"><span className="login-orbit-dot" /></div>
-      <div className="login-orbit login-orbit-3"><span className="login-orbit-dot" /></div>
-
-      {/* 主内容 */}
+      {/* 主内容 — 毛玻璃卡片 */}
       <div className="login-content">
         {/* Logo 外发光 */}
         <div className="login-logo-glow" />
@@ -50,7 +48,6 @@ export default function LoginPage() {
 
         {/* 飞书登录 */}
         <a href={feishuAuthUrl} className="login-btn">
-          {/* 飞书 Logo */}
           <img src="/feishu-logo.ico" alt="" className="login-btn-icon" />
           飞书登录
         </a>
