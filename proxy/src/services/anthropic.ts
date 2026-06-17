@@ -1,0 +1,377 @@
+import { findChannelForModel, findFallbackChannel, type ChannelInfo } from "./channel.js";
+import { estimateTokens, recordUsage, type UsageRecord } from "./usage.js";
+import { assertSafeUpstreamBaseUrl } from "./upstream-safety.js";
+import { checkUserQuota, releaseQuotaReservation } from "./web-internal.js";
+
+const ANTHROPIC_VERSION = "2023-06-01";
+const UPSTREAM_TIMEOUT = 300_000;
+
+interface AnthropicRequest {
+  model: string;
+  stream?: boolean;
+  [key: string]: unknown;
+}
+
+interface AnthropicClientHeaders {
+  anthropicVersion?: string;
+  anthropicBeta?: string;
+}
+
+function normalizeModelForBilling(model: string): string {
+  return model.replace(/\[[^\]]+\]$/, "");
+}
+
+function safeInt(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function anthropicPathFor(baseUrl: URL, endpoint: "messages" | "count_tokens"): string {
+  const cleanPath = baseUrl.pathname.replace(/\/+$/, "");
+  const suffix = endpoint === "messages" ? "messages" : "messages/count_tokens";
+
+  if (baseUrl.hostname.toLowerCase().includes("deepseek") && !cleanPath.includes("/anthropic")) {
+    return `${cleanPath}/anthropic/v1/${suffix}`.replace(/\/{2,}/g, "/");
+  }
+  if (cleanPath.endsWith("/v1")) {
+    return `${cleanPath}/${suffix}`;
+  }
+  return `${cleanPath}/v1/${suffix}`.replace(/\/{2,}/g, "/");
+}
+
+function buildAnthropicUrl(baseUrl: URL, endpoint: "messages" | "count_tokens"): URL {
+  const url = new URL(baseUrl.toString());
+  url.pathname = anthropicPathFor(baseUrl, endpoint);
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+
+function usageFromAnthropicBody(body: Record<string, unknown>): UsageRecord {
+  const usage = body.usage as Record<string, unknown> | undefined;
+  if (!usage) {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0, cost: 0 };
+  }
+
+  const inputTokens = safeInt(Number(usage.input_tokens ?? 0));
+  const outputTokens = safeInt(Number(usage.output_tokens ?? 0));
+  const cacheRead = safeInt(Number(usage.cache_read_input_tokens ?? 0));
+  const cacheCreated = safeInt(Number(usage.cache_creation_input_tokens ?? 0));
+  const cachedTokens = Math.min(cacheRead + cacheCreated, inputTokens);
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    cachedTokens,
+    cost: 0,
+  };
+}
+
+function estimateAnthropicUsage(requestBody: unknown, responseBody: unknown): UsageRecord {
+  const inputTokens = estimateTokens(requestBody);
+  const outputTokens = estimateTokens(responseBody);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    cachedTokens: 0,
+    cost: 0,
+  };
+}
+
+function jsonError(status: number, type: string, message: string, extra?: Record<string, unknown>): Response {
+  return new Response(
+    JSON.stringify({ type: "error", error: { type, message, ...(extra || {}) } }),
+    { status, headers: { "Content-Type": "application/json" } }
+  );
+}
+
+function reserveOutputTokens(requestBody: AnthropicRequest): number {
+  const explicit = Number(requestBody.max_tokens);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.ceil(explicit);
+
+  const fallback = Number(process.env.QUOTA_DEFAULT_OUTPUT_TOKEN_RESERVE ?? 2000);
+  return Number.isFinite(fallback) && fallback > 0 ? Math.ceil(fallback) : 2000;
+}
+
+async function reserveQuotaForChannel(
+  userId: string,
+  channel: ChannelInfo,
+  billingModel: string,
+  requestBody: AnthropicRequest
+): Promise<{ reservationId: string | null; estimatedInputTokens: number } | Response> {
+  const estimatedInputTokens = estimateTokens(requestBody);
+  const estimatedOutputTokens = reserveOutputTokens(requestBody);
+  const quota = await checkUserQuota(userId, {
+    channelId: channel.id,
+    model: billingModel,
+    estimatedInputTokens,
+    estimatedOutputTokens,
+  });
+
+  if (!quota.ok) {
+    const status = quota.type === "pricing_error" ? 422 : quota.type === "auth_error" ? 401 : 429;
+    return jsonError(status, quota.type || "quota_error", quota.message || "Quota check failed", {
+      quotaInfo: quota.quotaInfo,
+    });
+  }
+
+  return {
+    reservationId: quota.reservationId ?? null,
+    estimatedInputTokens,
+  };
+}
+
+async function sendAnthropicRequest(
+  channel: ChannelInfo,
+  body: string,
+  endpoint: "messages" | "count_tokens",
+  stream: boolean,
+  clientHeaders: AnthropicClientHeaders
+): Promise<Response> {
+  const baseUrl = await assertSafeUpstreamBaseUrl(channel.baseUrl);
+  const url = buildAnthropicUrl(baseUrl, endpoint);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-api-key": channel.apiKey,
+    Authorization: `Bearer ${channel.apiKey}`,
+    "anthropic-version": clientHeaders.anthropicVersion || ANTHROPIC_VERSION,
+  };
+  if (clientHeaders.anthropicBeta) {
+    headers["anthropic-beta"] = clientHeaders.anthropicBeta;
+  }
+  if (stream) {
+    headers.Accept = "text/event-stream";
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body,
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT),
+  });
+
+  if (!response.ok && (response.status >= 500 || response.status === 429)) {
+    const errorText = await response.text();
+    throw new Error(`Upstream ${response.status}: ${errorText.slice(0, 300)}`);
+  }
+
+  return response;
+}
+
+async function findAnthropicChannel(model: string): Promise<{ channel: ChannelInfo | null; billingModel: string }> {
+  const billingModel = normalizeModelForBilling(model);
+  const channel = await findChannelForModel(model) || await findChannelForModel(billingModel);
+  return { channel, billingModel };
+}
+
+export async function proxyAnthropicMessagesRequest(
+  userId: string,
+  requestBody: AnthropicRequest,
+  clientHeaders: AnthropicClientHeaders
+): Promise<Response> {
+  const { model, stream } = requestBody;
+  const { channel, billingModel } = await findAnthropicChannel(model);
+  if (!channel) {
+    return jsonError(404, "not_found_error", `No available channel for model '${model}'. Please configure it in admin panel.`);
+  }
+
+  const upstreamBody = JSON.stringify(requestBody);
+  let reservation = await reserveQuotaForChannel(userId, channel, billingModel, requestBody);
+  if (reservation instanceof Response) return reservation;
+
+  let response: Response;
+  let usedChannel = channel;
+  let reservationId = reservation.reservationId;
+  let estimatedInputTokens = reservation.estimatedInputTokens;
+
+  try {
+    response = await sendAnthropicRequest(channel, upstreamBody, "messages", Boolean(stream), clientHeaders);
+  } catch (err) {
+    await releaseQuotaReservation(reservationId);
+    console.error(`[Anthropic] Channel ${channel.name} failed, trying fallback:`, err);
+
+    const fallback = await findFallbackChannel(billingModel, channel.id);
+    if (!fallback) {
+      return jsonError(502, "api_error", "Upstream request failed: all channels unavailable");
+    }
+
+    const fallbackReservation = await reserveQuotaForChannel(userId, fallback, billingModel, requestBody);
+    if (fallbackReservation instanceof Response) return fallbackReservation;
+
+    usedChannel = fallback;
+    reservationId = fallbackReservation.reservationId;
+    estimatedInputTokens = fallbackReservation.estimatedInputTokens;
+
+    try {
+      response = await sendAnthropicRequest(fallback, upstreamBody, "messages", Boolean(stream), clientHeaders);
+    } catch (fallbackErr) {
+      await releaseQuotaReservation(reservationId);
+      console.error(`[Anthropic] Fallback ${fallback.name} failed:`, fallbackErr);
+      return jsonError(502, "api_error", "Upstream request failed: all channels unavailable");
+    }
+  }
+
+  if (!response.ok) {
+    await releaseQuotaReservation(reservationId);
+    return passThroughResponse(response);
+  }
+  if (stream) {
+    return handleAnthropicStream(response, userId, billingModel, usedChannel.id, estimatedInputTokens, reservationId);
+  }
+  return handleAnthropicJson(response, userId, billingModel, usedChannel.id, requestBody, reservationId);
+}
+
+export async function proxyAnthropicCountTokensRequest(
+  requestBody: AnthropicRequest,
+  clientHeaders: AnthropicClientHeaders
+): Promise<Response> {
+  const { channel } = await findAnthropicChannel(requestBody.model);
+  if (!channel) {
+    return jsonError(404, "not_found_error", `No available channel for model '${requestBody.model}'. Please configure it in admin panel.`);
+  }
+
+  const response = await sendAnthropicRequest(
+    channel,
+    JSON.stringify(requestBody),
+    "count_tokens",
+    false,
+    clientHeaders
+  );
+  return passThroughResponse(response);
+}
+
+async function handleAnthropicJson(
+  upstreamResponse: Response,
+  userId: string,
+  model: string,
+  channelId: string,
+  requestBody: AnthropicRequest,
+  reservationId: string | null
+): Promise<Response> {
+  const bodyText = await upstreamResponse.text();
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(bodyText) as Record<string, unknown>;
+  } catch {
+    await releaseQuotaReservation(reservationId);
+    return new Response(bodyText, {
+      status: upstreamResponse.status,
+      headers: { "Content-Type": upstreamResponse.headers.get("content-type") || "application/json" },
+    });
+  }
+
+  let usage = usageFromAnthropicBody(parsed);
+  if (usage.totalTokens === 0) {
+    console.warn(`[Anthropic] Upstream omitted usage for model=${model}; recording estimated usage`);
+    usage = estimateAnthropicUsage(requestBody, parsed);
+  }
+  await recordUsage(userId, model, channelId, usage, reservationId);
+
+  return new Response(JSON.stringify(parsed), {
+    status: upstreamResponse.status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function handleAnthropicStream(
+  upstreamResponse: Response,
+  userId: string,
+  model: string,
+  channelId: string,
+  estimatedInputTokens: number,
+  reservationId: string | null
+): Response {
+  const reader = upstreamResponse.body?.getReader();
+  if (!reader) {
+    releaseQuotaReservation(reservationId).catch((err) =>
+      console.error("[Anthropic] Reservation release failed:", err)
+    );
+    return jsonError(502, "api_error", "No response body");
+  }
+
+  let buffer = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cachedTokens = 0;
+  let streamedChars = 0;
+  let usageRecorded = false;
+
+  async function recordCollectedUsage(reason: string) {
+    if (usageRecorded) return;
+    usageRecorded = true;
+    const safeInput = inputTokens || estimatedInputTokens;
+    const safeOutput = outputTokens || Math.max(1, Math.ceil(streamedChars / 4));
+    if (!inputTokens || !outputTokens) {
+      console.warn(`[Anthropic] Stream ${reason} without complete usage for model=${model}; recording estimated usage`);
+    }
+    await recordUsage(userId, model, channelId, {
+      inputTokens: safeInput,
+      outputTokens: safeOutput,
+      totalTokens: safeInput + safeOutput,
+      cachedTokens: Math.min(cachedTokens, safeInput),
+      cost: 0,
+    }, reservationId);
+  }
+
+  const stream = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          await recordCollectedUsage("ended");
+          controller.close();
+          return;
+        }
+
+        controller.enqueue(value);
+        const decoded = new TextDecoder().decode(value);
+        streamedChars += decoded.length;
+        buffer += decoded;
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data) as Record<string, unknown>;
+            const usage = usageFromAnthropicBody(parsed);
+            if (usage.inputTokens > 0) inputTokens = usage.inputTokens;
+            if (usage.outputTokens > 0) outputTokens = usage.outputTokens;
+            if (usage.cachedTokens > 0) cachedTokens = usage.cachedTokens;
+          } catch {
+            // Ignore non-JSON SSE data.
+          }
+        }
+      } catch (err) {
+        console.error("[Anthropic] Stream read error:", err);
+        await recordCollectedUsage("errored");
+        controller.error(err);
+      }
+    },
+    cancel() {
+      recordCollectedUsage("cancelled").catch((err) =>
+        console.error("[Anthropic] Stream cancel usage record failed:", err)
+      );
+      reader.cancel();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": upstreamResponse.headers.get("content-type") || "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+async function passThroughResponse(upstreamResponse: Response): Promise<Response> {
+  const bodyText = await upstreamResponse.text();
+  return new Response(bodyText, {
+    status: upstreamResponse.status,
+    headers: { "Content-Type": upstreamResponse.headers.get("content-type") || "application/json" },
+  });
+}
