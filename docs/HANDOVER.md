@@ -1,9 +1,34 @@
-# Sparkloom 交接文档
+﻿# Sparkloom 交接文档
 
 最后更新：2026-06-18
 线上地址：https://ai.seapllo.com
 当前部署方式：Railway 单服务镜像，容器内同时运行 Next.js Web 和 Hono Proxy 两个进程。
-文档定位：这是后续开发、Bug 修复、日常运维和用户支持的权威入口。仓库中其他旧文档存在乱码或历史信息，除非已和当前代码核对，否则只作为参考。
+文档定位：这是后续开发、Bug 修复、日常运维和用户支持的总交接入口。完整交接不能只依赖一个文档，后续团队应以 `docs/README.md` 中列出的文档套件为准。
+
+---
+
+## 0. 文档套件
+
+一个总文档适合快速理解系统，但不足以支撑后续团队独立维护。当前已按代码重新整理为以下文档：
+
+| 文档 | 用途 |
+| --- | --- |
+| `docs/README.md` | 文档索引和阅读路径 |
+| `docs/HANDOVER.md` | 总交接说明 |
+| `docs/ARCHITECTURE.md` | 当前 Railway 单镜像双进程架构 |
+| `docs/PROJECT-MODULES.md` | 各模块功能、关键文件和维护规范 |
+| `docs/API.md` | Public/Web/Internal API 契约 |
+| `docs/DATABASE-SCHEMA.md` | SQLite 表结构、字段和迁移规范 |
+| `docs/PROXY-INTERNALS.md` | Hono Proxy、限额预占、usage 队列和流式计费 |
+| `docs/SECURITY-PERMISSIONS.md` | 权限、密钥、CSRF、SSRF、内部 API 和资金安全 |
+| `docs/USER-GUIDE.md` | 员工、管理员、财务、部门负责人使用说明 |
+| `docs/OPERATIONS.md` | 部署、环境变量、定时任务、日常维护 |
+| `docs/TROUBLESHOOTING.md` | 常见故障排查 |
+| `docs/RELEASE-CHECKLIST.md` | 上线前回归检查清单 |
+| `docs/balance-sync.md` | 渠道余额同步和提醒 |
+| `docs/backup-restore.md` | 备份、恢复和计费重置 |
+| `docs/monitoring.md` | 健康检查、日志、指标和告警 |
+| `docs/reverse-proxy.md` | Railway 入口层和未来反代规则 |
 
 ---
 
