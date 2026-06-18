@@ -1,685 +1,885 @@
-# AI Token Manager — 项目交接文档
+# Sparkloom 交接文档
 
-> 最后更新：2025-06-08
-> 文档目的：让新接手的的人能**快速理解项目全貌**，直接上手开发和运维。
-
----
-
-## 一、项目概述
-
-**一句话说明**：这是一个企业内部 AI Token 用量管理平台，用于追踪全公司员工使用 AI 模型（DeepSeek、OpenAI、Anthropic、GLM、SiliconFlow、阿里百炼等）的 Token 消耗、费用、限额和预警。
-
-**核心价值**：
-- 管理者看到「谁用了多少、花了多少钱、哪个部门最多」
-- 员工看到「我这个月用了多少、还剩多少额度」
-- 自动预警（超限额、异常用量、余额不足）
-- 通过飞书实现登录、通知、员工数据同步
-
-**线上地址**：`https://ai.seapllo.com`
+最后更新：2026-06-18
+线上地址：https://ai.seapllo.com
+当前部署方式：Railway 单服务镜像，容器内同时运行 Next.js Web 和 Hono Proxy 两个进程。
+文档定位：这是后续开发、Bug 修复、日常运维和用户支持的权威入口。仓库中其他旧文档存在乱码或历史信息，除非已和当前代码核对，否则只作为参考。
 
 ---
 
-## 二、技术架构
+## 1. 系统一句话说明
 
-```
-┌──────────────────────────────────────────────────┐
-│                   用户浏览器                       │
-│          Next.js 前端（端口 3000）                  │
-│   ┌──────────────────────────────────────┐        │
-│   │  React 页面 + Recharts 图表          │        │
-│   │  Tailwind CSS（Glass 设计系统）       │        │
-│   │  飞书 OAuth 登录                     │        │
-│   └──────────────┬───────────────────────┘        │
-│                  │ 内部 API 调用                    │
-│   ┌──────────────▼───────────────────────┐        │
-│   │  Next.js API Routes（44 个路由）      │        │
-│   │  鉴权(JWT) + 业务逻辑 + SQLite       │        │
-│   └──────────────┬───────────────────────┘        │
-│                  │ 转发聊天请求                     │
-│   ┌──────────────▼───────────────────────┐        │
-│   │  Hono Proxy 网关（端口 3001）          │        │
-│   │  API Key 鉴权 + 限额检查 + 转发       │        │
-│   │  限流(60/min) + 故障转移              │        │
-│   └──────────────┬───────────────────────┘        │
-│                  │                                │
-│   ┌──────────────▼───────────────────────┐        │
-│   │  上游 AI 模型服务商                    │        │
-│   │  (DeepSeek / OpenAI / Anthropic 等)  │        │
-│   └──────────────────────────────────────┘        │
-│                                                    │
-│   共享层：SQLite 数据库 (data.db)                    │
-│   Drizzle ORM + sql.js + AES-256-GCM 加密          │
-└──────────────────────────────────────────────────┘
-```
+Sparkloom 是公司内部 AI API 网关和用量管理后台：
 
-### 技术栈
+- 员工用飞书登录后台，创建自己的 `sk-emp-...` 员工密钥。
+- 员工在 Claude Code、OpenAI 兼容客户端等工具里使用公司统一入口调用模型。
+- 管理员维护上游渠道、模型价格、员工权限、个人/部门/公司额度、预警和排行榜。
+- 系统记录每次调用的 token、缓存命中 token、费用、渠道、模型，并按北京时间统计。
+- 飞书负责登录、通讯录同步、通知、余额提醒和排行榜群发。
 
-| 层面 | 技术 | 版本 | 说明 |
-|------|------|------|------|
-| 前端框架 | Next.js | 16.2.6 | App Router, Turbopack |
-| UI 框架 | React | 19.2.6 | |
-| 样式 | Tailwind CSS | 4.3.0 | CSS 变量主题系统，支持深色模式 |
-| 图表 | Recharts | 3.8.1 | |
-| 动画 | Framer Motion | 12.40.0 | 排行榜动画 |
-| 后端框架 | Hono | - | Proxy 网关独立进程 |
-| 数据库 | SQLite (sql.js) | 1.12.0 | 单文件，Docker volume 共享 |
-| ORM | Drizzle ORM | 0.44.7 | |
-| 认证 | JWT (jose) | 6.2.3 | HS256, 30 天过期 |
-| 加密 | AES-256-GCM | Node.js crypto | 敏感字段加密 |
-| 飞书 SDK | @larksuiteoapi/node-sdk | 1.66.0 | OAuth + 消息推送 |
-| Excel | xlsx | 0.18.5 | 导出报表 |
-| 部署 | Docker Compose | - | 两容器 + 共享 volume |
+核心原则：
+
+- 员工只拿员工密钥，不直接接触 DeepSeek、硅基流动等上游真实 Key。
+- 上游真实 Key 和员工 Key 均加密存储，认证走 hash 查询。
+- `/v1/*` 和 `/anthropic/*` 是正式 API 入口，由 Hono Proxy 承接。
+- `/api/internal/*` 只允许服务内部访问，Railway 入口层对公网返回 404。
 
 ---
 
-## 三、项目目录结构
+## 2. 代码结构
 
-```
-ai-token-manager/
-├── web/                          # Next.js 管理后台（主要开发目录）
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── api/              # 44 个 API 路由
-│   │   │   │   ├── auth/         # 飞书 OAuth + JWT 登录/登出
-│   │   │   │   ├── admin/        # 管理端 API（20+ 路由）
-│   │   │   │   ├── proxy/v1/     # OpenAI 兼容代理端点
-│   │   │   │   ├── usage/        # 用户用量查询
-│   │   │   │   ├── user/         # API Key 管理
-│   │   │   │   ├── internal/     # 内部 API（定时任务用）
-│   │   │   │   ├── setup/        # 数据库初始化 + 飞书同步
-│   │   │   │   └── health/       # 健康检查
-│   │   │   ├── dashboard/        # 前端页面（12 个页面）
-│   │   │   ├── login/            # 登录页
-│   │   │   ├── globals.css       # 全局样式 + Glass 设计系统
-│   │   │   └── layout.tsx
-│   │   ├── components/           # 15 个通用组件
-│   │   ├── context/              # ThemeContext（深色/浅色模式）
-│   │   ├── lib/                  # 29 个工具/服务模块
-│   │   │   ├── proxy/            # 代理核心逻辑（限流、缓存、流式）
-│   │   │   ├── price-scrapers/   # 各厂商价格爬取
-│   │   │   ├── db.ts             # 数据库连接
-│   │   │   ├── auth.ts           # JWT 工具
-│   │   │   ├── feishu.ts         # 飞书 API 封装
-│   │   │   ├── auto-sync.ts      # 定时任务调度器
-│   │   │   └── ...               # 其他工具模块
-│   │   └── middleware.ts         # 鉴权中间件 + 安全头
-│   ├── .env.local                # 环境变量（不入 Git）
-│   ├── package.json
-│   └── Dockerfile
-│
-├── proxy/                        # Hono API 网关（独立进程）
-│   ├── src/
-│   │   ├── index.ts              # 入口
-│   │   ├── routes/               # /v1/chat/completions, /v1/models
-│   │   ├── middleware/            # 鉴权 + 限额 + 限流
-│   │   ├── services/             # 渠道查找 + 请求转发 + 用量记录
-│   │   └── utils/                # 汇率 + 定价
-│   └── Dockerfile
-│
-├── shared/                       # 共享代码（web 和 proxy 都用）
-│   ├── schema.ts                 # 9 张表的 Drizzle ORM 定义
-│   ├── db.ts                     # 数据库连接单例
-│   ├── crypto.ts                 # AES-256-GCM 加解密
-│   ├── migrate.ts                # 数据库迁移（当前 v4）
-│   └── types.ts
-│
-├── docs/                         # 项目文档
-│   ├── HANDOVER.md               # ← 你正在看的这个文件
-│   ├── PROJECT-MODULES.md        # 模块详细文档
-│   ├── balance-sync.md           # 余额同步说明
-│   ├── monitoring.md             # 健康检查配置
-│   └── reverse-proxy.md          # Nginx/Caddy 反代配置
-│
-├── docker-compose.yml            # 生产部署配置
-├── send-leaderboard.js           # 独立排行榜推送脚本
-├── pnpm-workspace.yaml           # monorepo 工作区
-└── data.db                       # SQLite 数据库文件（运行时生成）
+| 路径 | 说明 |
+| --- | --- |
+| `web/` | Next.js 管理后台、用户页面、管理 API、内部 API、定时任务 |
+| `proxy/` | Hono API 网关，承接 `/v1/*` 和 `/anthropic/*` |
+| `shared/` | Drizzle schema、共享类型、迁移辅助 |
+| `railway/start.mjs` | Railway 生产入口，启动 web/proxy 两个子进程并做边缘转发 |
+| `Dockerfile` | 当前 Railway 使用的生产镜像 Dockerfile |
+| `docker-compose.yml` | Docker 双服务部署参考，当前线上不走 compose |
+| `.env.production.example` | 生产环境变量模板 |
+| `docs/HANDOVER.md` | 本交接文档 |
+
+重要入口文件：
+
+| 模块 | 关键文件 |
+| --- | --- |
+| 认证与 session | `web/src/lib/auth.ts`, `web/src/app/api/auth/*` |
+| 权限控制 | `web/src/lib/permissions.ts`, `web/src/lib/admin-check.ts`, `web/src/proxy.ts` |
+| 数据库 | `web/src/lib/db.ts`, `web/src/lib/ensure-tables.ts`, `shared/schema.ts` |
+| 飞书通讯录 | `web/src/lib/feishu.ts`, `web/src/app/api/setup/sync-feishu/*` |
+| 飞书通知 | `web/src/lib/feishu-bot.ts`, `web/src/lib/notification-router.ts` |
+| 员工 API Key | `web/src/app/api/user/key/route.ts`, `web/src/lib/user-api-keys.ts` |
+| Hono 网关 | `proxy/src/index.ts`, `proxy/src/routes/*`, `proxy/src/services/*` |
+| 内部鉴权 | `web/src/lib/internal-auth.ts`, `proxy/src/services/web-internal.ts` |
+| 计费写入 | `web/src/app/api/internal/usage/route.ts`, `proxy/src/services/usage.ts` |
+| 限额检查 | `web/src/app/api/internal/proxy/quota/check/route.ts` |
+| 模型价格 | `web/src/lib/price-sync.ts`, `web/src/lib/proxy/cache.ts` |
+| 渠道余额 | `web/src/lib/balance-sync.ts`, `web/src/lib/balance-fetchers.ts` |
+| 定时任务 | `web/src/lib/auto-sync.ts`, `web/src/instrumentation.ts` |
+| Railway 启动 | `railway/start.mjs` |
+
+---
+
+## 3. 运行架构
+
+```mermaid
+flowchart LR
+  User["浏览器用户"] -->|"HTTPS /dashboard /api"| Edge["railway/start.mjs"]
+  Client["AI 客户端"] -->|"HTTPS /v1 或 /anthropic"| Edge
+
+  Edge -->|"页面和管理 API"| Web["Next.js Web :3000"]
+  Edge -->|"/v1/* /anthropic/*"| Proxy["Hono Proxy :3001"]
+  Edge -->|"/api/internal/* 公网 404"| Block["屏蔽"]
+
+  Web --> DB[("sql.js SQLite /data/data.db")]
+  Proxy -->|"INTERNAL_API_KEY"| Web
+  Web -->|"飞书 OAuth/通讯录/消息"| Feishu["飞书开放平台"]
+  Proxy -->|"上游 API Key"| Upstream["DeepSeek / SiliconFlow / OpenAI / Anthropic / GLM / Alibaba"]
 ```
 
----
+生产请求流：
 
-## 四、数据库设计（9 张表）
-
-### 4.1 `users` — 用户表
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | text PK | 内部 ID |
-| feishuId | text (unique) | 飞书 open_id |
-| name | text | 姓名 |
-| avatar | text | 头像 URL（来自飞书） |
-| email | text | 邮箱 |
-| department | text | 所属部门（标准化后的） |
-| departmentId | text | 飞书部门 ID |
-| groupName | text | 飞书小组名 |
-| groupId | text | 飞书小组 ID |
-| centerName | text | 所属中心 |
-| centerId | text | 中心 ID |
-| employeeId | text | 工号 |
-| apiKey | text (unique) | 用户 API Key（AES 加密存储） |
-| apiKeyHash | text | API Key 的 HMAC-SHA256 哈希（用于快速查找） |
-| role | text | 角色（逗号分隔：admin,finance,dept_manager,member） |
-| status | text | `active` 或 `disabled` |
-| monthlyQuota | real | 个人月度限额（默认 200） |
-| createdAt | integer | 创建时间戳 |
-| updatedAt | integer | 更新时间戳 |
-
-**重要说明**：
-- `role` 字段支持多角色，如 `"admin,finance"` 表示既是管理员又是财务
-- `status` = `"disabled"` 的用户不出现在排行榜、限额管理、导出中
-- `apiKeyHash` 用于代理鉴权时的 O(1) 查找，避免全表解密
-
-### 4.2 `channels` — 渠道表
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | text PK | 渠道 ID |
-| name | text | 渠道名称 |
-| baseUrl | text | API 地址 |
-| apiKey | text | 渠道密钥（AES 加密） |
-| models | text | 支持的模型列表（JSON 数组字符串） |
-| priority | integer | 优先级（默认 0，数字越大越优先） |
-| status | text | `active` 或 `disabled` |
-| currency | text | `CNY` 或 `USD` |
-| provider | text | 服务商：deepseek/openai/anthropic/zhipu/siliconflow/alibaba/custom |
-| balance | real | 渠道余额 |
-| balanceCurrency | text | 余额币种 |
-| balanceSyncMode | text | `auto` 或 `manual` |
-| balanceSyncedAt | integer | 最后同步时间 |
-| balanceAlertThreshold | real | 余额预警阈值 |
-| accessKeyId | text | 阿里云 AccessKey ID |
-| accessKeySecret | text | 阿里云 AccessKey Secret（AES 加密） |
-| createdAt | integer | |
-
-### 4.3 `usage_logs` — 用量日志
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | text PK | |
-| userId | text FK→users.id | 使用者 |
-| model | text | 模型名 |
-| inputTokens | integer | 输入 Token |
-| outputTokens | integer | 输出 Token |
-| totalTokens | integer | 总 Token |
-| cost | real | 费用（CNY） |
-| channelId | text FK→channels.id | 使用的渠道 |
-| createdAt | integer | |
-
-### 4.4 `quota_rules` — 限额规则
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | text PK | |
-| scope | text | `company` / `department` / `personal` |
-| targetId | text | 目标 ID（用户/部门/公司标识） |
-| monthlyLimit | real | 月度限额 |
-| updatedBy | text | 操作人 |
-| updatedAt | integer | |
-
-### 4.5 `model_prices` — 模型定价
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | text PK | |
-| model | text | 模型名 |
-| channelId | text (nullable) | 渠道 ID（null = 全局定价） |
-| inputPerMillion | real | 输入单价（每百万 Token） |
-| outputPerMillion | real | 输出单价（每百万 Token） |
-| cachePerMillion | real | 缓存单价（默认 0） |
-| displayName | text | 显示名称 |
-| currency | text | 币种 |
-| deprecated | boolean | 是否已弃用 |
-| syncedAt | integer | 官方价格同步时间（null = 手动设置） |
-| updatedBy | text | |
-| updatedAt | integer | |
-| createdAt | integer | |
-
-### 4.6 其他表
-
-- **`alert_logs`** — 预警记录（类型 + 目标 + 消息 + 发送时间）
-- **`alert_settings`** — 预警配置（键值对，如阈值、开关、接收人）
-- **`admin_logs`** — 操作审计日志（谁在什么时候做了什么）
-- **`sync_blacklist`** — 价格同步黑名单（不自动同步的模型）
-
-### 数据库迁移（当前 v4）
-
-| 版本 | 内容 |
-|------|------|
-| v1 | channels 表增加 balance/provider/accessKey 列 |
-| v2 | model_prices 表增加 currency 列 |
-| v3 | users 表增加 api_key_hash 列 + 索引 |
-| v4 | usage_logs 增加 (userId, createdAt) 复合索引，users 增加 (departmentId) 索引 |
+1. 管理后台页面：浏览器访问 `https://ai.seapllo.com/dashboard...`，由 Next.js 处理。
+2. 普通 OpenAI 兼容调用：客户端填 `https://ai.seapllo.com/v1`，由 Hono Proxy 处理。
+3. Claude Code 调用：客户端填 `https://ai.seapllo.com/anthropic`，由 Hono Proxy 处理。
+4. Proxy 不直接读 DB 文件；它通过 `WEB_URL=http://127.0.0.1:3000` 调用 Web 内部 API。
+5. Web 是 DB owner，负责鉴权、渠道读取、限额检查、计费落库。
 
 ---
 
-## 五、角色权限体系
+## 4. 用户使用说明
 
-### 4 种角色
+### 4.1 登录
 
-| 角色 | 可见页面 | 说明 |
-|------|---------|------|
-| **admin** (管理员) | 全部 12 个页面 | 含渠道管理、价格、限额、预警、日志、权限 |
-| **finance** (财务) | 我的用量 + API Key + 全局概览 + 部门分账 | 只读，可导出 Excel |
-| **dept_manager** (部门负责人) | 我的用量 + API Key + 部门排行 + 员工排行 + 本部门分账 | 只看本部门数据 |
-| **member** (普通员工) | 我的用量 + API Key | 只看自己 |
+用户访问 `https://ai.seapllo.com`，点击登录后走飞书 OAuth。
 
-### 菜单完整列表
+登录失败常见原因：
 
-| 菜单 | 路径 | 可见角色 |
-|------|------|---------|
-| 我的用量 | `/dashboard` | 全部 |
-| API Key | `/dashboard/key` | 全部 |
-| 全局概览 | `/dashboard/admin` | admin, finance |
-| 部门排行 | `/dashboard/admin/departments` | admin, dept_manager |
-| 员工排行 | `/dashboard/admin/employees` | admin, dept_manager |
-| 部门分账 | `/dashboard/admin/billing` | admin, finance, dept_manager |
-| 渠道管理 | `/dashboard/admin/channels` | admin |
-| 模型价格 | `/dashboard/admin/prices` | admin |
-| 限额设置 | `/dashboard/admin/quotas` | admin |
-| 预警记录 | `/dashboard/admin/alerts` | admin |
-| 操作日志 | `/dashboard/admin/logs` | admin |
-| 权限管理 | `/dashboard/admin/permissions` | admin |
+- 飞书应用未授权给该用户。解决：飞书开放平台把应用可用范围设置到全员或目标部门。
+- `FEISHU_REDIRECT_URI` 未配置线上回调：`https://ai.seapllo.com/api/auth/feishu/callback`。
+- 飞书应用凭证错误。解决：更新 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` 并重新部署。
+- 用户在系统内 `status=disabled`。解决：管理员检查员工同步状态或权限页。
 
-### 权限实现方式
+### 4.2 员工 API Key
 
-1. **前端**：`src/lib/permissions.ts` 的 `getMenuForRole()` 根据角色过滤菜单项
-2. **中间件**：`src/middleware.ts` 对 `/api/admin/*` 路由强制 JWT + admin 角色校验
-3. **API 层**：每个 admin API 调用 `requireAdmin()` 或 `requireRole()` 二次验证
-4. **特殊保护**：`HARDCODED_ADMIN_IDS`（何广明、陈四华）的 admin 角色不会被同步操作降级
+页面：`/dashboard/key`
 
----
+规则：
 
-## 六、核心功能模块
+- 用户首次没有可用明文 Key，需要点击新建。
+- 新建后只展示一次完整 `sk-emp-...`，之后只显示脱敏值。
+- 后续无法再次复制明文；忘记后必须新建新的 Key。
+- 可以删除 Key，但每个用户至少保留一个 Key。
+- 员工必须使用本页生成的 `sk-emp-...`，不能填 DeepSeek 官方 Key 或硅基流动 Key。
 
-### 6.1 飞书登录（OAuth 2.0）
+客户端配置：
 
-**流程**：点击「飞书登录」 → 跳转飞书授权 → 回调到 `/api/auth/feishu/callback` → 换取用户信息 → `findOrCreateUser` → 创建 JWT session → 重定向到 Dashboard
+| 客户端类型 | Base URL | Key |
+| --- | --- | --- |
+| OpenAI 兼容客户端 | `https://ai.seapllo.com/v1` | 员工自己的 `sk-emp-...` |
+| Claude Code | `https://ai.seapllo.com/anthropic` | 员工自己的 `sk-emp-...` |
 
-**关键文件**：
-- `src/app/api/auth/feishu/start.ts` — 生成 CSRF state + 跳转
-- `src/app/api/auth/feishu/callback.ts` — 换 token + 取用户信息 + 三级部门分类
-- `src/lib/feishu.ts` — 飞书 API 封装
-- `src/lib/auth.ts` — JWT 创建/验证
+### 4.3 普通员工页面
 
-**部门三级分类**：飞书返回用户的部门层级，代码根据名称后缀自动分类为中心(center) → 部门(department) → 组(group)
+| 页面 | 功能 |
+| --- | --- |
+| `/dashboard` | 查看个人今日/本月/历史用量、费用、调用次数、额度百分比、模型分布 |
+| `/dashboard/key` | 新建、查看脱敏、删除员工 API Key；查看客户端配置说明 |
 
-### 6.2 飞书员工同步
+### 4.4 管理员页面
 
-**触发方式**：
-1. 服务器启动 30 秒后自动执行
-2. 每天 12:00 和 19:00 定时同步
-3. 手动触发：`POST /api/setup/sync-feishu`
+| 页面 | 功能 |
+| --- | --- |
+| `/dashboard/admin` | 全局概览、趋势、渠道/模型分布、启用渠道余额汇总 |
+| `/dashboard/admin/channels` | 上游渠道增删改查、启停、余额同步、手动余额、渠道 Key 管理 |
+| `/dashboard/admin/prices` | 模型价格管理、官方价格同步、手动价格保护、同步黑名单 |
+| `/dashboard/admin/quotas` | 公司/部门/个人月度额度配置和批量修改 |
+| `/dashboard/admin/alerts` | 阈值配置、飞书通知接收人、排行榜群组、预警历史 |
+| `/dashboard/admin/departments` | 部门排行和部门明细 |
+| `/dashboard/admin/employees` | 员工排行、部门筛选 |
+| `/dashboard/admin/billing` | 部门分账、渠道/模型费用分析、导出 |
+| `/dashboard/admin/logs` | 管理操作日志和审计记录 |
+| `/dashboard/admin/permissions` | 管理员、财务、部门负责人角色维护 |
 
-**同步流程**：
-1. 数据库迁移（确保列完整）
-2. 从飞书拉取所有部门 → 三级分类
-3. 收集所有部门下的用户
-4. `findOrCreateUser` upsert（首次自动生成 `sk-emp-xxx` 格式的 API Key）
-5. `normalizeAndProtect()` — 部门名规范化 + 管理员角色保护
-6. `cleanupDepartedAndSeed()` — 停用已离职员工，清理测试数据
-
-**部门映射逻辑**（`constants.ts`）：
-- `GROUP_TO_DEPT` — 小组名 → 部门（如"产品一组" → "产品部"）
-- `DEPT_RENAME` — 不规则名修正（如"开发部" → "产品部"）
-- `USER_DEPT_OVERRIDE` — 个别用户强制归属
-
-### 6.3 AI 请求代理
-
-**入口**：`POST /api/proxy/v1/chat/completions`
-
-**流程**：
-1. `authenticateUser()` — 从 `Authorization: Bearer sk-xxx` 提取 API Key，HMAC 哈希查找用户
-2. `checkRateLimit()` — 60 次/分钟滑动窗口
-3. `checkQuota()` — 三级限额检查（个人 → 部门 → 公司）
-4. `findChannelForModel()` — 按优先级查找可用渠道
-5. `proxyChatRequest()` — 转发请求，支持流式(SSE)和非流式
-6. 故障转移：主渠道失败自动切备用渠道
-7. `recordUsage()` — 批量记录用量（每 10 秒 flush 一次到数据库）
-
-### 6.4 排行榜
-
-**部门排行**（`/dashboard/admin/departments`）：
-- 领奖台式 TOP 3 展示（金/银/铜 + 皇冠 + 大理石纹理）
-- 点击部门可下钻查看该部门员工明细
-- 排序维度：费用 / Token / 人均
-- 时间范围：今天 / 7天 / 30天 / 全年
-
-**员工排行**（`/dashboard/admin/employees`）：
-- 同样领奖台式 TOP 3
-- 支持部门筛选
-- 排序维度：费用 / Token / 调用次数
-
-### 6.5 定时任务（auto-sync.ts）
-
-| 任务 | 时间 | 说明 |
-|------|------|------|
-| 飞书员工同步 | 12:00, 19:00 | 同步通讯录变更 |
-| 模型价格同步 | 03:00 | 爬取各厂商官网最新定价 |
-| 渠道余额同步 | 04:00 | 查询各渠道余额 + 预警 |
-| 异常用量检测 | 每小时 | 检测 1 小时内用量突增（7 天均值的 5 倍） |
-| 员工状态检查 | 20:00 | 比对飞书通讯录，自动停用离职人员 |
-| 排行榜推送 | 10:00 | 检查是否需要发送排行榜到飞书群 |
-
-**启动时**：服务器启动后 30s 执行飞书同步 + 价格同步，60s 执行余额同步，90s 异常检测，120s 员工状态检查。
-
-### 6.6 预警系统
-
-**预警类型**：
-| 类型 | 触发条件 | 通知方式 |
-|------|---------|---------|
-| personal_80 | 个人用量达限额 80% | 飞书私聊 |
-| personal_100 | 个人用量达限额 100% | 飞书私聊 |
-| dept_80 | 部门用量达限额 80% | 通知管理员 |
-| company_90 | 公司用量达限额 90% | 通知管理员 |
-| anomaly | 异常用量突增 | 飞书卡片 |
-| balance_low | 渠道余额不足 | 飞书卡片 |
-| employee_departed | 员工离职 | 飞书私聊 |
-| leaderboard | 排行榜 | 飞书群卡片 |
-
-**通知路由**（`notification-router.ts`）：总开关 → 类型开关 → 接收人解析（按类型可配不同接收人）
-
-### 6.7 费用计算
-
-**三级定价**（优先级从高到低）：
-1. 渠道特定价格（`model_prices.channelId` 不为 null）
-2. 全局价格（`channelId` 为 null）
-3. 硬编码兜底价格
-
-**币种转换**：USD 价格通过汇率 API 自动转 CNY，汇率 24 小时缓存。
-
-**汇率来源**：open.er-api.com → exchangerate-api.com → 硬编码 7.2
-
-### 6.8 Excel 导出
-
-**端点**：`GET /api/admin/export?range=30d`
-
-**导出 3 个 Sheet**：
-1. 员工费用汇总（姓名、部门、Token、费用、调用次数）
-2. 部门汇总（排名、占比、人均）
-3. 渠道 × 模型明细
+财务和部门负责人页面受角色限制，见下一节。
 
 ---
 
-## 七、API 路由清单（44 个端点）
+## 5. 权限模型
 
-### 公开端点（无需登录）
+角色字段在 `users.role` 中，用逗号分隔，支持多角色。
+
+| 角色 | 页面权限 | 数据范围 | 写权限 |
+| --- | --- | --- | --- |
+| `admin` | 全部页面 | 全局 | 全部管理写操作 |
+| `finance` | 全局概览、部门分账、个人用量、Key | 全局财务只读 | 无渠道/价格/权限写操作 |
+| `dept_manager` | 部门排行、员工排行、部门分账、个人用量、Key | 本部门 | 只读 |
+| `member` | 个人用量、Key | 本人 | 只能管理自己的 Key |
+
+权限实现：
+
+- 页面导航：`web/src/lib/permissions.ts`。
+- 页面跳转保护：`web/src/proxy.ts` 使用 `canAccess()`，注意按最长路径匹配，避免 `/dashboard` 误放行 `/dashboard/admin/*`。
+- API 二次校验：每个 route 使用 `requireAdmin()`、`requireRole()` 或 `requireActiveSession()`。
+- session 每次通过 `getFreshSession()` 从 DB 刷新角色和状态，禁用用户或降级用户不会长期保留旧权限。
+
+开发规范：
+
+- 新增管理页面时，必须同时改 `MENU_ITEMS`、页面守卫和 API 的 `requireRole()`。
+- 新增 finance 或 dept_manager 可见 API 时，必须在 SQL 层限制数据范围。
+- 禁用用户必须在统计、排行榜、导出、通知里过滤掉，除非业务明确需要查历史。
+
+---
+
+## 6. 数据模型
+
+数据库是 sql.js SQLite，生产路径优先级：
+
+1. `DATABASE_URL` 且不是 URL 字符串时使用该路径。
+2. `RAILWAY_VOLUME_MOUNT_PATH` 存在时使用 `${RAILWAY_VOLUME_MOUNT_PATH}/data.db`。
+3. 默认 `./data.db`。
+
+线上 Railway 当前挂载在 `/data`，数据库为 `/data/data.db`。
+
+核心表：
+
+| 表 | 用途 | 注意事项 |
+| --- | --- | --- |
+| `users` | 员工、飞书身份、角色、状态、默认 quota、兼容旧 Key 字段 | `status` 必须参与统计过滤；`api_key` 为历史兼容字段 |
+| `user_api_keys` | 多员工 Key；保存 hash、密文、脱敏值、创建/使用时间 | 当前员工 Key 的主表；认证优先查这里 |
+| `channels` | 上游渠道、baseUrl、上游 Key、模型列表、优先级、余额 | 禁用渠道不参与路由、余额告警、全局余额概览 |
+| `model_prices` | 模型价格，支持全局和渠道级价格 | `channel_id=NULL` 是全局价格；非空是渠道专属价 |
+| `usage_logs` | 每次调用的 token、缓存 token、成本、模型、渠道 | 成本统一按 CNY 统计 |
+| `quota_rules` | 公司/部门/个人月度额度规则 | 个人规则同步写入 `users.monthly_quota` |
+| `quota_reservations` | 请求前额度预占，避免并发超额 | 默认 TTL 600 秒，失败或完成会释放/抵扣 |
+| `alert_logs` | 已发送通知和预警历史 | 历史记录不会因渠道禁用自动删除 |
+| `alert_settings` | 预警、排行榜、接收人等 KV 配置 | 大部分值为字符串或 JSON 字符串 |
+| `admin_logs` | 管理操作审计 | 新增管理写操作时应写审计 |
+| `sync_blacklist` | 价格同步黑名单 | 删除价格会加入，防止下次同步恢复 |
+| `system_flags` | 一次性迁移标记 | 用于避免重复执行破坏性迁移 |
+
+敏感字段：
+
+- `channels.api_key`
+- `channels.access_key_secret`
+- `users.api_key`
+- `user_api_keys.key_encrypted`
+
+这些字段使用 `ENCRYPTION_KEY` 进行 AES-256-GCM 加密。认证用 `searchableHash()` 生成 hash，避免全表解密。
+
+重要限制：
+
+- 不要随意更换 `ENCRYPTION_KEY`。更换后历史加密字段会无法解密，必须先做解密/重加密迁移。
+- 任何写 DB 的代码必须调用 `saveDb()` 或 `scheduleSave()`。
+- 新增表/列必须同时更新 `shared/schema.ts` 和 `web/src/lib/ensure-tables.ts`。
+
+---
+
+## 7. AI 调用链路
+
+```mermaid
+sequenceDiagram
+  participant C as 客户端
+  participant P as Hono Proxy
+  participant W as Web 内部 API
+  participant U as 上游模型
+
+  C->>P: Authorization: Bearer sk-emp-...
+  P->>W: /api/internal/proxy/authenticate
+  W-->>P: active user
+  P->>W: /api/internal/proxy/channels?model=...
+  W-->>P: active channels + decrypted upstream key
+  P->>W: /api/internal/proxy/quota/check
+  W-->>P: ok + reservationId
+  P->>U: forward request
+  U-->>P: JSON or SSE
+  P->>W: /api/internal/usage
+  W-->>P: usage persisted
+```
+
+支持入口：
+
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+- `POST /anthropic/v1/messages`
+
+关键规则：
+
+- 员工 Key 必须以 `sk-emp-` 开头。
+- `proxy/src/middleware/auth.ts` 只做员工 Key 认证。
+- 渠道路由只读取 `status='active'` 且模型匹配的渠道。
+- 渠道按 `priority` 升序排序，数字越小优先级越高。
+- 渠道缓存 TTL 为 30 秒，修改渠道后最多 30 秒生效。
+- 请求体大小由 `MAX_CHAT_BODY_BYTES` 和 `MAX_REQUEST_BODY_BYTES` 控制，默认 2 MB。
+- 非流式和流式均尝试提取 usage；流式默认需要上游返回 usage，否则可能按估算/无 usage 策略处理。
+- DeepSeek / SiliconFlow 的缓存命中字段会计入 `cached_tokens`，并按缓存价格计算。
+
+计费公式：
+
+```text
+nonCachedInput = max(inputTokens - cachedTokens, 0)
+cost = nonCachedInput * inputPerMillion / 1_000_000
+     + cachedTokens * cachePerMillion / 1_000_000
+     + outputTokens * outputPerMillion / 1_000_000
+```
+
+如果价格币种是 USD，Web 侧用汇率转为 CNY 后落库。
+
+---
+
+## 8. 渠道管理
+
+页面：`/dashboard/admin/channels`
+
+字段规则：
+
+| 字段 | 说明 |
+| --- | --- |
+| `name` | 管理后台显示名 |
+| `baseUrl` | 上游 API 根地址，生产必须 HTTPS |
+| `apiKey` | 上游真实 Key，保存时加密 |
+| `models` | JSON 数组，如 `["deepseek-chat","deepseek-reasoner"]`；支持 `["*"]` |
+| `priority` | 数字越小优先级越高 |
+| `status` | `active` 才参与路由和余额告警 |
+| `provider` | `deepseek`、`siliconflow`、`openai`、`anthropic`、`glm`、`alibaba` 等 |
+| `currency` | 渠道计价币种，通常 CNY 或 USD |
+| `balanceSyncMode` | `auto` 自动余额同步，`manual` 手动维护 |
+| `balanceAlertThreshold` | 单渠道余额预警阈值；空则用默认 CNY 100 / USD 10 |
+
+安全规则：
+
+- `baseUrl` 禁止指向 localhost、内网地址、metadata 地址，防止 SSRF。
+- 生产环境 `baseUrl` 必须是 HTTPS。
+- 前端显示的是脱敏上游 Key，不能把脱敏 Key 再保存回去。
+- 修改上游 Key 会清空该渠道旧余额和同步时间。
+
+余额同步：
+
+| provider | 自动余额接口 |
+| --- | --- |
+| `deepseek` | `${baseUrl}/user/balance` |
+| `siliconflow` | `${baseUrl}/v1/user/info` |
+| `alibaba` | 阿里云 BSS `QueryAccountBalance`，需要 AccessKey ID/Secret |
+| 其他 | 默认手动维护 |
+
+禁用渠道后：
+
+- 不再路由请求。
+- 不再参与全局概览余额汇总。
+- 不再触发余额不足/严重不足提醒。
+- 历史预警记录仍会保留。
+
+---
+
+## 9. 模型价格
+
+页面：`/dashboard/admin/prices`
+
+价格来源：
+
+1. 管理员手动创建或编辑。
+2. `syncPricesFromOfficial()` 从官方价格页抓取。
+3. 抓取失败时使用内置 fallback 价格。
+
+写入规则：
+
+- 渠道级价格：`model_prices.channel_id = channelId`。
+- 全局价格：`channel_id = NULL`。
+- 查价优先级：渠道级价格 > 全局价格 > 内置 fallback。
+- `synced_at = NULL` 表示手动价格，自动同步不会覆盖。
+- 删除价格会写入 `sync_blacklist`，防止下次同步恢复。
+- 价格同步只针对启用渠道对应的 provider。
+
+常见问题：
+
+- “同步更新 15 条但页面只显示 6 条”：页面可能按启用渠道、provider 或展示范围过滤；同时价格有全局价和渠道价之分。
+- “模型不出现在 `/v1/models`”：必须同时满足启用渠道包含该模型，并且存在该模型价格。
+- “手动价格被覆盖”：检查 `synced_at` 是否为 null；手动编辑应确保被识别为手动价格。
+
+---
+
+## 10. 限额与计费
+
+额度层级：
+
+| 层级 | 表示方式 |
+| --- | --- |
+| 个人 | `quota_rules.scope='personal'`, `target_id=user.id` |
+| 部门 | `scope='department'`, `target_id=department_id` |
+| 公司 | `scope='company'` |
+
+检查流程：
+
+1. Proxy 在请求前估算本次成本。
+2. Web 读取北京时间当月起点后的已用金额。
+3. 同时读取 `quota_reservations` 中未过期预占金额。
+4. 个人、部门、公司任一层级超额则返回 429。
+5. 通过后写入一条 reservation，避免并发请求突破额度。
+6. 请求完成后 usage 落库，reservation 被释放或抵扣。
+
+注意：
+
+- 统计周期按北京时间。
+- 额度金额单位为 CNY。
+- 额度为 0 表示硬阻断，不要当成“未设置”。
+- 用户看到“未到 100% 就 429”时，先检查是否有未过期 `quota_reservations` 或部门/公司额度已满。
+- 重置测试计费应清理 `usage_logs`、`quota_reservations` 和 proxy usage 队列。
+
+---
+
+## 11. 飞书集成
+
+### 11.1 OAuth 登录
+
+环境变量：
+
+- `FEISHU_APP_ID`
+- `FEISHU_APP_SECRET`
+- `FEISHU_REDIRECT_URI`
+- `NEXT_PUBLIC_FEISHU_APP_ID`
+- `NEXT_PUBLIC_FEISHU_REDIRECT_URI`
+
+线上回调：
+
+```text
+https://ai.seapllo.com/api/auth/feishu/callback
+```
+
+飞书开放平台需要配置：
+
+- 应用可用范围：全员或目标部门。
+- 安全设置中的重定向 URL：必须包含线上回调。
+- 如果本地调试，需要额外配置 `http://localhost:3000/api/auth/feishu/callback`。
+
+### 11.2 通讯录同步
+
+入口：
+
+- 定时：每天北京时间 12:00、19:00。
+- 手动：`POST /api/setup/sync-feishu`。
+- 状态：`GET /api/setup/sync-feishu`。
+
+同步做的事：
+
+- 拉取部门树和员工。
+- upsert `users`。
+- 维护 `center_name`、`department`、`department_id`、`group_name` 等组织字段。
+- 按映射表修正部门归属。
+- 保护管理员角色。
+- 检查离职/离开应用范围用户并置为 `disabled`。
+
+如果大量员工被误标离职，优先检查：
+
+- 飞书应用可见范围是否被缩小。
+- 通讯录权限是否变更。
+- 同步账号是否还有读取全员通讯录权限。
+- 最近是否改过部门映射逻辑。
+
+### 11.3 通知与群组
+
+用途：
+
+- 个人额度通知。
+- 部门/公司额度通知。
+- 异常用量通知。
+- 余额不足提醒。
+- 员工离职停用通知。
+- 排行榜群组推送。
+
+群组读取：
+
+- API：`GET /api/admin/feishu/chats`。
+- 需要机器人加入目标群。
+- 需要飞书 IM 群读取权限，例如 `im:chat:read`。
+
+常用飞书权限建议：
+
+| 功能 | 需要的能力 |
+| --- | --- |
+| OAuth 登录 | 获取用户基本信息、OIDC 登录 |
+| 通讯录同步 | 读取用户、读取部门、读取组织架构 |
+| 私聊通知 | 发送消息到用户 |
+| 群排行榜 | 读取机器人所在群、发送消息到群 |
+| 用户头像/邮箱 | 读取用户详情 |
+
+飞书权限变更后通常需要重新发布/重新授权应用。
+
+---
+
+## 12. 预警系统
+
+配置页面：`/dashboard/admin/alerts`
+
+预警类型：
+
+| 类型 | 触发条件 | 接收人 |
+| --- | --- | --- |
+| `personal_80` | 个人用量达到配置阈值 | 用户本人 |
+| `personal_100` | 个人额度用尽或超额 | 用户本人 |
+| `dept_80` | 部门用量达到阈值 | 配置接收人，空则管理员 |
+| `company_90` | 公司用量达到阈值 | 配置接收人，空则管理员 |
+| `anomaly` | 单小时异常用量 | 配置接收人，空则管理员 |
+| `balance_low` | 启用渠道余额低于阈值 | 配置接收人，空则管理员 |
+| `employee_departed` | 员工被判定离职并停用 | 配置接收人，空则管理员 |
+| `leaderboard` | 排行榜群发 | 配置的群组 |
+
+余额提醒时间：
+
+```text
+09:30,12:00,14:30,17:30
+```
+
+可通过环境变量 `BALANCE_ALERT_TIMES` 修改，时间均按北京时间。
+
+余额同步与提醒分离：
+
+- 每小时自动同步余额，不发提醒。
+- 到提醒时间才同步并发送余额提醒。
+- 发送前会复核渠道是否仍启用、余额是否仍低于阈值。
+
+---
+
+## 13. 定时任务
+
+文件：`web/src/lib/auto-sync.ts`
+
+| 任务 | 默认时间 | 说明 |
+| --- | --- | --- |
+| 飞书通讯录同步 | 12:00、19:00 | 拉取员工和组织架构 |
+| 模型价格同步 | 03:00 | 抓取启用渠道对应 provider 的价格 |
+| 渠道余额同步 | 每 60 分钟 | 不发送提醒 |
+| 渠道余额提醒 | 09:30、12:00、14:30、17:30 | 同步后按阈值通知 |
+| 异常用量检测 | 每小时 | 检测 1 小时突增 |
+| 员工状态检查 | 20:00 | 检查离职并停用 |
+| 排行榜检查 | 10:00 | 根据配置判断是否发送 |
+
+启动行为：
+
+- `AUTO_SYNC_ENABLED=false` 可禁用全部定时任务。
+- `AUTO_SYNC_ON_STARTUP=false` 可禁用启动后的初始化同步。
+- `AUTO_SYNC_STARTUP_DELAY_MS` 默认 120000，避免刚启动时抢页面资源。
+
+---
+
+## 14. API 总览
+
+公开：
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/health` | 健康检查 |
-| GET | `/api/auth/feishu/start` | 发起飞书 OAuth |
-| GET | `/api/auth/feishu/callback` | OAuth 回调 |
-| GET | `/api/auth/dev-login` | 开发环境快捷登录（生产禁用） |
-| POST | `/api/proxy/v1/chat/completions` | AI 代理（Bearer API Key） |
-| GET | `/api/proxy/v1/models` | 可用模型列表 |
+| --- | --- | --- |
+| `GET` | `/api/health` | Web 健康检查 |
+| `GET` | `/health` | Proxy 健康检查 |
+| `GET` | `/api/auth/feishu/start` | 发起飞书登录 |
+| `GET` | `/api/auth/feishu/callback` | 飞书登录回调 |
+| `POST` | `/v1/chat/completions` | OpenAI 兼容聊天 |
+| `GET` | `/v1/models` | OpenAI 兼容模型列表 |
+| `POST` | `/anthropic/v1/messages` | Anthropic 兼容消息接口 |
 
-### 用户端点（JWT 登录）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/auth/me` | 当前用户信息 |
-| POST | `/api/auth/logout` | 退出登录 |
-| GET | `/api/user/key` | 获取 API Key（脱敏） |
-| POST | `/api/user/key` | 重新生成 API Key |
-| GET | `/api/usage/summary` | 用量汇总 |
-| GET | `/api/usage/chart` | 用量趋势图 |
-| GET | `/api/usage/by-model` | 按模型分组 |
-| GET | `/api/usage/details` | 明细列表（分页） |
-
-### 管理端点（JWT + admin 角色）
+登录用户：
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/admin/overview` | 全局概览数据 |
-| GET | `/api/admin/models` | 模型用量统计 |
-| GET/POST/PUT/DELETE | `/api/admin/channels` | 渠道 CRUD |
-| POST | `/api/admin/channels/balance-sync` | 触发余额同步 |
-| GET/POST/PUT/DELETE | `/api/admin/prices` | 价格 CRUD |
-| POST | `/api/admin/prices/sync` | 触发官方价格同步 |
-| GET/POST | `/api/admin/quotas` | 限额管理 |
-| GET | `/api/admin/billing/by-model` | 模型维度账单 |
-| GET | `/api/admin/billing/by-channel` | 渠道维度账单 |
-| GET | `/api/admin/departments` | 部门排行数据 |
-| GET | `/api/admin/employees` | 员工排行数据 |
-| GET | `/api/admin/org-structure` | 组织架构树 |
-| GET | `/api/admin/export` | Excel 导出 |
-| GET | `/api/admin/alerts` | 预警记录 |
-| GET/PUT | `/api/admin/alerts/settings` | 预警配置 |
-| POST | `/api/admin/alerts/test-anomaly` | 测试异常预警 |
-| POST | `/api/admin/alerts/test-feishu` | 测试飞书通知 |
-| GET/POST/DELETE/PUT | `/api/admin/permissions` | 权限管理 |
-| GET | `/api/admin/logs` | 最近 200 条操作日志 |
-| GET | `/api/admin/audit-logs` | 审计日志（分页 + 筛选） |
-| GET/POST | `/api/admin/exchange-rate` | 汇率查询/刷新 |
-| POST | `/api/admin/migrate/encrypt` | 敏感字段加密迁移 |
-| GET | `/api/admin/cleanup-preview` | 部门清理预览 |
-| POST | `/api/admin/cleanup-execute` | 执行清理 |
-| POST | `/api/admin/anomaly-check` | 触发异常检测 |
-| POST | `/api/admin/leaderboard-send` | 触发排行榜推送 |
-| GET | `/api/admin/admins-list` | 管理员列表（多选用） |
-| POST | `/api/admin/employee-status-check` | 员工在职状态检查 |
-| GET | `/api/admin/debug` | 调试信息（生产禁用） |
+| --- | --- | --- |
+| `GET` | `/api/auth/me` | 当前用户 |
+| `POST` | `/api/auth/logout` | 退出登录 |
+| `GET/POST/DELETE` | `/api/user/key` | 员工 Key 列表、新建、删除 |
+| `GET` | `/api/usage/summary` | 个人用量汇总 |
+| `GET` | `/api/usage/chart` | 个人趋势图 |
+| `GET` | `/api/usage/by-model` | 按模型统计 |
+| `GET` | `/api/usage/details` | 明细列表 |
 
-### 内部端点（INTERNAL_API_KEY）
+管理：
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/internal/usage` | 批量写入用量记录 |
-| POST | `/api/internal/quota-alert` | 预警处理 |
+| 路径 | 说明 |
+| --- | --- |
+| `/api/admin/overview` | 全局概览 |
+| `/api/admin/channels` | 渠道 CRUD |
+| `/api/admin/channels/balance-sync` | 余额同步 |
+| `/api/admin/prices` | 价格 CRUD |
+| `/api/admin/prices/sync` | 官方价格同步 |
+| `/api/admin/quotas` | 限额管理 |
+| `/api/admin/permissions` | 权限管理 |
+| `/api/admin/departments` | 部门排行 |
+| `/api/admin/employees` | 员工排行 |
+| `/api/admin/billing/by-channel` | 按渠道分账 |
+| `/api/admin/billing/by-model` | 按模型分账 |
+| `/api/admin/export` | Excel 导出 |
+| `/api/admin/alerts` | 预警历史 |
+| `/api/admin/alerts/settings` | 预警配置 |
+| `/api/admin/feishu/chats` | 读取机器人所在群 |
+| `/api/admin/leaderboard-send` | 手动发送排行榜 |
+| `/api/admin/anomaly-check` | 手动异常检测 |
+| `/api/admin/employee-status-check` | 手动员工状态检查 |
+| `/api/admin/logs` | 操作日志 |
+| `/api/admin/audit-logs` | 审计日志 |
 
-### 系统端点（admin 或 INTERNAL_API_KEY）
+内部：
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/setup/seed` | **⚠️ 危险操作**：重置数据库 + 种子数据 |
-| GET/POST | `/api/setup/sync-feishu` | 触发飞书同步 |
+| 路径 | 说明 |
+| --- | --- |
+| `/api/internal/proxy/authenticate` | Proxy 员工 Key 鉴权 |
+| `/api/internal/proxy/channels` | Proxy 读取启用渠道和模型 |
+| `/api/internal/proxy/quota/check` | 请求前限额检查和预占 |
+| `/api/internal/proxy/quota/release` | 释放额度预占 |
+| `/api/internal/usage` | Proxy 批量上报用量 |
+| `/api/internal/quota-alert` | 额度预警通知 |
+| `/api/internal/admin/flush-db` | 内部 flush DB |
+| `/api/internal/admin/reset-billing` | 内部计费重置；公网入口被 `railway/start.mjs` 屏蔽 |
 
----
+高危：
 
-## 八、环境变量
-
-### 必须配置
-
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `JWT_SECRET` | JWT 签名密钥（HS256），生产若为默认值会拒绝所有认证 | `openssl rand -hex 32` 生成 |
-| `FEISHU_APP_ID` | 飞书应用 ID | `cli_xxxxx` |
-| `FEISHU_APP_SECRET` | 飞书应用密钥 | |
-| `FEISHU_REDIRECT_URI` | OAuth 回调地址 | `https://ai.seapllo.com/api/auth/feishu/callback` |
-| `NEXT_PUBLIC_FEISHU_APP_ID` | 浏览器端飞书 App ID（同上） | `cli_xxxxx` |
-| `NEXT_PUBLIC_FEISHU_REDIRECT_URI` | 浏览器端回调地址（同上） | |
-| `INTERNAL_API_KEY` | 内部服务间通信密钥，proxy→web 和定时任务用 | `openssl rand -hex 24` 生成 |
-| `DATABASE_URL` | 数据库路径 | `../data.db`（本地）或 `/data/data.db`（Docker） |
-
-### 重要配置
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ENCRYPTION_KEY` | AES-256-GCM 加密密钥（64 位 hex），加密 API Key 和 AccessKey Secret | 无 = 明文存储（不安全） |
-| `ADMIN_IDS` | 管理员飞书 open_id（逗号分隔），同步时强制保持 admin 角色不被降级 | 空 |
-| `ADMIN_EMAILS` | 管理员邮箱（逗号分隔），首次登录自动授 admin | 空 |
-| `WEB_URL` | Web 服务地址，proxy→web 内部调用用 | `http://web:3000`（Docker） |
-| `PROXY_PORT` | 代理网关端口 | `3001` |
-| `WEB_PORT` | 管理后台端口 | `3000` |
-| `PORT` | Web 服务端口（fallback） | `3000` |
-| `CORS_ALLOWED_ORIGINS` | CORS 跨域白名单（逗号分隔） | `http://localhost:3000` |
-
-### 可选 / 平台特定
-
-| 变量 | 说明 | 场景 |
-|------|------|------|
-| `RAILWAY_VOLUME_MOUNT_PATH` | Railway 平台卷挂载路径 | Railway 部署时自动设置 |
-| `NODE_ENV` | 运行环境 | `production` 时启用 HSTS 等安全头 |
+| 路径 | 说明 |
+| --- | --- |
+| `/api/setup/seed` | 重置/种子数据接口。生产严禁误触。 |
+| `/api/setup/sync-feishu` | 飞书同步，允许 admin 或 INTERNAL_API_KEY |
 
 ---
 
-## 九、部署
+## 15. 生产部署和运维
 
-### 本地开发
+当前线上：
 
-```bash
-cd ai-token-manager
-pnpm install
+- Railway Project：`heartfelt-education`
+- Service：`web`
+- Public URL：`https://ai.seapllo.com`
+- Volume：`/data`
+- DB：`/data/data.db`
 
-# web 服务
-cd web
-pnpm dev    # 启动在 http://localhost:3000
+常用命令：
 
-# proxy 网关（另一个终端）
-cd proxy
-pnpm dev    # 启动在 http://localhost:3001
+```powershell
+railway status
+railway logs --service web --environment production --lines 200
+railway variables --json
+railway up
 ```
 
-### Docker 部署
+部署前本地门禁：
 
-```bash
-# 1. 创建 .env 文件（填入真实配置）
-cp .env.example .env
-
-# 2. 构建并启动
-docker compose up -d --build
-
-# 3. 查看日志
-docker compose logs -f
+```powershell
+pnpm install --frozen-lockfile
+pnpm --filter web exec tsc --noEmit --pretty false
+pnpm --filter web build
+pnpm --filter proxy build
+node --check railway/start.mjs
 ```
 
-**Docker 架构**：
-- `proxy` 容器：端口 3001，处理 AI 请求转发
-- `web` 容器：端口 3000，管理后台
-- 共享 `app-data` volume 存放 `data.db`
+部署后检查：
 
-### Nginx 反向代理
-
-详见 `docs/reverse-proxy.md`，关键配置：
-- SSE 流式响应需要关闭 `proxy_buffering`
-- 超时设置 300 秒（AI 推理可能很慢）
-
----
-
-## 十、开发注意事项
-
-### 10.1 ⚠️ 危险操作
-
-- **`POST /api/setup/seed`** 会调用 `resetDb()` **删除整个数据库文件**，然后重建。**绝对不要在生产环境调用**。
-- 飞书同步（`sync-feishu`）是安全的，只会 upsert 用户数据，不会删除。
-
-### 10.2 安全机制
-
-| 机制 | 说明 |
-|------|------|
-| API Key 存储用 AES-256-GCM 加密 | `ENCRYPTION_KEY` 必须配置 |
-| API Key 查找用 HMAC-SHA256 哈希 | 避免全表解密，O(1) 查找 |
-| JWT 签名 | HS256，30 天过期 |
-| CSRF 保护 | 飞书 OAuth 使用 HttpOnly cookie + timingSafeEqual 验证 state |
-| 安全响应头 | CSP / X-Frame-Options / HSTS / nosniff |
-| 管理员保护 | `HARDCODED_ADMIN_IDS` 不被同步降级 |
-
-### 10.3 数据库注意事项
-
-- SQLite 单文件，Docker 环境通过 volume 共享
-- `saveDb()` 有 2 秒防抖，`resetDb()` 会直接删除文件
-- 所有时间字段用 Unix 时间戳（integer），不是 ISO 字符串
-- 用户状态 `status` 字段：查询排行榜、限额、导出时都要 `WHERE status = 'active'`
-
-### 10.4 前端开发约定
-
-- **Glass 设计系统**：CSS 变量 `--glass-bg`、`--glass-border`、`--text-primary` 等
-- **深色模式**：`[data-theme="dark"]` 选择器覆盖，通过 ThemeContext 切换
-- **部门图标**：圆形字母缩写（`getMonogram`），hash 取色，不用图片
-- **用户头像**：Avatar 组件，有飞书头像用飞书的，没有显示姓名首字
-- **排序切换**：排行榜页面的 `sortBy` 控制排序和显示，用 `fmtPrimary`/`fmtSecondary` 动态格式化
-
-### 10.5 已知问题和历史教训
-
-1. **种子操作会清除数据**：之前误操作导致全量数据丢失。seed 端点已加 admin 权限保护。
-2. **disabled 用户**：数据库中有 142 个 status='disabled' 的种子用户（无头像），查询时必须加 status 过滤。
-3. **部门名不一致**：飞书返回的部门名可能不规范（如"开发部"应为"产品部"），通过 `constants.ts` 的映射表修正。
-
----
-
-## 十一、前端页面一览
-
-| 页面 | 路径 | 功能 |
-|------|------|------|
-| 登录 | `/login` | 飞书 OAuth 登录，玻璃态设计 + 动画背景 |
-| 我的用量 | `/dashboard` | 费用/Token/调用汇总 + 趋势图 + 模型分布 + 限额进度 |
-| API Key | `/dashboard/key` | 查看/重新生成 API Key + 代理地址 |
-| 全局概览 | `/dashboard/admin` | 统计卡片 + 费用/Token趋势 + 渠道饼图 + 模型表 + 余额概览 |
-| 部门排行 | `/dashboard/admin/departments` | TOP 3 领奖台 + 完整排名 + 下钻员工明细 |
-| 员工排行 | `/dashboard/admin/employees` | TOP 3 领奖台 + 完整排名 + 部门筛选 |
-| 部门分账 | `/dashboard/admin/billing` | 部门饼图 + 柱状图 + 模型表 + 明细表 + 导出 |
-| 渠道管理 | `/dashboard/admin/channels` | 渠道 CRUD + 余额同步 + 阿里云 AK/SK |
-| 模型价格 | `/dashboard/admin/prices` | 价格 CRUD + 双币种显示 + 官方同步 |
-| 限额设置 | `/dashboard/admin/quotas` | 公司限额 + 个人限额（批量/单个编辑） |
-| 预警记录 | `/dashboard/admin/alerts` | 阈值设置 + 飞书通知配置 + 预警历史 |
-| 操作日志 | `/dashboard/admin/logs` | 审计日志查询（按类型筛选 + 分页） |
-| 权限管理 | `/dashboard/admin/permissions` | 三组角色管理（管理员/财务/部门负责人） |
-
----
-
-## 十二、快速上手指南
-
-### 第一次启动
-
-```bash
-# 1. 安装依赖
-cd ai-token-manager
-pnpm install
-
-# 2. 配置环境变量
-cd web
-cp .env.example .env.local
-# 编辑 .env.local，填入飞书凭证和 JWT_SECRET
-
-# 3. 启动 web
-pnpm dev
-
-# 4. 访问 http://localhost:3000
-# 开发环境可访问 /api/auth/dev-login 快捷登录
+```powershell
+curl.exe -i https://ai.seapllo.com/api/health
+curl.exe -i https://ai.seapllo.com/health
+curl.exe -i -X POST https://ai.seapllo.com/api/internal/admin/reset-billing
 ```
 
-### 常用开发命令
+最后一条应返回 404，表示公网内部接口仍被屏蔽。
 
-```bash
-# 类型检查
-cd web && pnpm tsc --noEmit
+Railway 启动逻辑：
 
-# 构建
-cd web && pnpm build
-
-# Docker 构建
-docker compose up -d --build
-```
-
-### 常见问题
-
-**Q: 数据库在哪？**
-A: 本地开发在 `ai-token-manager/data.db`（web 目录的上一级），Docker 环境在 volume `/data/data.db`。
-
-**Q: 如何添加新的管理员？**
-A: 在 `.env.local` 的 `ADMIN_IDS` 中添加飞书 open_id（逗号分隔），或在权限管理页面手动赋角色。`HARDCODED_ADMIN_IDS`（代码中）保护的管理员不会被同步降级。
-
-**Q: 如何查看所有定时任务状态？**
-A: 查看服务器日志，搜索 `[AutoSync]` 前缀的输出。
-
-**Q: 如何手动触发飞书同步？**
-A: 调用 `POST /api/setup/sync-feishu`（需 admin 或 INTERNAL_API_KEY）。
-
-**Q: 排行榜数据不准？**
-A: 检查是否有 `status = 'disabled'` 的用户混入查询。所有排行、限额、导出 API 都应该只查 active 用户。
+- `railway/start.mjs` 先校验生产必填变量。
+- 启动 Next.js standalone：`node web/server.js`，内部端口 3000。
+- 启动 Hono Proxy：`node dist/index.js`，内部端口 3001。
+- 对外监听 Railway `PORT`，默认 8080。
+- `/v1/*`、`/anthropic/*`、`/health` 转发到 Proxy。
+- 其他路径转发到 Web。
+- `/api/internal/*` 直接返回 404，不转发。
 
 ---
 
-## 十三、文档索引
+## 16. 必填环境变量
 
-| 文档 | 路径 | 内容 |
-|------|------|------|
-| 项目交接 | `docs/HANDOVER.md` | 你正在看的这个 |
-| 架构设计 | `docs/ARCHITECTURE.md` | Mermaid 图：系统总览、认证流程、数据管线、定时任务、权限矩阵、预警、Docker、安全 |
-| API 接口 | `docs/API.md` | 44+ 接口的详细文档：参数、响应示例、错误码、鉴权要求 |
-| 模块详情 | `docs/PROJECT-MODULES.md` | 数据库设计 + API + 页面详细说明 |
-| 余额同步 | `docs/balance-sync.md` | 渠道余额自动同步机制 |
-| 健康检查 | `docs/monitoring.md` | 健康检查端点 + 监控集成 |
-| 反向代理 | `docs/reverse-proxy.md` | Nginx/Caddy 配置指南 |
-| Proxy 内部机制 | `docs/PROXY-INTERNALS.md` | 网关内部机制：缓存策略、限流算法、限额检查、用量上报、费用计算、汇率获取 |
-| 数据库 Schema | `docs/DATABASE-SCHEMA.md` | 全部 9 张表的逐列文档：类型、约束、索引、加密字段、迁移历史 |
+| 变量 | 说明 | 生产要求 |
+| --- | --- | --- |
+| `JWT_SECRET` | JWT 签名密钥 | 必填，强随机 |
+| `INTERNAL_API_KEY` | Proxy/Web 内部通信密钥 | 必填，强随机 |
+| `ENCRYPTION_KEY` | 敏感字段加密密钥 | 必填，32 字节 hex 推荐 |
+| `FEISHU_APP_ID` | 飞书应用 ID | 必填 |
+| `FEISHU_APP_SECRET` | 飞书应用 Secret | 必填 |
+| `FEISHU_REDIRECT_URI` | 飞书回调 | 必填 |
+| `NEXT_PUBLIC_FEISHU_APP_ID` | 浏览器侧飞书应用 ID | 必填 |
+| `NEXT_PUBLIC_FEISHU_REDIRECT_URI` | 浏览器侧回调 | 必填 |
+| `PUBLIC_PROXY_BASE_URL` | 员工页面展示的 API 地址 | 建议 `https://ai.seapllo.com/v1` |
+| `DATABASE_URL` | DB 路径 | Railway 可依赖 `/data/data.db` |
+| `RAILWAY_VOLUME_MOUNT_PATH` | Railway volume 路径 | Railway 自动注入 |
+| `CORS_ALLOWED_ORIGINS` | 允许来源 | 生产填 `https://ai.seapllo.com` |
+| `AUTO_SYNC_ENABLED` | 定时任务总开关 | 默认 true |
+| `BALANCE_SYNC_INTERVAL_MINUTES` | 余额同步间隔 | 默认 60 |
+| `BALANCE_ALERT_TIMES` | 余额提醒时间 | 默认 `09:30,12:00,14:30,17:30` |
+
+生成密钥示例：
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
+```
+
+密钥操作红线：
+
+- 不要把 `.env`、Railway 变量输出、真实上游 Key 发到聊天或提交到 Git。
+- 轮换 `FEISHU_APP_SECRET` 后，要同步更新 Railway 变量。
+- 轮换 `ENCRYPTION_KEY` 前必须规划迁移，否则存量密钥不可读。
+- 轮换 `INTERNAL_API_KEY` 后 Web 和 Proxy 必须同值，否则调用会全部失败。
+
+---
+
+## 17. 备份、恢复和重置
+
+备份对象：
+
+- `/data/data.db`
+- `/data/usage-queue.jsonl`
+- `/data/usage-dead-letter.jsonl`
+- Railway 环境变量快照
+
+建议：
+
+- 每日至少备份一次 DB。
+- 大版本上线前手动备份一次。
+- 恢复演练至少每月一次。
+
+计费测试重置：
+
+- 可通过内部维护接口清理 `usage_logs`、`quota_reservations`、usage queue。
+- 公网默认不可调 `/api/internal/admin/reset-billing`，需要内部执行或临时受控放行后立刻收回。
+- 重置前必须备份 DB。
+- 重置不会删除员工、渠道、模型价格、个人限额、API Key、飞书配置。
+
+已执行过的线上重置记录：
+
+- 2026-06-18 清理前 `usage_logs=9`，备份到 `/data/backups/data-before-billing-reset-2026-06-18T06-59-48-646Z.db`。
+
+---
+
+## 18. 二次开发规范
+
+### 18.1 API 开发
+
+- 管理接口必须使用 `requireAdmin()` 或 `requireRole()`。
+- 普通登录接口必须使用 `requireActiveSession()`。
+- 内部接口必须使用 `requireInternalRequest()`。
+- 写操作必须记录 `auditLog()`，至少记录 action、targetType、targetId、关键字段。
+- 写 DB 后必须 `await saveDb()`；高频写入可 `scheduleSave()`。
+- 返回错误用明确 HTTP 状态码：400、401、403、404、409、422、429、500。
+
+### 18.2 权限和数据范围
+
+- 新增角色可见页面必须同步更新 `web/src/lib/permissions.ts`。
+- `finance` 不应看到上游 Key、渠道密钥、余额敏感操作。
+- `dept_manager` 必须限制为本人部门数据。
+- `member` 只能访问个人数据和自己的 Key。
+
+### 18.3 数据库
+
+- 新增 schema：先改 `shared/schema.ts`，再改 `web/src/lib/ensure-tables.ts`。
+- 生产已有 SQLite 数据，DDL 必须兼容旧表。
+- 不要在请求热路径执行重型 DDL。
+- 高频统计必须检查索引，尤其 `usage_logs(created_at)`、`usage_logs(user_id, created_at)`。
+
+### 18.4 密钥
+
+- 员工 Key：统一 `sk-emp-`，只明文返回一次。
+- 上游 Key：保存时必须 `ensureEncrypted()`。
+- 员工 Key hash：必须写 `searchableHash()`。
+- 禁止将脱敏值当作真实 Key 写回。
+
+### 18.5 时间
+
+- 用户统计、月度额度、预警阈值均按北京时间。
+- 涉及“今日”“本月”的 SQL 必须使用 `web/src/lib/time-range.ts` 或 `beijing-time.ts`。
+- 不要直接用 UTC 自然日做业务统计。
+
+### 18.6 前端
+
+- 页面不要绕过 API 权限判断。
+- API Key 明文只在创建响应中出现一次，刷新后不可恢复。
+- 新增导航项必须测试 admin、finance、dept_manager、member 四种角色。
+- 表格和卡片要处理空数据、加载、错误、长名称。
+
+---
+
+## 19. 常见故障排查
+
+### 19.1 员工登录后又回到登录页
+
+检查：
+
+- 用户是否在飞书应用可用范围内。
+- `/api/auth/feishu/callback` 日志是否有错误。
+- `users.status` 是否为 `disabled`。
+- `JWT_SECRET` 是否变更导致旧 token 失效。
+
+### 19.2 其他同事提示没有 Sparkloom 使用权限
+
+通常是飞书应用可用范围问题。到飞书开放平台把应用授权范围改为全员或目标部门，并发布/生效。
+
+### 19.3 客户端 401，提示 Key 无效
+
+检查：
+
+- 客户端填的是员工 `sk-emp-...`，不是 DeepSeek/SiliconFlow 官方 Key。
+- Base URL 是否正确：OpenAI 兼容为 `/v1`，Claude Code 为 `/anthropic`。
+- 用户是否禁用。
+- Key 是否已删除。
+- `user_api_keys.key_hash` 是否存在。
+
+### 19.4 还没到 100% 就 429
+
+检查：
+
+- 个人、部门、公司任一层级是否已满。
+- `quota_reservations` 是否有未过期预占。
+- 本月统计是否按北京时间。
+- 价格是否异常偏高。
+
+### 19.5 渠道禁用了还显示余额告警
+
+当前规则：
+
+- 新版全局概览只统计启用渠道。
+- 余额提醒发送前会复核渠道状态。
+- 渠道页禁用渠道不展示告急/偏低。
+- 预警历史不会删除，历史记录仍可能看到旧消息。
+
+### 19.6 余额同步异常
+
+检查：
+
+- 渠道是否 active。
+- provider 是否正确识别。
+- `balanceSyncMode` 是否 auto。
+- 上游 Key 是否完整且未脱敏保存。
+- DeepSeek 使用 `/user/balance`，SiliconFlow 使用 `/v1/user/info`。
+- SiliconFlow 会优先取非负的 available/charge/balance/total 字段。
+
+### 19.7 模型不显示或价格同步看起来不对
+
+检查：
+
+- 渠道是否 active。
+- 渠道 `models` 是否包含该模型。
+- `model_prices` 是否存在该模型的渠道价或全局价。
+- 该模型是否在 `sync_blacklist`。
+- 手动价格 `synced_at` 是否为 null，避免被覆盖。
+- Proxy 渠道缓存最多 30 秒。
+
+### 19.8 排行榜测试发送无效
+
+检查：
+
+- 预警设置里排行榜是否启用。
+- 群组是否已选择并保存。
+- 机器人是否在该群。
+- 飞书应用是否有读取群和发送消息权限。
+- 手动测试会保存当前设置后发送；定时发送仍按配置频率判断。
+
+### 19.9 全局概览慢
+
+检查：
+
+- `usage_logs` 行数和索引。
+- 是否请求了 `includeBreakdowns=true` 或 `includeBalance=true`。
+- `/api/admin/overview` 有 30 秒内存缓存，但只在当前进程有效。
+- 首屏余额拆分为 `onlyBalance=true` 单独加载，避免拖慢主概览。
+
+---
+
+## 20. 上线前回归清单
+
+每次改动后至少跑：
+
+```powershell
+pnpm --filter web exec tsc --noEmit --pretty false
+pnpm --filter web build
+pnpm --filter proxy build
+node --check railway/start.mjs
+git diff --check
+```
+
+线上 smoke test：
+
+- 登录页可打开。
+- 飞书登录可进入后台。
+- `/api/health` 返回 200。
+- `/health` 返回 200 或 ok。
+- `/api/internal/admin/reset-billing` 公网返回 404。
+- 管理员能打开全局概览、渠道管理、模型价格。
+- 普通用户无法访问 `/dashboard/admin/*`。
+- 员工能新建 Key，复制一次明文后刷新只显示脱敏。
+- 使用员工 Key 调 `/v1/models`。
+- 使用员工 Key 发一次非流式 `/v1/chat/completions`。
+- 使用员工 Key 发一次流式请求并确认 usage 记录。
+- 余额同步不会提示禁用渠道。
+- 价格同步不会覆盖手动价格。
+- 飞书测试通知和排行榜测试可发送。
+
+---
+
+## 21. 交接给新团队的建议分工
+
+| 角色 | 需要重点掌握 |
+| --- | --- |
+| 后端维护 | `web/src/app/api/*`、`web/src/lib/db.ts`、`ensure-tables.ts`、内部 API、权限 |
+| 网关维护 | `proxy/src/*`、Hono 路由、usage queue、quota reservation、stream usage |
+| 前端维护 | `web/src/app/dashboard/*`、`permissions.ts`、API 调用和错误态 |
+| 运维 | Railway、volume、环境变量、备份、健康检查、日志 |
+| 业务管理员 | 渠道、价格、额度、权限、飞书通知、排行榜配置 |
+
+建议新团队第一天做的事：
+
+1. 本地跑通 `pnpm install --frozen-lockfile`、web build、proxy build。
+2. 阅读 `railway/start.mjs`，理解线上为什么是单服务双进程。
+3. 阅读 `web/src/lib/permissions.ts`，理解四角色边界。
+4. 阅读 `proxy/src/services/web-internal.ts`，理解 Proxy 为什么不直接读 DB。
+5. 在测试环境创建一个员工 Key，跑 `/v1/models` 和一次 chat。
+6. 在测试环境触发一次飞书同步、余额同步、价格同步。
+7. 做一次 DB 备份和恢复演练。
+
+---
+
+## 22. 当前需持续关注的风险
+
+- SQLite/sql.js 适合当前规模，但不是长期高并发方案；如果调用量显著增长，应迁移 PostgreSQL。
+- 价格同步依赖官网页面和内置 fallback，官方页面变化会导致 fallback 增多，需要人工复核。
+- 飞书通讯录同步依赖应用数据范围；范围误改会导致大量员工被判定离职。
+- `ENCRYPTION_KEY` 是最高敏感密钥，丢失或变更会导致上游 Key 和员工 Key 密文不可读。
+- 预警历史是日志，不是当前状态；用户看到历史告警时要区分“历史记录”和“当前状态”。
+- 所有涉及资金、额度、渠道 Key 的改动都应先在测试环境跑完整 smoke test。
