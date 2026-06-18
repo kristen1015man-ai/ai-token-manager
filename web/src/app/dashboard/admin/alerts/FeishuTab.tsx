@@ -110,7 +110,7 @@ export default function FeishuTab({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">通知类型与接收人</label>
-        <div className="border border-gray-100 rounded-xl overflow-hidden">
+        <div className="border border-gray-100 rounded-xl overflow-visible">
           <div className="grid grid-cols-[1fr_80px_1fr] gap-2 px-4 py-2 bg-gray-50/80 text-xs font-medium text-gray-500 border-b border-gray-100">
             <span>通知类型</span>
             <span className="text-center">开关</span>
@@ -231,7 +231,7 @@ export default function FeishuTab({
               onChange={(e) =>
                 setSettings({ ...settings, leaderboard_chat_ids: encodeChatIds(e.target.value) })
               }
-              placeholder="oc_xxxxx&#10;oc_yyyyy"
+              placeholder={"oc_xxxxx\noc_yyyyy"}
               rows={3}
               className="glass-input w-full text-sm resize-y min-h-[86px]"
             />

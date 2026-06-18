@@ -13,28 +13,11 @@ export async function GET() {
   if (error) return error;
 
   const { db } = await getDb();
-  const rows = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      department: users.department,
-    })
-    .from(users)
-    .where(
-      eq(users.status, "active")
-    );
-
-  // 过滤出有 admin 角色的用户（role 是逗号分隔字符串）
-  const admins = rows.filter((r) => {
-    // 需要重新查询包含 role 字段
-    return true; // 下面会单独查
-  });
-
-  // 单独查带 role 字段
   const adminRows = await db
     .select({
       id: users.id,
       name: users.name,
+      avatar: users.avatar,
       department: users.department,
       role: users.role,
     })
@@ -49,6 +32,7 @@ export async function GET() {
     .map((r) => ({
       id: r.id,
       name: r.name,
+      avatar: r.avatar || null,
       department: r.department || null,
     }));
 

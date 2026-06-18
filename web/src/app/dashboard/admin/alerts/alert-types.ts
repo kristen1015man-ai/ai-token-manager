@@ -9,6 +9,7 @@ export interface Alert {
 export interface AdminOption {
   id: string;
   name: string;
+  avatar: string | null;
   department: string | null;
 }
 
