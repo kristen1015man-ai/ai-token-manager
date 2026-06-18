@@ -1,7 +1,6 @@
 "use client";
 
-/** 价格管理页 — 价格单元格组件（支持双币种显示） */
-import { type ModelPrice, type ExchangeRate } from "./price-types";
+import { type ExchangeRate, type ModelPrice } from "./price-types";
 
 interface PriceCellProps {
   value: number;
@@ -14,10 +13,11 @@ export default function PriceCell({ value, row, exchangeRate }: PriceCellProps) 
   if (isUSD && exchangeRate) {
     return (
       <div className="text-right">
-        <div className="text-gray-700">${value}</div>
-        <div className="text-[10px] text-gray-400">≈ ¥{(value * exchangeRate.rate).toFixed(2)}</div>
+        <div className="text-gray-700">${value.toFixed(4)}</div>
+        <div className="text-[10px] text-gray-400">约 ¥{(value * exchangeRate.rate).toFixed(4)}</div>
       </div>
     );
   }
-  return <div className="text-right text-gray-700">¥{value}</div>;
+
+  return <div className="text-right text-gray-700">¥{value.toFixed(4)}</div>;
 }

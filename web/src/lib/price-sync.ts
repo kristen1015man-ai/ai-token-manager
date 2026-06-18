@@ -28,32 +28,37 @@ export interface PriceSyncResult {
   skipped: number;
   skippedManual: number;
   skippedBlacklist: number;
+  skippedFallbackUpdates: number;
   providers: string[];
   warnings: string[];
   sourceSummary: Record<string, ProviderSourceSummary>;
   exchangeRate: { rate: number; source: string };
 }
 
-export async function fetchOfficialPrices(): Promise<ParsedPrice[]> {
-  const { rate } = await getUsdCnyRate();
-  const allPrices = await Promise.all([
-    fetchDeepSeekPrices(rate),
-    fetchGLMPrices(rate),
-    fetchOpenAIPrices(rate),
-    fetchAnthropicPrices(rate),
-    fetchSiliconFlowPrices(rate),
-  ]);
+type PriceProvider = "deepseek" | "glm" | "openai" | "anthropic" | "siliconflow";
+
+const PROVIDER_FETCHERS: Record<PriceProvider, (rate: number) => Promise<ParsedPrice[]>> = {
+  deepseek: fetchDeepSeekPrices,
+  glm: fetchGLMPrices,
+  openai: fetchOpenAIPrices,
+  anthropic: fetchAnthropicPrices,
+  siliconflow: fetchSiliconFlowPrices,
+};
+
+export async function fetchOfficialPrices(rate?: number, providers?: Set<string>): Promise<ParsedPrice[]> {
+  const effectiveRate = rate ?? (await getUsdCnyRate()).rate;
+  const targetProviders = providers && providers.size > 0
+    ? [...providers].filter((provider): provider is PriceProvider => provider in PROVIDER_FETCHERS)
+    : (Object.keys(PROVIDER_FETCHERS) as PriceProvider[]);
+
+  const allPrices = await Promise.all(
+    targetProviders.map((provider) => PROVIDER_FETCHERS[provider](effectiveRate))
+  );
   return allPrices.flat();
 }
 
 export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
   const { rate, source } = await getUsdCnyRate();
-  const officialPrices = await fetchOfficialPrices();
-  if (officialPrices.length === 0) {
-    throw new Error("所有供应商价格解析结果为空，可能是网络问题或官方页面结构已变化");
-  }
-
-  const providers = [...new Set(officialPrices.map((price) => price.provider))].sort();
   const { db, sqlite } = await getDb();
   const dbAny = sqlite as unknown as SqliteExec;
 
@@ -63,9 +68,9 @@ export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
     baseUrl: channels.baseUrl,
     provider: channels.provider,
     currency: channels.currency,
+    status: channels.status,
   }).from(channels);
 
-  const sourceSummary = buildSourceSummary(officialPrices);
   const providerToChannels = new Map<string, typeof channelList>();
   for (const ch of channelList) {
     const inferredProvider = inferPriceProvider(ch);
@@ -74,11 +79,24 @@ export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
       await db.update(channels).set({ provider: inferredProvider }).where(eq(channels.id, ch.id));
       ch.provider = inferredProvider;
     }
+    if (ch.status !== "active") continue;
     const arr = providerToChannels.get(inferredProvider) || [];
     arr.push(ch);
     providerToChannels.set(inferredProvider, arr);
   }
 
+  const targetProviders = new Set(providerToChannels.keys());
+  if (targetProviders.size === 0) {
+    return emptyResult(rate, source, ["没有启用中的渠道，已跳过官方价格同步。"]);
+  }
+
+  const officialPrices = await fetchOfficialPrices(rate, targetProviders);
+  if (officialPrices.length === 0) {
+    throw new Error("启用渠道对应的供应商价格解析结果为空，可能是网络问题或官方页面结构已变化。");
+  }
+
+  const providers = [...new Set(officialPrices.map((price) => price.provider))].sort();
+  const sourceSummary = buildSourceSummary(officialPrices);
   for (const [provider, matchedChannels] of providerToChannels.entries()) {
     if (!sourceSummary[provider]) {
       sourceSummary[provider] = { official: 0, fallback: 0, total: 0, channelCount: matchedChannels.length };
@@ -98,6 +116,7 @@ export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
   let added = 0;
   let skippedManual = 0;
   let skippedBlacklist = 0;
+  let skippedFallbackUpdates = 0;
   const now = new Date();
 
   for (const price of officialPrices) {
@@ -105,6 +124,7 @@ export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
     if (matchedChannels.length > 0) {
       for (const ch of matchedChannels) {
         const result = await writePrice({
+          db,
           price,
           channelId: ch.id,
           channelName: ch.name,
@@ -118,9 +138,11 @@ export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
         added += result.added;
         skippedManual += result.skippedManual;
         skippedBlacklist += result.skippedBlacklist;
+        skippedFallbackUpdates += result.skippedFallbackUpdates;
       }
     } else {
       const result = await writePrice({
+        db,
         price,
         channelId: null,
         channelName: "global",
@@ -134,6 +156,7 @@ export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
       added += result.added;
       skippedManual += result.skippedManual;
       skippedBlacklist += result.skippedBlacklist;
+      skippedFallbackUpdates += result.skippedFallbackUpdates;
     }
   }
 
@@ -148,81 +171,110 @@ export async function syncPricesFromOfficial(): Promise<PriceSyncResult> {
   return {
     updated,
     added,
-    skipped: skippedManual + skippedBlacklist,
+    skipped: skippedManual + skippedBlacklist + skippedFallbackUpdates,
     skippedManual,
     skippedBlacklist,
+    skippedFallbackUpdates,
     providers,
     warnings: buildWarnings(sourceSummary),
     sourceSummary,
     exchangeRate: { rate, source },
   };
+}
 
-  async function writePrice(args: {
-    price: ParsedPrice;
-    channelId: string | null;
-    channelName: string;
-    channelCurrency: string;
-    rate: number;
-    now: Date;
-    priceMap: Map<string, typeof existing[0]>;
-    blacklist: Set<string>;
-  }): Promise<{ updated: number; added: number; skippedManual: number; skippedBlacklist: number }> {
-    const { price, channelId, channelName, channelCurrency, rate, now, priceMap, blacklist } = args;
-    const key = priceKey(channelId, price.model);
-    if (blacklist.has(key) || blacklist.has(priceKey(null, price.model))) {
-      console.log(`[PriceSync] skip blacklisted model=${price.model} channel=${channelName}`);
-      return { updated: 0, added: 0, skippedManual: 0, skippedBlacklist: 1 };
+function emptyResult(rate: number, source: string, warnings: string[]): PriceSyncResult {
+  return {
+    updated: 0,
+    added: 0,
+    skipped: 0,
+    skippedManual: 0,
+    skippedBlacklist: 0,
+    skippedFallbackUpdates: 0,
+    providers: [],
+    warnings,
+    sourceSummary: {},
+    exchangeRate: { rate, source },
+  };
+}
+
+type DbHandle = Awaited<ReturnType<typeof getDb>>["db"];
+type ExistingModelPrice = typeof modelPrices.$inferSelect;
+
+async function writePrice(args: {
+  db: DbHandle;
+  price: ParsedPrice;
+  channelId: string | null;
+  channelName: string;
+  channelCurrency: string;
+  rate: number;
+  now: Date;
+  priceMap: Map<string, ExistingModelPrice>;
+  blacklist: Set<string>;
+}): Promise<{
+  updated: number;
+  added: number;
+  skippedManual: number;
+  skippedBlacklist: number;
+  skippedFallbackUpdates: number;
+}> {
+  const { db, price, channelId, channelName, channelCurrency, rate, now, priceMap, blacklist } = args;
+  const key = priceKey(channelId, price.model);
+  if (blacklist.has(key) || blacklist.has(priceKey(null, price.model))) {
+    console.log(`[PriceSync] skip blacklisted model=${price.model} channel=${channelName}`);
+    return { updated: 0, added: 0, skippedManual: 0, skippedBlacklist: 1, skippedFallbackUpdates: 0 };
+  }
+
+  const isUSDChannel = channelCurrency === "USD";
+  const writeCurrency = isUSDChannel ? "USD" : "CNY";
+  const writeInput = isUSDChannel
+    ? price.rawInputPerMillion
+    : price.currency === "USD" ? r2(price.rawInputPerMillion * rate) : price.rawInputPerMillion;
+  const writeOutput = isUSDChannel
+    ? price.rawOutputPerMillion
+    : price.currency === "USD" ? r2(price.rawOutputPerMillion * rate) : price.rawOutputPerMillion;
+  const writeCache = isUSDChannel
+    ? price.rawCachePerMillion
+    : price.currency === "USD" ? r2(price.rawCachePerMillion * rate) : price.rawCachePerMillion;
+
+  const row = priceMap.get(key);
+  if (row) {
+    if (row.syncedAt === null) {
+      return { updated: 0, added: 0, skippedManual: 1, skippedBlacklist: 0, skippedFallbackUpdates: 0 };
     }
-
-    const isUSDChannel = channelCurrency === "USD";
-    const writeCurrency = isUSDChannel ? "USD" : "CNY";
-    const writeInput = isUSDChannel
-      ? price.rawInputPerMillion
-      : price.currency === "USD" ? r2(price.rawInputPerMillion * rate) : price.rawInputPerMillion;
-    const writeOutput = isUSDChannel
-      ? price.rawOutputPerMillion
-      : price.currency === "USD" ? r2(price.rawOutputPerMillion * rate) : price.rawOutputPerMillion;
-    const writeCache = isUSDChannel
-      ? price.rawCachePerMillion
-      : price.currency === "USD" ? r2(price.rawCachePerMillion * rate) : price.rawCachePerMillion;
-
-    const row = priceMap.get(key);
-    if (row) {
-      if (row.syncedAt === null) {
-        return { updated: 0, added: 0, skippedManual: 1, skippedBlacklist: 0 };
-      }
-      await db.update(modelPrices).set({
-        inputPerMillion: writeInput,
-        outputPerMillion: writeOutput,
-        cachePerMillion: writeCache,
-        displayName: price.displayName,
-        currency: writeCurrency,
-        syncedAt: now,
-        updatedBy: "auto-sync",
-        updatedAt: now,
-      }).where(eq(modelPrices.id, row.id));
-      return { updated: 1, added: 0, skippedManual: 0, skippedBlacklist: 0 };
+    if (price.source === "fallback") {
+      return { updated: 0, added: 0, skippedManual: 0, skippedBlacklist: 0, skippedFallbackUpdates: 1 };
     }
-
-    const inserted = {
-      id: `price_${randomBytes(6).toString("hex")}`,
-      model: price.model,
-      channelId,
+    await db.update(modelPrices).set({
       inputPerMillion: writeInput,
       outputPerMillion: writeOutput,
       cachePerMillion: writeCache,
       displayName: price.displayName,
       currency: writeCurrency,
-      deprecated: false,
       syncedAt: now,
       updatedBy: "auto-sync",
       updatedAt: now,
-      createdAt: now,
-    };
-    await db.insert(modelPrices).values(inserted);
-    priceMap.set(key, inserted);
-    return { updated: 0, added: 1, skippedManual: 0, skippedBlacklist: 0 };
+    }).where(eq(modelPrices.id, row.id));
+    return { updated: 1, added: 0, skippedManual: 0, skippedBlacklist: 0, skippedFallbackUpdates: 0 };
   }
+
+  const inserted = {
+    id: `price_${randomBytes(6).toString("hex")}`,
+    model: price.model,
+    channelId,
+    inputPerMillion: writeInput,
+    outputPerMillion: writeOutput,
+    cachePerMillion: writeCache,
+    displayName: price.displayName,
+    currency: writeCurrency,
+    deprecated: false,
+    syncedAt: now,
+    updatedBy: price.source === "fallback" ? "fallback-sync" : "auto-sync",
+    updatedAt: now,
+    createdAt: now,
+  };
+  await db.insert(modelPrices).values(inserted);
+  priceMap.set(key, inserted);
+  return { updated: 0, added: 1, skippedManual: 0, skippedBlacklist: 0, skippedFallbackUpdates: 0 };
 }
 
 function priceKey(channelId: string | null, model: string): string {
@@ -271,5 +323,22 @@ function buildSourceSummary(prices: ParsedPrice[]): Record<string, ProviderSourc
 function buildWarnings(summary: Record<string, ProviderSourceSummary>): string[] {
   return Object.entries(summary)
     .filter(([, item]) => item.fallback > 0)
-    .map(([provider, item]) => `${provider} 官方价格抓取失败或解析为空，已使用内置兜底价 ${item.fallback} 条`);
+    .map(([provider, item]) => {
+      const label = providerLabel(provider);
+      if (item.official > 0) {
+        return `${label} 部分官方实时价格不可用，已为缺失模型使用内置兜底价 ${item.fallback} 条；已有价格不会被兜底价覆盖。`;
+      }
+      return `${label} 官方实时价格不可用，已为缺失模型使用内置兜底价 ${item.fallback} 条；已有价格不会被兜底价覆盖。`;
+    });
+}
+
+function providerLabel(provider: string): string {
+  const labels: Record<string, string> = {
+    deepseek: "DeepSeek",
+    glm: "智谱 GLM",
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    siliconflow: "硅基流动",
+  };
+  return labels[provider] || provider;
 }

@@ -1,20 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchApi, ApiError } from "../../../../lib/fetcher";
 import EmptyState from "@/components/EmptyState";
+import GlassSelect from "@/components/GlassSelect";
 import PageLoader from "@/components/PageLoader";
-import { type ModelPrice, type Channel, type ExchangeRate, EMPTY_FORM, type FormState } from "./price-types";
+import { fetchApi, ApiError } from "../../../../lib/fetcher";
 import PriceCell from "./PriceCell";
 import PriceForm from "./PriceForm";
-import GlassSelect from "@/components/GlassSelect";
+import { EMPTY_FORM, type Channel, type ExchangeRate, type FormState, type ModelPrice } from "./price-types";
+
+interface PriceSyncResponse {
+  success: boolean;
+  updated: number;
+  added: number;
+  skipped?: number;
+  skippedManual?: number;
+  skippedBlacklist?: number;
+  skippedFallbackUpdates?: number;
+  warnings?: string[];
+  exchangeRate?: ExchangeRate;
+  error?: string;
+}
 
 export default function PricesPage() {
   const [prices, setPrices] = useState<ModelPrice[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filterChannel, setFilterChannel] = useState<string>("all");
+  const [filterChannel, setFilterChannel] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -44,38 +57,38 @@ export default function PricesPage() {
         provider: c.provider || null,
       })));
       void loadExchangeRate();
-    } catch {
-      // ignore
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const data = await fetchApi<{
-        success: boolean;
-        updated: number;
-        added: number;
-        skipped?: number;
-        skippedManual?: number;
-        skippedBlacklist?: number;
-        warnings?: string[];
-        exchangeRate?: ExchangeRate;
-        error?: string;
-      }>("/api/admin/prices/sync", { method: "POST" });
-      const rateInfo = data.exchangeRate ? `，汇率 1 USD = ${data.exchangeRate.rate.toFixed(4)} CNY` : "";
-      const skippedInfo = data.skipped ? `，跳过 ${data.skipped} 条（手动 ${data.skippedManual ?? 0}，黑名单 ${data.skippedBlacklist ?? 0}）` : "";
-      const warningInfo = data.warnings?.length ? `\n\n注意：\n${data.warnings.map((w) => `- ${w}`).join("\n")}` : "";
-      alert(`同步完成：更新 ${data.updated} 条，新增 ${data.added} 条${skippedInfo}${rateInfo}${warningInfo}`);
+      const data = await fetchApi<PriceSyncResponse>("/api/admin/prices/sync", { method: "POST" });
+      const lines = [
+        `同步完成：更新 ${data.updated} 条，新增 ${data.added} 条`,
+      ];
+      if (data.skipped) {
+        lines.push(`跳过 ${data.skipped} 条：手动 ${data.skippedManual ?? 0}，黑名单 ${data.skippedBlacklist ?? 0}，保留现有兜底价 ${data.skippedFallbackUpdates ?? 0}`);
+      }
+      if (data.exchangeRate) {
+        lines.push(`汇率：1 USD = ${data.exchangeRate.rate.toFixed(4)} CNY`);
+      }
+      if (data.warnings?.length) {
+        lines.push("", "提示：", ...data.warnings.map((warning) => `- ${warning}`));
+      }
+      alert(lines.join("\n"));
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : "同步请求失败");
+      alert(e instanceof ApiError ? e.message : "价格同步请求失败");
+    } finally {
+      setSyncing(false);
+      void load();
     }
-    setSyncing(false);
-    load();
   };
 
   const handleEdit = (p: ModelPrice) => {
@@ -99,8 +112,7 @@ export default function PricesPage() {
 
   const getFormCurrency = (): string => {
     if (!form.channelId) return "CNY";
-    const ch = channels.find((c) => c.id === form.channelId);
-    return ch?.currency || "CNY";
+    return channels.find((c) => c.id === form.channelId)?.currency || "CNY";
   };
 
   const handleSave = async () => {
@@ -118,14 +130,20 @@ export default function PricesPage() {
           }),
         });
       } else {
-        if (!form.model.trim()) { alert("请输入模型名称"); return; }
-        if (!form.channelId) { alert("请选择渠道"); return; }
+        if (!form.model.trim()) {
+          alert("请输入模型名称");
+          return;
+        }
+        if (!form.channelId) {
+          alert("请选择渠道");
+          return;
+        }
         await fetchApi("/api/admin/prices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model: form.model.trim(),
-            channelId: form.channelId || null,
+            channelId: form.channelId,
             inputPerMillion: Number(form.inputPerMillion),
             outputPerMillion: Number(form.outputPerMillion),
             cachePerMillion: Number(form.cachePerMillion || 0),
@@ -137,7 +155,7 @@ export default function PricesPage() {
       setShowForm(false);
       setEditingId(null);
       setForm(EMPTY_FORM);
-      load();
+      void load();
     } catch (e) {
       alert(e instanceof ApiError ? e.message : "保存失败");
     }
@@ -151,10 +169,10 @@ export default function PricesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
+      void load();
     } catch (e) {
       alert(e instanceof ApiError ? e.message : "删除失败");
     }
-    load();
   };
 
   const handleToggleDeprecated = async (p: ModelPrice) => {
@@ -164,10 +182,10 @@ export default function PricesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: p.id, deprecated: !p.deprecated }),
       });
+      void load();
     } catch (e) {
       alert(e instanceof ApiError ? e.message : "操作失败");
     }
-    load();
   };
 
   const cancelForm = () => {
@@ -176,7 +194,6 @@ export default function PricesPage() {
     setForm(EMPTY_FORM);
   };
 
-  // 筛选：默认显示全部价格；渠道价和全局默认价可分别查看
   const channelPrices = prices.filter((p) => !!p.channelId);
   const globalPrices = prices.filter((p) => !p.channelId);
   const channelModelSet = new Set(channelPrices.map((p) => p.model));
@@ -190,9 +207,7 @@ export default function PricesPage() {
         ? globalPrices
         : channelPrices.filter((p) => p.channelId === filterChannel);
 
-  if (loading) {
-    return <PageLoader />;
-  }
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
@@ -216,26 +231,19 @@ export default function PricesPage() {
             disabled={syncing}
             className="px-3 py-2 text-sm rounded-xl font-medium transition-all duration-200 disabled:opacity-50 bg-indigo-50/50 text-indigo-600 border border-indigo-200/50"
           >
-            {syncing ? "同步中..." : "↻ 同步官方价格"}
+            {syncing ? "同步中..." : "同步官方价格"}
           </button>
-          <button
-            onClick={handleAdd}
-            className="glass-btn text-sm"
-          >
-            + 添加价格
-          </button>
+          <button onClick={handleAdd} className="glass-btn text-sm">+ 添加价格</button>
         </div>
       </div>
 
-      {/* 汇率信息条 */}
       {exchangeRate && (
         <div className="flex items-center gap-2 text-xs text-amber-700 px-4 py-2.5 rounded-xl bg-amber-50/60 border border-amber-200 backdrop-blur-sm">
-          <span>💱 当前汇率：1 USD = {exchangeRate.rate.toFixed(4)} CNY</span>
-          <span className="text-amber-500">（来源：{exchangeRate.source}）</span>
+          <span>当前汇率：1 USD = {exchangeRate.rate.toFixed(4)} CNY</span>
+          <span className="text-amber-500">来源：{exchangeRate.source}</span>
         </div>
       )}
 
-      {/* 编辑表单 */}
       {showForm && (
         <PriceForm
           form={form}
@@ -247,7 +255,6 @@ export default function PricesPage() {
         />
       )}
 
-      {/* 价格列表 */}
       <div className="glass-card-static p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
           <span>当前显示 {filtered.length} 条</span>
@@ -273,7 +280,7 @@ export default function PricesPage() {
             </thead>
             <tbody>
               {filtered.map((p) => (
-                <tr key={p.id} className={`${p.deprecated ? "opacity-50" : ""}`}>
+                <tr key={p.id} className={p.deprecated ? "opacity-50" : ""}>
                   <td>
                     <div>
                       <span>{p.displayName || p.model}</span>
@@ -293,6 +300,8 @@ export default function PricesPage() {
                   <td className="text-center">
                     {p.deprecated ? (
                       <span className="glass-badge glass-badge-amber">已废弃</span>
+                    ) : p.updatedBy === "fallback-sync" ? (
+                      <span className="glass-badge glass-badge-amber">兜底价</span>
                     ) : p.syncedAt ? (
                       <span className="glass-badge glass-badge-green">已同步</span>
                     ) : (
@@ -314,9 +323,9 @@ export default function PricesPage() {
       </div>
 
       <div className="text-xs text-gray-400 space-y-1">
-        <p>💡 每个渠道独立管理价格，通过同步从官网自动更新</p>
-        <p>💡 USD 渠道显示美元原价 + 人民币换算价格，计费统一按人民币结算</p>
-        <p>💡 删除价格后会加入同步黑名单，不会被同步重新添加</p>
+        <p>每个渠道独立管理价格；官方实时抓取失败时，系统只会用兜底价补缺失模型，不会覆盖已有价格。</p>
+        <p>USD 渠道显示美元原价和人民币换算价，最终计费统一按人民币结算。</p>
+        <p>删除价格后会加入同步黑名单，不会被同步重新添加。</p>
       </div>
     </div>
   );

@@ -1,17 +1,15 @@
-/** 价格管理页 — 共享类型与常量 */
-
 export interface ModelPrice {
   id: string;
   model: string;
   channelId: string | null;
   channelName: string;
-  channelCurrency: string | null;   // "CNY" | "USD" | null
+  channelCurrency: string | null;
   channelProvider: string | null;
   inputPerMillion: number;
   outputPerMillion: number;
   cachePerMillion: number;
   displayName: string | null;
-  currency: string;                  // 价格的原始币种
+  currency: string;
   deprecated: boolean;
   syncedAt: string | null;
   updatedBy: string | null;
@@ -32,7 +30,7 @@ export interface ExchangeRate {
 
 export const EMPTY_FORM = {
   model: "",
-  channelId: "" as string,
+  channelId: "",
   inputPerMillion: 0,
   outputPerMillion: 0,
   cachePerMillion: 0,
