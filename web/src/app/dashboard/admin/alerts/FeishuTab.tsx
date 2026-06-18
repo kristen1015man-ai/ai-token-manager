@@ -65,6 +65,7 @@ export default function FeishuTab({
     leaderboardEnabled &&
     settings.leaderboard_schedule !== "disabled" &&
     leaderboardChatIds.length > 0 &&
+    !saving &&
     !sendingLeaderboard;
 
   const toggleNotifyType = (key: string) => {
@@ -359,7 +360,7 @@ export default function FeishuTab({
           </button>
           {!leaderboardCanSend && (
             <span className="text-xs text-gray-400">
-              发送前请启用排行榜、选择频率、填写 Chat ID，并先保存设置。
+              发送前请启用排行榜、选择频率并选择群组。测试发送会自动保存当前设置。
             </span>
           )}
         </div>

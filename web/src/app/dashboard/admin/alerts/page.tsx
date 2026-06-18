@@ -142,6 +142,14 @@ export default function AlertsPage() {
     }
   };
 
+  const saveSettings = async () => {
+    await fetchApi("/api/admin/alerts/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+  };
+
   const handleTestFeishu = async () => {
     setTesting(true);
     try {
@@ -157,18 +165,21 @@ export default function AlertsPage() {
   const handleSendLeaderboard = async () => {
     setSendingLeaderboard(true);
     try {
-      const data = await fetchApi<{ sent: number; failed: number; chatIds: string[] }>(
+      await saveSettings();
+      const data = await fetchApi<{ sent: number; failed: number; chatIds: string[]; skippedReason?: string | null }>(
         "/api/admin/leaderboard-send",
         { method: "POST" }
       );
       if (data.chatIds.length === 0) {
-        flash("err", "未发送：请先填写排行榜飞书群组 Chat ID 并保存设置");
+        flash("err", "未发送：请先选择排行榜飞书群组");
+      } else if (data.skippedReason === "disabled") {
+        flash("err", "未发送：请先启用排行榜定时发送");
       } else if (data.sent > 0 && data.failed === 0) {
         flash("ok", `排行榜已发送到 ${data.sent} 个群组`);
       } else if (data.sent > 0) {
         flash("err", `排行榜部分发送成功：成功 ${data.sent} 个，失败 ${data.failed} 个`);
       } else {
-        flash("err", "排行榜未发送成功，请检查 Chat ID、机器人是否已进群、飞书应用权限");
+        flash("err", "排行榜未发送成功，请检查机器人是否已进群、飞书应用权限，或本月是否已有用量数据");
       }
     } catch (e) {
       flash("err", e instanceof ApiError ? e.message : "排行榜发送失败");

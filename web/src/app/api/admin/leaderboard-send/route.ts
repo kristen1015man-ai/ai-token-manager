@@ -9,6 +9,7 @@ import { safeErrorSummary } from "../../../../lib/safe-error";
  */
 export async function POST(request: Request) {
   // 认证：管理员 session 或内部 API Key
+  let isInternal = false;
   const { error } = await requireAdmin();
   if (error) {
     // 尝试 INTERNAL_API_KEY 认证（定时任务走这条路径）
@@ -17,15 +18,17 @@ export async function POST(request: Request) {
     if (!internalKey || authHeader !== `Bearer ${internalKey}`) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
+    isInternal = true;
   }
 
   try {
-    const result = await sendLeaderboard();
+    const result = await sendLeaderboard({ allowEmpty: !isInternal });
     return NextResponse.json({
       success: true,
       sent: result.sent,
       failed: result.failed,
       chatIds: result.chatIds,
+      skippedReason: result.skippedReason || null,
     });
   } catch (err) {
     console.error("[Leaderboard API] 发送失败:", safeErrorSummary(err));

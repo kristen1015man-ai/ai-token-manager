@@ -119,25 +119,26 @@ export function buildLeaderboardCard(data: LeaderboardData) {
   };
 }
 
-export async function sendLeaderboard(): Promise<{
+export async function sendLeaderboard(options: { allowEmpty?: boolean } = {}): Promise<{
   sent: number;
   failed: number;
   chatIds: string[];
+  skippedReason?: string;
 }> {
   const settings = await loadLeaderboardSettings();
   if (!settings.enabled) {
     console.log("[Leaderboard] Skipped: leaderboard toggle off");
-    return { sent: 0, failed: 0, chatIds: [] };
+    return { sent: 0, failed: 0, chatIds: [], skippedReason: "disabled" };
   }
   if (settings.chatIds.length === 0) {
     console.log("[Leaderboard] Skipped: no chat IDs configured");
-    return { sent: 0, failed: 0, chatIds: [] };
+    return { sent: 0, failed: 0, chatIds: [], skippedReason: "no_chat_ids" };
   }
 
   const data = await generateLeaderboard();
-  if (data.activeUsers === 0) {
+  if (data.activeUsers === 0 && !options.allowEmpty) {
     console.log("[Leaderboard] Skipped: no usage data this month");
-    return { sent: 0, failed: 0, chatIds: settings.chatIds };
+    return { sent: 0, failed: 0, chatIds: settings.chatIds, skippedReason: "no_usage_data" };
   }
 
   const card = buildLeaderboardCard(data);
