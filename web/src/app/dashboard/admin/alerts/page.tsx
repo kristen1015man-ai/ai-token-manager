@@ -1,12 +1,48 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { fetchApi, ApiError } from "../../../../lib/fetcher";
+import { useCallback, useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
-import { type Alert, type AlertSettings, type AdminOption, DEFAULT_SETTINGS, TYPE_LABELS } from "./alert-types";
+import { ApiError, fetchApi } from "../../../../lib/fetcher";
 import FeishuTab from "./FeishuTab";
+import { DEFAULT_SETTINGS, TYPE_LABELS, type AdminOption, type Alert, type AlertSettings } from "./alert-types";
 
 type TabKey = "threshold" | "feishu" | "history";
+
+function NumberField({
+  label,
+  value,
+  suffix,
+  hint,
+  min = 1,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  suffix: string;
+  hint: string;
+  min?: number;
+  max?: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="glass-input w-24"
+        />
+        <span className="text-sm text-gray-500">{suffix}</span>
+      </div>
+      <p className="text-xs text-gray-400 mt-1">{hint}</p>
+    </div>
+  );
+}
 
 export default function AlertsPage() {
   const [tab, setTab] = useState<TabKey>("threshold");
@@ -14,43 +50,48 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [sendingLeaderboard, setSendingLeaderboard] = useState(false);
   const [admins, setAdmins] = useState<AdminOption[]>([]);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  // 加载设置和预警记录
   const loadSettings = useCallback(async () => {
     try {
-      const d = await fetchApi<{ settings: AlertSettings }>("/api/admin/alerts/settings");
-      setSettings({ ...DEFAULT_SETTINGS, ...d.settings });
-    } catch {}
+      const data = await fetchApi<{ settings: AlertSettings }>("/api/admin/alerts/settings");
+      setSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+    } catch {
+      // Keep defaults when the settings endpoint is temporarily unavailable.
+    }
   }, []);
 
   const loadAlerts = useCallback(async () => {
     try {
-      const d = await fetchApi<{ alerts: Alert[] }>("/api/admin/alerts");
-      setAlerts(d.alerts || []);
-    } catch {}
+      const data = await fetchApi<{ alerts: Alert[] }>("/api/admin/alerts");
+      setAlerts(data.alerts || []);
+    } catch {
+      setAlerts([]);
+    }
   }, []);
 
   const loadAdmins = useCallback(async () => {
     try {
-      const d = await fetchApi<{ admins: AdminOption[] }>("/api/admin/admins-list");
-      setAdmins(d.admins || []);
-    } catch {}
+      const data = await fetchApi<{ admins: AdminOption[] }>("/api/admin/admins-list");
+      setAdmins(data.admins || []);
+    } catch {
+      setAdmins([]);
+    }
   }, []);
 
   useEffect(() => {
-    loadSettings();
-    loadAlerts();
-    loadAdmins();
+    void loadSettings();
+    void loadAlerts();
+    void loadAdmins();
   }, [loadSettings, loadAlerts, loadAdmins]);
 
   const flash = (type: "ok" | "err", text: string) => {
     setMsg({ type, text });
-    setTimeout(() => setMsg(null), 3000);
+    window.setTimeout(() => setMsg(null), 3000);
   };
 
-  /* ===== 保存设置 ===== */
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -62,153 +103,120 @@ export default function AlertsPage() {
       flash("ok", "设置已保存");
     } catch (e) {
       flash("err", e instanceof ApiError ? e.message : "保存失败");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
-  /* ===== 测试飞书通知 ===== */
   const handleTestFeishu = async () => {
     setTesting(true);
     try {
-      const d = await fetchApi<{ message: string }>("/api/admin/alerts/test-feishu", { method: "POST" });
-      flash("ok", d.message || "测试通知已发送");
+      const data = await fetchApi<{ message: string }>("/api/admin/alerts/test-feishu", { method: "POST" });
+      flash("ok", data.message || "测试通知已发送");
     } catch (e) {
       flash("err", e instanceof ApiError ? e.message : "发送失败");
+    } finally {
+      setTesting(false);
     }
-    setTesting(false);
+  };
+
+  const handleSendLeaderboard = async () => {
+    setSendingLeaderboard(true);
+    try {
+      const data = await fetchApi<{ sent: number; failed: number; chatIds: string[] }>(
+        "/api/admin/leaderboard-send",
+        { method: "POST" }
+      );
+      if (data.chatIds.length === 0) {
+        flash("err", "未发送：请先填写排行榜飞书群组 Chat ID 并保存设置");
+      } else if (data.sent > 0 && data.failed === 0) {
+        flash("ok", `排行榜已发送到 ${data.sent} 个群组`);
+      } else if (data.sent > 0) {
+        flash("err", `排行榜部分发送成功：成功 ${data.sent} 个，失败 ${data.failed} 个`);
+      } else {
+        flash("err", "排行榜未发送成功，请检查 Chat ID、机器人是否已进群、飞书应用权限");
+      }
+    } catch (e) {
+      flash("err", e instanceof ApiError ? e.message : "排行榜发送失败");
+    } finally {
+      setSendingLeaderboard(false);
+    }
   };
 
   return (
     <div className="space-y-5">
-      {/* 提示消息 */}
       {msg && (
         <div
           className={`px-4 py-2 rounded-xl text-sm ${
-            msg.type === "ok" ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"
+            msg.type === "ok"
+              ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
+              : "bg-red-50 border border-red-200 text-red-700"
           }`}
         >
           {msg.text}
         </div>
       )}
 
-      {/* Tab 切换 */}
       <div className="rank-tabs">
         <button className={`rank-tab ${tab === "threshold" ? "rank-tab-active" : ""}`} onClick={() => setTab("threshold")}>
-          🎯 阈值设置
+          阈值设置
         </button>
         <button className={`rank-tab ${tab === "feishu" ? "rank-tab-active" : ""}`} onClick={() => setTab("feishu")}>
-          📨 飞书通知
+          飞书通知
         </button>
         <button className={`rank-tab ${tab === "history" ? "rank-tab-active" : ""}`} onClick={() => setTab("history")}>
-          📋 预警记录
+          预警记录
         </button>
       </div>
 
-      {/* ===== Tab 1: 阈值设置 ===== */}
       {tab === "threshold" && (
         <div className="glass-card-static p-5 space-y-5">
           <p className="text-sm text-gray-500">
-            设置用量达到限额的百分之几时触发预警通知。阈值范围 1-100。
+            设置用量达到限额的百分比或金额时触发预警通知。阈值修改后会影响后续新触发的提醒。
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* 个人阈值 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                个人用量预警阈值
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={settings.personal_threshold}
-                  onChange={(e) =>
-                    setSettings({ ...settings, personal_threshold: e.target.value })
-                  }
-                  className="glass-input w-24"
-                />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">当个人本月用量达到限额的此百分比时触发</p>
-            </div>
-
-            {/* 部门阈值 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                部门用量预警阈值
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={settings.dept_threshold}
-                  onChange={(e) =>
-                    setSettings({ ...settings, dept_threshold: e.target.value })
-                  }
-                  className="glass-input w-24"
-                />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">当部门本月用量达到限额的此百分比时触发</p>
-            </div>
-
-            {/* 公司阈值 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                公司用量预警阈值
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={settings.company_threshold}
-                  onChange={(e) =>
-                    setSettings({ ...settings, company_threshold: e.target.value })
-                  }
-                  className="glass-input w-24"
-                />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">当公司本月总用量达到限额的此百分比时触发</p>
-            </div>
-
-            {/* 异常阈值 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                异常用量检测阈值
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  value={settings.anomaly_threshold}
-                  onChange={(e) =>
-                    setSettings({ ...settings, anomaly_threshold: e.target.value })
-                  }
-                  className="glass-input w-24"
-                />
-                <span className="text-sm text-gray-500">元/小时</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">单人 1 小时内消耗超过此金额时触发异常预警</p>
-            </div>
+            <NumberField
+              label="个人用量预警阈值"
+              value={settings.personal_threshold}
+              suffix="%"
+              max={100}
+              hint="当个人本月用量达到限额的此百分比时触发。"
+              onChange={(value) => setSettings({ ...settings, personal_threshold: value })}
+            />
+            <NumberField
+              label="部门用量预警阈值"
+              value={settings.dept_threshold}
+              suffix="%"
+              max={100}
+              hint="当部门本月用量达到限额的此百分比时触发。"
+              onChange={(value) => setSettings({ ...settings, dept_threshold: value })}
+            />
+            <NumberField
+              label="公司用量预警阈值"
+              value={settings.company_threshold}
+              suffix="%"
+              max={100}
+              hint="当公司本月总用量达到限额的此百分比时触发。"
+              onChange={(value) => setSettings({ ...settings, company_threshold: value })}
+            />
+            <NumberField
+              label="异常用量检测阈值"
+              value={settings.anomaly_threshold}
+              suffix="元/小时"
+              hint="单人 1 小时内消耗超过此金额时触发异常预警。"
+              onChange={(value) => setSettings({ ...settings, anomaly_threshold: value })}
+            />
           </div>
 
           <div className="flex justify-end pt-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="glass-btn text-sm disabled:opacity-50"
-            >
+            <button onClick={handleSave} disabled={saving} className="glass-btn text-sm disabled:opacity-50">
               {saving ? "保存中..." : "保存设置"}
             </button>
           </div>
         </div>
       )}
 
-      {/* ===== Tab 2: 飞书通知 ===== */}
       {tab === "feishu" && (
         <FeishuTab
           settings={settings}
@@ -218,10 +226,11 @@ export default function AlertsPage() {
           onTestFeishu={handleTestFeishu}
           testing={testing}
           admins={admins}
+          onSendLeaderboard={handleSendLeaderboard}
+          sendingLeaderboard={sendingLeaderboard}
         />
       )}
 
-      {/* ===== Tab 3: 预警记录 ===== */}
       {tab === "history" && (
         <div className="glass-card-static p-5">
           <div className="flex items-center justify-between mb-4">
@@ -241,13 +250,11 @@ export default function AlertsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {alerts.map((a) => (
-                    <tr key={a.id}>
-                      <td>{TYPE_LABELS[a.type] || a.type}</td>
-                      <td>
-                        {new Date(a.sentAt).toLocaleString("zh-CN")}
-                      </td>
-                      <td className="max-w-2xl whitespace-pre-line break-words text-sm leading-6">{a.message}</td>
+                  {alerts.map((alert) => (
+                    <tr key={alert.id}>
+                      <td>{TYPE_LABELS[alert.type] || alert.type}</td>
+                      <td>{new Date(alert.sentAt).toLocaleString("zh-CN")}</td>
+                      <td className="max-w-2xl whitespace-pre-line break-words text-sm leading-6">{alert.message}</td>
                     </tr>
                   ))}
                 </tbody>
