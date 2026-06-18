@@ -10,6 +10,11 @@ export interface UsageRecord {
   cost: number;
 }
 
+function safeTokenCount(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
 /**
  * 从 OpenAI 兼容响应中提取 usage 信息。
  *
@@ -21,10 +26,13 @@ export async function extractUsageFromResponse(
   model: string
 ): Promise<UsageRecord> {
   const usage = responseBody.usage as {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-    prompt_tokens_details?: { cached_tokens?: number };
+    prompt_tokens?: unknown;
+    completion_tokens?: unknown;
+    total_tokens?: unknown;
+    prompt_tokens_details?: { cached_tokens?: unknown };
+    prompt_cache_hit_tokens?: unknown;
+    prompt_cache_miss_tokens?: unknown;
+    cache_read_input_tokens?: unknown;
   } | undefined;
 
   if (!usage) {
@@ -32,10 +40,17 @@ export async function extractUsageFromResponse(
     return { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0, cost: 0 };
   }
 
-  const inputTokens = usage.prompt_tokens ?? 0;
-  const outputTokens = usage.completion_tokens ?? 0;
-  const totalTokens = usage.total_tokens ?? inputTokens + outputTokens;
-  const cachedTokens = usage.prompt_tokens_details?.cached_tokens ?? 0;
+  const cacheHitTokens =
+    safeTokenCount(usage.prompt_tokens_details?.cached_tokens) ||
+    safeTokenCount(usage.prompt_cache_hit_tokens) ||
+    safeTokenCount(usage.cache_read_input_tokens);
+  const cacheMissTokens = safeTokenCount(usage.prompt_cache_miss_tokens);
+  const reportedInputTokens = safeTokenCount(usage.prompt_tokens);
+  const inputTokens = reportedInputTokens || (cacheHitTokens + cacheMissTokens);
+  const outputTokens = safeTokenCount(usage.completion_tokens);
+  const reportedTotalTokens = safeTokenCount(usage.total_tokens);
+  const totalTokens = reportedTotalTokens || inputTokens + outputTokens;
+  const cachedTokens = Math.min(cacheHitTokens, inputTokens);
 
   if (inputTokens === 0 && outputTokens === 0) {
     console.warn(`[Usage] Zero tokens in response for model=${model} channel=${channelId}`, usage);

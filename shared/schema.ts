@@ -78,6 +78,7 @@ export const usageLogs = sqliteTable("usage_logs", {
   model: text("model").notNull(),
   inputTokens: integer("input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
+  cachedTokens: integer("cached_tokens").notNull().default(0),
   totalTokens: integer("total_tokens").notNull().default(0),
   cost: real("cost").notNull().default(0),
   channelId: text("channel_id")

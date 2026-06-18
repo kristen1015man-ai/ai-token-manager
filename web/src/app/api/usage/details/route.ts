@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       model: item.model,
       inputTokens: item.inputTokens,
       outputTokens: item.outputTokens,
+      cachedTokens: item.cachedTokens,
       totalTokens: item.totalTokens,
       cost: Number(item.cost),
       createdAt: item.createdAt,

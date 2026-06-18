@@ -91,14 +91,15 @@ export async function POST(request: NextRequest) {
 
         db.exec(
           `INSERT OR IGNORE INTO usage_logs
-            (id, user_id, model, input_tokens, output_tokens, total_tokens, cost, channel_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, user_id, model, input_tokens, output_tokens, cached_tokens, total_tokens, cost, channel_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             userId,
             model,
             inputTokens,
             outputTokens,
+            cachedTokens,
             totalTokens,
             cost,
             channelId,

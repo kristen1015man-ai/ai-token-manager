@@ -45,6 +45,7 @@ export interface UsageLog {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cachedTokens: number;
   totalTokens: number;
   cost: number;
   channelId: string;

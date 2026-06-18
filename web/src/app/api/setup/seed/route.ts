@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
   dbAny.exec(`CREATE TABLE usage_logs (
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL, model TEXT NOT NULL,
     input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+    cached_tokens INTEGER DEFAULT 0,
     total_tokens INTEGER DEFAULT 0, cost REAL DEFAULT 0, channel_id TEXT NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);

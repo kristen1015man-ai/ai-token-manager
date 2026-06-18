@@ -66,8 +66,12 @@ export function generateUsageLogs(
         const outTok = isTech ? randInt(500, 4000) : randInt(200, 2500);
         const cost = Number(((inTok * model.inPrice + outTok * model.outPrice) / 1000).toFixed(4));
 
-        db.exec(`INSERT INTO usage_logs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [`log_${totalRecords}`, u.id, model.name, inTok, outTok, inTok + outTok, cost, model.channel, ts]);
+        db.exec(
+          `INSERT INTO usage_logs
+            (id, user_id, model, input_tokens, output_tokens, cached_tokens, total_tokens, cost, channel_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [`log_${totalRecords}`, u.id, model.name, inTok, outTok, 0, inTok + outTok, cost, model.channel, ts]
+        );
         totalRecords++;
       }
     }

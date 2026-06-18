@@ -209,11 +209,15 @@ export async function ensureAllTables() {
     model TEXT NOT NULL,
     input_tokens INTEGER NOT NULL DEFAULT 0,
     output_tokens INTEGER NOT NULL DEFAULT 0,
+    cached_tokens INTEGER NOT NULL DEFAULT 0,
     total_tokens INTEGER NOT NULL DEFAULT 0,
     cost REAL NOT NULL DEFAULT 0,
     channel_id TEXT NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   )`);
+  if (!hasColumn(dbRaw, "usage_logs", "cached_tokens")) {
+    dbRaw.exec("ALTER TABLE usage_logs ADD COLUMN cached_tokens INTEGER NOT NULL DEFAULT 0");
+  }
 
   dbRaw.exec(`CREATE TABLE IF NOT EXISTS quota_rules (
     id TEXT PRIMARY KEY,

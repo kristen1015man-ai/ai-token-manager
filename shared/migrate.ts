@@ -6,7 +6,7 @@ const DB_PATH = process.env.DATABASE_URL || "./data.db";
 
 // ========== 迁移版本号 ==========
 // 每次新增迁移时递增，已执行过的迁移不会重复执行
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /**
  * 获取表的列名集合
@@ -100,6 +100,7 @@ async function migrate() {
       model TEXT NOT NULL,
       input_tokens INTEGER NOT NULL DEFAULT 0,
       output_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_tokens INTEGER NOT NULL DEFAULT 0,
       total_tokens INTEGER NOT NULL DEFAULT 0,
       cost REAL NOT NULL DEFAULT 0,
       channel_id TEXT NOT NULL REFERENCES channels(id),
@@ -238,6 +239,13 @@ async function migrate() {
     sqlite.run("CREATE INDEX IF NOT EXISTS idx_usage_logs_user_created ON usage_logs(user_id, created_at)");
     sqlite.run("CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id)");
     sqlite.run("INSERT INTO _schema_version (version) VALUES (4)");
+  }
+
+  // --- Migration v5: usage cache hit accounting ---
+  if (currentVersion < 5) {
+    console.log("[migrate] v5: Adding cached token column to usage_logs...");
+    addColumnIfMissing(sqlite, "usage_logs", "cached_tokens", "INTEGER NOT NULL DEFAULT 0");
+    sqlite.run("INSERT INTO _schema_version (version) VALUES (5)");
   }
 
   // --- 未来迁移在此追加 ---

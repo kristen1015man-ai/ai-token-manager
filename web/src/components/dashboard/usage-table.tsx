@@ -9,6 +9,7 @@ interface Detail {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cachedTokens: number;
   totalTokens: number;
   cost: number;
   createdAt: string;
@@ -76,6 +77,8 @@ export default function UsageTable() {
   }
 
   const { items, pagination } = state.data!;
+  const cacheHitRate = (item: Detail) =>
+    item.inputTokens > 0 ? (item.cachedTokens / item.inputTokens) * 100 : 0;
 
   return (
     <div className="glass-card-static p-5">
@@ -91,6 +94,7 @@ export default function UsageTable() {
                   <th className="text-left">时间</th>
                   <th className="text-left">模型</th>
                   <th className="text-right">输入</th>
+                  <th className="text-right">缓存命中</th>
                   <th className="text-right">输出</th>
                   <th className="text-right">费用</th>
                 </tr>
@@ -103,6 +107,11 @@ export default function UsageTable() {
                       <span className="glass-badge glass-badge-indigo">{item.model}</span>
                     </td>
                     <td className="text-right">{item.inputTokens.toLocaleString()}</td>
+                    <td className="text-right">
+                      {item.cachedTokens > 0
+                        ? `${item.cachedTokens.toLocaleString()} (${cacheHitRate(item).toFixed(1)}%)`
+                        : "—"}
+                    </td>
                     <td className="text-right">{item.outputTokens.toLocaleString()}</td>
                     <td className="text-right font-medium" style={{ color: "var(--text-primary)" }}>¥{item.cost.toFixed(4)}</td>
                   </tr>
