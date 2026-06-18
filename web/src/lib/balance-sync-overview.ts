@@ -4,6 +4,7 @@
 import { getDb } from "./db";
 import { channels } from "../../../shared/schema";
 import { DEFAULT_THRESHOLDS, type ChannelAlert } from "./balance-fetchers";
+import { eq } from "drizzle-orm";
 
 /**
  * 获取所有渠道余额概览
@@ -19,7 +20,7 @@ export async function getBalanceOverview() {
     balanceCurrency: channels.balanceCurrency,
     balanceSyncedAt: channels.balanceSyncedAt,
     balanceAlertThreshold: channels.balanceAlertThreshold,
-  }).from(channels);
+  }).from(channels).where(eq(channels.status, "active"));
 
   // 汇总
   const totals: Record<string, number> = {};

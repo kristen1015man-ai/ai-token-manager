@@ -18,6 +18,7 @@ export function getBalanceDisplay(ch: Channel): string | null {
 
 /** 获取余额状态 */
 export function getBalanceStatus(ch: Channel): "normal" | "warning" | "danger" | "none" {
+  if (ch.status !== "active") return "none";
   if (ch.balance == null) return "none";
   const threshold = ch.balanceAlertThreshold ?? DEFAULT_THRESHOLDS[ch.balanceCurrency || ch.currency || "CNY"] ?? 100;
   if (ch.balance < threshold * 0.2) return "danger";
