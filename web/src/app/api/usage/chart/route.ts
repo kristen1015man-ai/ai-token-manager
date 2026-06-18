@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
   const result = db.exec(
     `SELECT
-      strftime('${groupFormat}', created_at, 'unixepoch', 'localtime') as time_slot,
+      strftime('${groupFormat}', created_at, 'unixepoch', '+8 hours') as time_slot,
       SUM(total_tokens) as tokens,
       SUM(cost) as cost
     FROM usage_logs

@@ -3,6 +3,7 @@ import { getDb, getRawExec, saveDb } from "../../../../lib/db";
 import { randomBytes } from "crypto";
 import { requireInternalRequest } from "../../../../lib/internal-auth";
 import { calculateCost } from "../../../../lib/proxy/cache";
+import { checkQuotaAlertsForUsers } from "../../../../lib/quota-alerts";
 
 function ensureReservationTable(db: ReturnType<typeof getRawExec>): void {
   db.exec(`
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
     ensureReservationTable(db);
 
     const accepted: string[] = [];
+    const acceptedUserIds = new Set<string>();
     const rejected: Array<{ id: string; userId: string; model: string; channelId: string; error: string }> = [];
 
     for (const r of records) {
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
           db.exec("DELETE FROM quota_reservations WHERE id = ?", [reservationId]);
         }
         accepted.push(id);
+        acceptedUserIds.add(userId);
       } catch (err) {
         const error = err instanceof Error ? err.message : "Unknown usage record error";
         console.error("[InternalAPI] Rejected usage record:", { id, userId, model, channelId, error });
@@ -116,6 +119,14 @@ export async function POST(request: NextRequest) {
 
     if (accepted.length > 0) {
       await saveDb();
+    }
+
+    if (acceptedUserIds.size > 0) {
+      try {
+        await checkQuotaAlertsForUsers([...acceptedUserIds]);
+      } catch (alertErr) {
+        console.error("[InternalAPI] Failed to check quota alerts:", alertErr);
+      }
     }
 
     return NextResponse.json({

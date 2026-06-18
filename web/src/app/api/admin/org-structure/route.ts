@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-check";
 import { getDb, type SqliteExec } from "../../../../lib/db";
 import { apiHandler } from "../../../../lib/api-handler";
+import { getBeijingMonthStartUnix } from "../../../../lib/time-range";
 
 /**
  * 组织架构分析
@@ -67,8 +68,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
   });
 
   // 2. 使用量数据（本月，仅活跃用户）
-  const now = new Date();
-  const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
+  const monthStart = getBeijingMonthStartUnix();
 
   const usageResult = dbAny.exec(`
     SELECT u.id, SUM(ul.total_tokens) as tokens, SUM(ul.cost) as cost, COUNT(*) as calls

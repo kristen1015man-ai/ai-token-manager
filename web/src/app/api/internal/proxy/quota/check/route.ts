@@ -5,11 +5,8 @@ import { quotaRules, users } from "../../../../../../../../shared/schema";
 import { getDb, getRawExec, scheduleSave, type SqliteExec } from "../../../../../../lib/db";
 import { requireInternalRequest } from "../../../../../../lib/internal-auth";
 import { calculateCost } from "../../../../../../lib/proxy/cache";
-
-function monthStart(): number {
-  const now = new Date();
-  return Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
-}
+import { beijingCurrentMonthLabel } from "../../../../../../lib/beijing-time";
+import { getBeijingMonthStartUnix } from "../../../../../../lib/time-range";
 
 function ruleTimestamp(rule: { updatedAt: Date | number | null }): number {
   if (rule.updatedAt instanceof Date) return rule.updatedAt.getTime();
@@ -17,8 +14,8 @@ function ruleTimestamp(rule: { updatedAt: Date | number | null }): number {
 }
 
 function reservationTtlSeconds(): number {
-  const parsed = Number(process.env.QUOTA_RESERVATION_TTL_SECONDS ?? 1800);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1800;
+  const parsed = Number(process.env.QUOTA_RESERVATION_TTL_SECONDS ?? 600);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 600;
 }
 
 function finiteNonNegative(value: unknown): number {
@@ -71,7 +68,8 @@ export async function POST(request: NextRequest) {
   const rawDb = getRawExec(sqlite);
   ensureReservationTable(rawDb);
   const nowSec = Math.floor(Date.now() / 1000);
-  rawDb.exec("DELETE FROM quota_reservations WHERE expires_at <= ?", [nowSec]);
+  const reservationTtl = reservationTtlSeconds();
+  rawDb.exec("DELETE FROM quota_reservations WHERE expires_at <= ? OR created_at <= ?", [nowSec, nowSec - reservationTtl]);
 
   const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (userResult.length === 0 || userResult[0].status !== "active") {
@@ -84,8 +82,8 @@ export async function POST(request: NextRequest) {
 
   const user = userResult[0];
   const rules = await db.select().from(quotaRules);
-  const ms = monthStart();
-  const period = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const ms = getBeijingMonthStartUnix();
+  const period = beijingCurrentMonthLabel();
   const channelId = typeof body.channelId === "string" ? body.channelId : "";
   const model = typeof body.model === "string" ? body.model : "";
   const estimatedInputTokens = finiteNonNegative(body.estimatedInputTokens);
@@ -107,8 +105,26 @@ export async function POST(request: NextRequest) {
     return Number(result[0]?.values[0]?.[0] ?? 0);
   };
 
-  const exceedsLimit = (used: number, reserved: number, limit: number) =>
-    used >= limit || used + reserved + estimatedCost > limit;
+  let reservationCost = estimatedCost;
+  const assertWithinLimit = (
+    used: number,
+    reserved: number,
+    limit: number,
+    scope: "personal" | "department" | "company",
+    message: string
+  ) => {
+    const remaining = Math.max(0, limit - used - reserved);
+    if (used + reserved >= limit) {
+      return NextResponse.json({
+        ok: false,
+        message,
+        type: "quota_exceeded",
+        quotaInfo: { used, reserved, estimatedCost, remaining, limit, scope, period },
+      }, { status: 429 });
+    }
+    reservationCost = Math.min(reservationCost, remaining);
+    return null;
+  };
 
   const personalRule = rules
     .filter((rule) => rule.scope === "personal" && rule.targetId === userId)
@@ -123,14 +139,8 @@ export async function POST(request: NextRequest) {
       "SELECT COALESCE(SUM(estimated_cost), 0) FROM quota_reservations WHERE user_id = ? AND expires_at > ?",
       [userId, nowSec]
     );
-    if (exceedsLimit(used, reserved, personalLimit)) {
-      return NextResponse.json({
-        ok: false,
-        message: "Monthly personal quota exceeded",
-        type: "quota_exceeded",
-        quotaInfo: { used, reserved, estimatedCost, limit: personalLimit, scope: "personal", period },
-      }, { status: 429 });
-    }
+    const limitError = assertWithinLimit(used, reserved, personalLimit, "personal", "个人月度额度已用完");
+    if (limitError) return limitError;
   }
 
   if (user.departmentId) {
@@ -146,14 +156,8 @@ export async function POST(request: NextRequest) {
         "SELECT COALESCE(SUM(estimated_cost), 0) FROM quota_reservations WHERE department_id = ? AND expires_at > ?",
         [user.departmentId, nowSec]
       );
-      if (exceedsLimit(used, reserved, deptRule.monthlyLimit)) {
-        return NextResponse.json({
-          ok: false,
-          message: "Monthly department quota exceeded",
-          type: "quota_exceeded",
-          quotaInfo: { used, reserved, estimatedCost, limit: deptRule.monthlyLimit, scope: "department", period },
-        }, { status: 429 });
-      }
+      const limitError = assertWithinLimit(used, reserved, deptRule.monthlyLimit, "department", "部门月度额度已用完");
+      if (limitError) return limitError;
     }
   }
 
@@ -166,18 +170,12 @@ export async function POST(request: NextRequest) {
       "SELECT COALESCE(SUM(estimated_cost), 0) FROM quota_reservations WHERE expires_at > ?",
       [nowSec]
     );
-    if (exceedsLimit(used, reserved, companyRule.monthlyLimit)) {
-      return NextResponse.json({
-        ok: false,
-        message: "Monthly company quota exceeded",
-        type: "quota_exceeded",
-        quotaInfo: { used, reserved, estimatedCost, limit: companyRule.monthlyLimit, scope: "company", period },
-      }, { status: 429 });
-    }
+    const limitError = assertWithinLimit(used, reserved, companyRule.monthlyLimit, "company", "公司月度额度已用完");
+    if (limitError) return limitError;
   }
 
   let reservationId: string | null = null;
-  if (estimatedCost > 0) {
+  if (reservationCost > 0) {
     reservationId = `qr_${randomBytes(8).toString("hex")}`;
     rawDb.exec(
       `INSERT INTO quota_reservations
@@ -189,13 +187,13 @@ export async function POST(request: NextRequest) {
         user.departmentId || null,
         channelId,
         model,
-        estimatedCost,
+        reservationCost,
         nowSec,
-        nowSec + reservationTtlSeconds(),
+        nowSec + reservationTtl,
       ]
     );
     scheduleSave();
   }
 
-  return NextResponse.json({ ok: true, reservationId, estimatedCost });
+  return NextResponse.json({ ok: true, reservationId, estimatedCost, reservedCost: reservationCost });
 }

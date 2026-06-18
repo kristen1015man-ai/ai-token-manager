@@ -1,67 +1,77 @@
-/**
- * 公共时间范围工具
- * 支持：day / 7d / 30d / year / YYYY-MM（历史月份）
- */
+import {
+  beijingStartOfDayUnix,
+  beijingStartOfMonthUnix,
+  beijingStartOfYearUnix,
+  beijingWallTimeToUnixSeconds,
+  getBeijingDateParts,
+} from "./beijing-time";
 
 export interface TimeRange {
-  start: number;   // unix 秒
-  end?: number;    // unix 秒，仅历史月份需要
-  label: string;   // 人类可读标签
+  start: number;
+  end?: number;
+  label: string;
 }
 
 export function getTimeRange(range: string): TimeRange {
-  const now = new Date();
-
-  // 历史月份格式：YYYY-MM
   if (/^\d{4}-\d{2}$/.test(range)) {
-    const [y, m] = range.split("-").map(Number);
-    const start = Math.floor(new Date(y, m - 1, 1).getTime() / 1000);
-    const end = Math.floor(new Date(y, m, 1).getTime() / 1000);
-    return { start, end, label: `${y}年${m}月` };
+    const [year, month] = range.split("-").map(Number);
+    return {
+      start: beijingWallTimeToUnixSeconds(year, month, 1),
+      end: beijingWallTimeToUnixSeconds(year, month + 1, 1),
+      label: `${year}年${month}月`,
+    };
   }
 
   switch (range) {
     case "day":
       return {
-        start: Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000),
+        start: beijingStartOfDayUnix(),
+        end: beijingStartOfDayUnix(new Date(), 1),
         label: "今日",
       };
     case "7d":
       return {
-        start: Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime() / 1000),
+        start: beijingStartOfDayUnix(new Date(), -6),
+        end: beijingStartOfDayUnix(new Date(), 1),
         label: "近7天",
       };
     case "30d":
       return {
-        start: Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29).getTime() / 1000),
+        start: beijingStartOfDayUnix(new Date(), -29),
+        end: beijingStartOfDayUnix(new Date(), 1),
         label: "近30天",
       };
     case "year":
       return {
-        start: Math.floor(new Date(now.getFullYear(), 0, 1).getTime() / 1000),
+        start: beijingStartOfYearUnix(),
         label: "今年",
       };
     default:
       return {
-        start: Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29).getTime() / 1000),
+        start: beijingStartOfDayUnix(new Date(), -29),
+        end: beijingStartOfDayUnix(new Date(), 1),
         label: "近30天",
       };
   }
 }
 
-/** 生成最近 12 个月的历史月份列表（不含当月） */
 export function generateHistoryMonths(count = 12): { value: string; label: string }[] {
-  const now = new Date();
+  const now = getBeijingDateParts();
   const months: { value: string; label: string }[] = [];
   for (let i = 1; i <= count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    months.push({ value: val, label: `${d.getFullYear()}年${d.getMonth() + 1}月` });
+    const shifted = new Date(Date.UTC(now.year, now.month - 1 - i, 1));
+    const year = shifted.getUTCFullYear();
+    const month = shifted.getUTCMonth() + 1;
+    const value = `${year}-${String(month).padStart(2, "0")}`;
+    months.push({ value, label: `${year}年${month}月` });
   }
   return months;
 }
 
-/** 判断 range 是否为历史月份格式 */
 export function isHistoricalMonth(range: string): boolean {
   return /^\d{4}-\d{2}$/.test(range);
+}
+
+export function getBeijingMonthStartUnix(date = new Date()): number {
+  return beijingStartOfMonthUnix(date);
 }

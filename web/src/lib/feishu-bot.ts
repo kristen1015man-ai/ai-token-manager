@@ -21,9 +21,6 @@ function getClient(): lark.Client | null {
   return client;
 }
 
-/**
- * 发送飞书私聊消息给指定用户
- */
 export async function sendPrivateMessage(feishuUserId: string, text: string) {
   try {
     const feishuClient = getClient();
@@ -43,17 +40,13 @@ export async function sendPrivateMessage(feishuUserId: string, text: string) {
   }
 }
 
-/**
- * 发送飞书交互式卡片消息（私聊）
- * 用于异常告警等富文本通知
- */
 export async function sendCardMessage(
   receiveId: string,
   receiveIdType: "open_id" | "chat_id",
   card: {
     title: string;
     template?: "red" | "orange" | "blue" | "green";
-    elements: string[];  // Markdown 内容行
+    elements: string[];
   }
 ) {
   try {
@@ -84,9 +77,6 @@ export async function sendCardMessage(
   }
 }
 
-/**
- * 生成额度预警消息
- */
 export function formatQuotaAlert(params: {
   userName: string;
   department: string;
@@ -94,14 +84,19 @@ export function formatQuotaAlert(params: {
   limit: number;
   percent: number;
   remainingDays: number;
+  threshold?: number;
 }): string {
-  return `🤖 ${BRAND_NAME} 提醒
+  const percentText = params.percent.toFixed(1);
+  const status = params.percent >= 100 ? "已达到或超过月度额度" : `已达到 ${percentText}%`;
+  const thresholdLine = params.threshold === undefined ? "" : `提醒阈值：${params.threshold}%\n`;
 
-⚠️ ${params.userName} 的月度额度已达 ${params.percent}%
-━━━━━━━━━━━━━━━━━
-👤 员工：${params.userName}（${params.department}）
-💰 已用：¥${params.used.toFixed(2)} / ¥${params.limit.toFixed(2)}
-📅 剩余天数：${params.remainingDays} 天
-━━━━━━━━━━━━━━━━━
-💡 管理员可在后台调整额度`;
+  return `${BRAND_NAME} 额度提醒
+
+${params.userName} ${status}
+员工：${params.userName}（${params.department}）
+已用：¥${params.used.toFixed(2)} / ¥${params.limit.toFixed(2)}
+当前占比：${percentText}%
+${thresholdLine}本月剩余天数：${params.remainingDays} 天
+
+请合理安排调用，必要时联系管理员调整额度。`;
 }

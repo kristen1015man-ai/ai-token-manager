@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, scheduleSave } from "../../../../lib/db";
-import { SqliteExec } from "../../../../lib/db";
-import { alertLogs, alertSettings, users } from "../../../../../../shared/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { randomBytes } from "crypto";
+import { alertLogs, alertSettings, users } from "../../../../../../shared/schema";
+import { getDb, scheduleSave, getRawExec } from "../../../../lib/db";
+import { beijingRemainingDaysInMonth, beijingStartOfDayUnix } from "../../../../lib/beijing-time";
 import { formatQuotaAlert } from "../../../../lib/feishu-bot";
+import { requireInternalRequest } from "../../../../lib/internal-auth";
 import { notifyAlert } from "../../../../lib/notification-router";
 import { safeErrorSummary } from "../../../../lib/safe-error";
 import { DEFAULT_ALERT_SETTINGS } from "../../admin/alerts/settings/route";
 
-// ===== 类型定义 =====
 interface QuotaAlert {
   type: "personal_80" | "personal_100" | "dept_80" | "company_90";
   targetId: string;
@@ -17,33 +17,29 @@ interface QuotaAlert {
   used: number;
   limit: number;
   percent: number;
+  threshold?: number;
 }
 
-/**
- * POST /api/internal/quota-alert
- * 内部端点：供 proxy 调用，发送限额预警通知
- *
- * 认证：通过 INTERNAL_API_KEY 环境变量进行简单 token 校验
- * Body: { alerts: QuotaAlert[] }
- */
-export async function POST(request: NextRequest) {
-  // 内部 API Key 校验
-  const internalKey = process.env.INTERNAL_API_KEY;
-  if (!internalKey) {
-    console.error("[InternalAPI/quota-alert] INTERNAL_API_KEY not configured");
-    return NextResponse.json({ error: "Internal API not configured" }, { status: 503 });
-  }
+function parseThreshold(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : fallback;
+}
 
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${internalKey}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+function thresholdFor(type: QuotaAlert["type"], settings: Record<string, string>): number | undefined {
+  if (type === "personal_80") return parseThreshold(settings.personal_threshold, 80);
+  if (type === "dept_80") return parseThreshold(settings.dept_threshold, 80);
+  if (type === "company_90") return parseThreshold(settings.company_threshold, 90);
+  return undefined;
+}
+
+export async function POST(request: NextRequest) {
+  const authError = requireInternalRequest(request);
+  if (authError) return authError;
 
   let body: { alerts?: unknown[] };
   try {
     body = await request.json();
   } catch {
-    console.warn("[InternalAPI/quota-alert] Invalid JSON body");
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
@@ -54,28 +50,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const { db, sqlite } = await getDb();
-    const dbRaw = sqlite as unknown as SqliteExec;
+    const rawDb = getRawExec(sqlite);
 
-    // 加载预警设置（合并默认值）
     const settingsRows = await db.select().from(alertSettings);
     const settings: Record<string, string> = { ...DEFAULT_ALERT_SETTINGS };
-    for (const row of settingsRows) {
-      settings[row.key] = row.value;
-    }
+    for (const row of settingsRows) settings[row.key] = row.value;
 
     const feishuEnabled = settings.feishu_notify_enabled === "true";
-    const feishuNotifyTypes = new Set(settings.feishu_notify_types.split(","));
-
-    // 今天零点的时间戳（秒）
-    const todayStart = Math.floor(new Date(new Date().toISOString().slice(0, 10)).getTime() / 1000);
+    const feishuNotifyTypes = new Set(settings.feishu_notify_types.split(",").map((item) => item.trim()).filter(Boolean));
+    const todayStart = beijingStartOfDayUnix();
+    const remainingDays = beijingRemainingDaysInMonth();
 
     let sent = 0;
     let skipped = 0;
 
     for (const rawAlert of alerts) {
       const alert = rawAlert as QuotaAlert;
+      const threshold = alert.threshold ?? thresholdFor(alert.type, settings);
 
-      // 去重检查：今天是否已发送过同类型同 targetId 的预警
       const existing = await db
         .select({ id: alertLogs.id })
         .from(alertLogs)
@@ -93,7 +85,6 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // 写入 alert_logs（由调用方写，这里仍然写一份用于去重）
       await db.insert(alertLogs).values({
         id: randomBytes(8).toString("hex"),
         type: alert.type,
@@ -102,49 +93,41 @@ export async function POST(request: NextRequest) {
         sentAt: new Date(),
       });
 
-      // 检查是否需要发送飞书通知
       if (!feishuEnabled || !feishuNotifyTypes.has(alert.type)) {
         skipped++;
         continue;
       }
 
       try {
-        // 计算剩余天数（当月最后一天 - 今天）
-        const now = new Date();
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        const remainingDays = lastDay - now.getDate();
-
         if (alert.type === "personal_80" || alert.type === "personal_100") {
-          // 个人预警：查用户 feishu_id，通过 router 发私聊
-          const userRows = dbRaw.exec(
-            `SELECT feishu_id, name, department FROM users WHERE id = ?`,
+          const userRows = rawDb.exec(
+            "SELECT feishu_id, name, department FROM users WHERE id = ?",
             [alert.userId]
           );
-          if (userRows[0] && userRows[0].values.length > 0) {
-            const [feishuId, name, department] = userRows[0].values[0];
-
-            const message = formatQuotaAlert({
-              userName: String(name),
-              department: String(department || "未知部门"),
-              used: alert.used,
-              limit: alert.limit,
-              percent: alert.percent,
-              remainingDays,
-            });
-
-            await notifyAlert({
-              type: alert.type,
-              targetId: alert.targetId,
-              message,
-              recipientFeishuId: String(feishuId),
-            });
-            sent++;
-          } else {
-            console.warn(`[quota-alert] User ${alert.userId} not found for alert`);
+          if (!userRows[0] || userRows[0].values.length === 0) {
             skipped++;
+            continue;
           }
-        } else if (alert.type === "dept_80" || alert.type === "company_90") {
-          // 部门/公司预警：通过 router 发给选定管理员
+
+          const [feishuId, name, department] = userRows[0].values[0];
+          const message = formatQuotaAlert({
+            userName: String(name),
+            department: String(department || "未知部门"),
+            used: alert.used,
+            limit: alert.limit,
+            percent: alert.percent,
+            threshold,
+            remainingDays,
+          });
+
+          await notifyAlert({
+            type: alert.type,
+            targetId: alert.targetId,
+            message,
+            recipientFeishuId: String(feishuId),
+          });
+          sent++;
+        } else {
           const scopeLabel = alert.type === "dept_80" ? "部门" : "公司";
           const message = formatQuotaAlert({
             userName: scopeLabel,
@@ -152,6 +135,7 @@ export async function POST(request: NextRequest) {
             used: alert.used,
             limit: alert.limit,
             percent: alert.percent,
+            threshold,
             remainingDays,
           });
 
@@ -160,12 +144,9 @@ export async function POST(request: NextRequest) {
             targetId: alert.targetId,
             message,
             card: {
-              title: alert.type === "dept_80" ? "⚠️ 部门额度预警" : "⚠️ 公司额度预警",
+              title: alert.type === "dept_80" ? "部门额度预警" : "公司额度预警",
               template: "orange",
-              elements: [
-                message,
-                `📊 已用：¥${alert.used.toFixed(2)} / ¥${alert.limit.toFixed(2)}（${alert.percent}%）`,
-              ],
+              elements: [message],
             },
           });
           sent++;

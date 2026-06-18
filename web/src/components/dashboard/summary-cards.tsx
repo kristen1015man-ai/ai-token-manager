@@ -11,9 +11,23 @@ interface Summary {
   monthlyQuota: number;
   quotaUsed: number;
   quotaRemaining: number;
+  quotaPercent?: number;
 }
 
-type State = { data: Summary; error: null } | { data: null; error: string } | { data: null; error: null };
+type State =
+  | { data: Summary; error: null }
+  | { data: null; error: string }
+  | { data: null; error: null };
+
+function formatCount(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
+}
+
+function formatMoney(n: number) {
+  return `¥${n.toFixed(2)}`;
+}
 
 export default function SummaryCards({ range }: { range: string }) {
   const [state, setState] = useState<State>({ data: null, error: null });
@@ -22,10 +36,11 @@ export default function SummaryCards({ range }: { range: string }) {
     setState({ data: null, error: null });
     fetchApi<Summary>(`/api/usage/summary?range=${range}`)
       .then((d) => setState({ data: d, error: null }))
-      .catch((err) => setState({ data: null, error: err instanceof ApiError ? err.message : "加载失败" }));
+      .catch((err) =>
+        setState({ data: null, error: err instanceof ApiError ? err.message : "加载失败" })
+      );
   }, [range]);
 
-  // 加载态
   if (!state.data && !state.error) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -39,7 +54,6 @@ export default function SummaryCards({ range }: { range: string }) {
     );
   }
 
-  // 错误态
   if (state.error) {
     return (
       <div className="glass-card-static p-4 text-sm text-red-600 border-red-200/50 bg-red-50/70">
@@ -49,14 +63,32 @@ export default function SummaryCards({ range }: { range: string }) {
   }
 
   const data = state.data!;
-  const fmt = (n: number) =>
-    n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
-
+  const quotaPercent = data.quotaPercent ?? (data.monthlyQuota > 0 ? (data.quotaUsed / data.monthlyQuota) * 100 : 0);
   const cards = [
-    { label: `${data.rangeLabel}总Token`, value: fmt(data.tokens), sub: `${data.count} 次调用`, color: "text-blue-600", icon: "⚡" },
-    { label: `${data.rangeLabel}总花费`, value: `¥${data.cost.toFixed(2)}`, sub: "", color: "text-emerald-600", icon: "💰" },
-    { label: "本月已用", value: `¥${data.quotaUsed.toFixed(2)}`, sub: `额度 ¥${data.monthlyQuota}`, color: "text-purple-600", icon: "📊" },
-    { label: "本月剩余", value: `¥${data.quotaRemaining.toFixed(2)}`, sub: `额度 ¥${data.monthlyQuota}`, color: "text-orange-600", icon: "📈" },
+    {
+      label: `${data.rangeLabel} Token`,
+      value: formatCount(data.tokens),
+      sub: `${data.count} 次调用`,
+      color: "text-blue-600",
+    },
+    {
+      label: `${data.rangeLabel}花费`,
+      value: formatMoney(data.cost),
+      sub: "",
+      color: "text-emerald-600",
+    },
+    {
+      label: "本月已用",
+      value: formatMoney(data.quotaUsed),
+      sub: `${quotaPercent.toFixed(1)}% / 额度 ${formatMoney(data.monthlyQuota)}`,
+      color: "text-purple-600",
+    },
+    {
+      label: "本月剩余",
+      value: formatMoney(data.quotaRemaining),
+      sub: `已用 ${quotaPercent.toFixed(1)}%`,
+      color: "text-orange-600",
+    },
   ];
 
   return (
