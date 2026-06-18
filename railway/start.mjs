@@ -2,7 +2,6 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { timingSafeEqual } from "node:crypto";
 
 const publicPort = Number(process.env.PORT || 8080);
 const webPort = Number(process.env.WEB_PORT_INTERNAL || 3000);
@@ -114,29 +113,9 @@ function targetForPath(pathname) {
   return webPort;
 }
 
-function hasInternalApiKey(req) {
-  const internalKey = process.env.INTERNAL_API_KEY;
-  if (!internalKey) return false;
-
-  const provided = Buffer.from(String(req.headers.authorization || ""));
-  const expected = Buffer.from(`Bearer ${internalKey}`);
-  return provided.length === expected.length && timingSafeEqual(provided, expected);
-}
-
-function isAllowedExternalInternalPath(req, pathname) {
-  return (
-    req.method === "POST" &&
-    pathname === "/api/internal/admin/reset-billing" &&
-    hasInternalApiKey(req)
-  );
-}
-
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url || "/", "http://localhost").pathname;
-  if (
-    (pathname === "/api/internal" || pathname.startsWith("/api/internal/")) &&
-    !isAllowedExternalInternalPath(req, pathname)
-  ) {
+  if (pathname === "/api/internal" || pathname.startsWith("/api/internal/")) {
     res.writeHead(404, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "Not found" }));
     return;
