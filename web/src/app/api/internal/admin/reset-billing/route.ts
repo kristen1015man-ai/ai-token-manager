@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     usageLogs: hasUsageLogs ? numberScalar(db, "SELECT COUNT(*) FROM usage_logs") : 0,
     quotaReservations: hasQuotaReservations ? numberScalar(db, "SELECT COUNT(*) FROM quota_reservations") : 0,
     totalCost: hasUsageLogs ? numberScalar(db, "SELECT COALESCE(SUM(cost), 0) FROM usage_logs") : 0,
-    totalTokens: hasUsageLogs ? numberScalar(db, "SELECT COALESCE(SUM(tokens), 0) FROM usage_logs") : 0,
+    totalTokens: hasUsageLogs ? numberScalar(db, "SELECT COALESCE(SUM(total_tokens), 0) FROM usage_logs") : 0,
   };
 
   db.run("BEGIN IMMEDIATE");
