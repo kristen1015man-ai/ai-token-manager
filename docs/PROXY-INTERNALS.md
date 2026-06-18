@@ -45,6 +45,21 @@ x-api-key: sk-emp-...
 - Web 用 HMAC hash 查找，再 timing-safe 比对明文。
 - 用户不存在或 disabled 返回 401。
 
+## 2.1 限频边界
+
+当前限频在 `proxy/src/middleware/rate-limit.ts`：
+
+- 内存滑动窗口。
+- 按 `userId` 计数。
+- 每用户每分钟 60 次。
+
+边界：
+
+- Proxy 重启后计数清空。
+- 多实例横向扩展时不共享计数。
+- 该限频不能替代月额度、供应商控制台预算或风控。
+- 如未来多实例部署，需要迁移到 Redis 或外部限频服务。
+
 ## 3. 渠道选择
 
 关键文件：
@@ -176,6 +191,19 @@ Proxy 上报：
 - createdAt
 
 Web 落库时计算人民币 cost。
+
+fallback 说明：
+
+- Web 价格表正常时，缺价模型必须阻断。
+- 如果 Web 侧价格表加载失败，`web/src/lib/proxy/cache.ts` 有少量 DeepSeek fallback 价格，只作为防御性兜底。
+- 汇率有 24 小时缓存；两个公开汇率 API 都失败时会使用过期缓存，最后才用硬编码 7.2。
+- 出现 fallback 价格或 hardcoded 汇率时，运维必须标记为需要人工复核的资金风险。
+
+日志规则：
+
+- Proxy 可能记录上游错误片段，排障分享前必须脱敏。
+- usage dead-letter 可能保存 rejected record，不能直接贴到聊天或工单。
+- 不得在日志中输出完整员工 Key、供应商 Key 或 `INTERNAL_API_KEY`。
 
 ## 9. Fallback 渠道
 

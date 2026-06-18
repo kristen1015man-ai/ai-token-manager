@@ -162,6 +162,13 @@
 - `web/src/app/api/internal/proxy/quota/check/route.ts`
 - `web/src/lib/proxy/cache.ts`
 
+计费 fallback 口径：
+
+- 正常情况下缺价格必须阻断。
+- 如果价格表加载失败，`web/src/lib/proxy/cache.ts` 有极小 fallback 价格表，仅覆盖少量 DeepSeek 模型，目的是避免服务完全不可用。
+- 汇率模块有 24 小时内存缓存，两个公开汇率 API 都失败时会使用过期缓存，最后才使用硬编码 7.2。
+- 生产监控应关注 fallback 价格和 hardcoded 汇率，一旦出现需要人工复核费用。
+
 ## 9. 审计
 
 管理员写操作应记录到 `admin_logs`：
@@ -170,10 +177,96 @@
 - 权限、额度、价格等关键改动。
 - 后续新增敏感操作也应加审计。
 
+当前审计差距：
+
+- 当前代码已覆盖部分渠道和权限操作，但价格 CRUD、价格同步、预警设置、汇率刷新、余额同步、cleanup execute、reset-billing 等并非全部都有一致审计记录。
+- 接手团队修复时应补齐审计覆盖，不应把当前差距理解为允许无审计操作。
+
+要求覆盖：
+
+- 渠道和供应商 Key。
+- 模型价格和价格同步。
+- 额度。
+- 权限。
+- 预警设置。
+- 汇率刷新。
+- 余额同步。
+- cleanup。
+- 计费重置。
+- 密钥迁移。
+- internal 触发的系统操作。
+
+internal 触发时，记录为 `system/internal`，并记录触发接口、结果摘要和变更数量。
+
 关键代码：
 
 - `web/src/lib/audit-log.ts`
 - `web/src/app/api/admin/logs/route.ts`
+
+## 9.1 密钥生命周期
+
+密钥类型：
+
+- 员工 `sk-emp-...`
+- 供应商 API Key
+- 飞书 `FEISHU_APP_SECRET`
+- `INTERNAL_API_KEY`
+- `JWT_SECRET`
+- `ENCRYPTION_KEY`
+- 阿里云 AccessKey Secret
+
+规则：
+
+- 所有密钥必须有 Owner 和备份 Owner。
+- 供应商 Key 应在供应商控制台限制预算或权限。
+- 员工 Key 泄露时删除该 Key，让员工新建。
+- 供应商 Key 泄露时先在供应商控制台停用，再在渠道管理重新录入。
+- `INTERNAL_API_KEY` 泄露时必须同时更新 Web 和 Proxy 环境并重新部署。
+- `JWT_SECRET` 轮换会使现有登录 session 失效，应安排窗口。
+- `ENCRYPTION_KEY` 不得直接替换；直接替换会导致历史密文 Key 无法解密，必须先设计迁移方案。
+
+## 9.2 日志脱敏
+
+禁止在聊天、工单、日志、截图中粘贴：
+
+- 完整员工 Key。
+- 完整供应商 Key。
+- `FEISHU_APP_SECRET`
+- `INTERNAL_API_KEY`
+- `JWT_SECRET`
+- `ENCRYPTION_KEY`
+- 阿里云 AccessKey Secret。
+
+排障时只允许记录：
+
+- 前 6 位和后 4 位。
+- 已配置/未配置。
+- 更新时间。
+- 错误码和脱敏后的请求 ID。
+
+供应商原始响应、dead-letter、Railway 环境变量截图在分享前必须人工脱敏。
+
+## 9.3 安全/资金事故响应
+
+正式事故流程见 `INCIDENT-RUNBOOK.md`。
+
+高危事故包括：
+
+- `INTERNAL_API_KEY` 泄露。
+- 供应商 Key 泄露。
+- 员工 Key 泄露。
+- 异常费用暴涨。
+- 飞书同步误停用。
+- 计费重置或 cleanup 误触。
+- usage 队列持续失败。
+
+处置顺序：
+
+1. 先止血。
+2. 再轮换。
+3. 再核账。
+4. 再恢复。
+5. 最后复盘。
 
 ## 10. 禁止事项
 
@@ -184,3 +277,4 @@
 - 禁止在生产使用明文 secret 或默认 JWT secret。
 - 禁止新增未鉴权的管理写接口。
 - 禁止直接公网暴露 `3000`、`3001` 或 `/api/internal/*`。
+- 生产禁止开启 `ENABLE_DEV_LOGIN`、`ENABLE_SEED_ENDPOINT`、`ENABLE_DEBUG_ENDPOINT`、`ENABLE_CLEANUP_ENDPOINT`、`ALLOW_INSECURE_*`、`ALLOW_PLAINTEXT_SECRETS_FOR_DEV`、`ALLOW_EPHEMERAL_DATA`。

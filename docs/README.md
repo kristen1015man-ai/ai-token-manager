@@ -23,8 +23,8 @@
 | 新接手负责人 | `HANDOVER.md`, `ARCHITECTURE.md`, `OPERATIONS.md` | 建立系统全局认知和上线维护边界 |
 | 后端/全栈开发 | `PROJECT-MODULES.md`, `API.md`, `DATABASE-SCHEMA.md`, `PROXY-INTERNALS.md` | 二次开发和 Bug 修复 |
 | 运维/平台 | `OPERATIONS.md`, `monitoring.md`, `backup-restore.md`, `reverse-proxy.md` | 部署、监控、备份恢复 |
-| 安全/审计 | `SECURITY-PERMISSIONS.md`, `API.md`, `DATABASE-SCHEMA.md` | 权限、密钥、资金安全审查 |
-| 客服/管理员 | `USER-GUIDE.md`, `TROUBLESHOOTING.md` | 指导员工使用和排查常见问题 |
+| 安全/审计 | `SECURITY-PERMISSIONS.md`, `INCIDENT-RUNBOOK.md`, `API.md`, `DATABASE-SCHEMA.md` | 权限、密钥、资金安全审查 |
+| 客服/管理员 | `USER-GUIDE.md`, `SUPPORT-RUNBOOK.md`, `TROUBLESHOOTING.md` | 指导员工使用和排查常见问题 |
 | 发布负责人 | `RELEASE-CHECKLIST.md` | 每次上线前回归验收 |
 
 ## 文档职责
@@ -38,7 +38,9 @@
 | `DATABASE-SCHEMA.md` | 数据表、字段含义、写入边界和迁移说明 |
 | `PROXY-INTERNALS.md` | Hono Proxy 转发、鉴权、限额、计费、流式处理 |
 | `SECURITY-PERMISSIONS.md` | RBAC、密钥、CSRF、SSRF、内部 API 和审计要求 |
+| `INCIDENT-RUNBOOK.md` | 生产事故分级、止血、回滚、密钥泄露和费用异常处理 |
 | `USER-GUIDE.md` | 管理员、员工、财务、部门负责人使用说明 |
+| `SUPPORT-RUNBOOK.md` | 一线管理员/客服 SOP、话术和升级标准 |
 | `OPERATIONS.md` | 环境变量、部署、重启、日常任务、应急操作 |
 | `TROUBLESHOOTING.md` | 登录、密钥、计费、余额、价格、同步、排行榜排障 |
 | `RELEASE-CHECKLIST.md` | 上线前检查清单和回归场景 |
@@ -55,3 +57,15 @@
 - 改权限、密钥、鉴权、内部接口时，同步更新 `SECURITY-PERMISSIONS.md`。
 - 改定时任务、部署、环境变量时，同步更新 `OPERATIONS.md` 和 `monitoring.md`。
 - 改用户可见流程时，同步更新 `USER-GUIDE.md` 和 `TROUBLESHOOTING.md`。
+
+## 变更流程
+
+所有新增需求先建变更单。变更单必须包含：
+
+- 业务背景。
+- 影响页面、API、数据表和定时任务。
+- 验收标准。
+- 是否涉及资金、权限、密钥、飞书或 DB。
+- 回滚方案。
+
+高风险变更必须先由甲方负责人审批，再进入开发。上线前执行 `RELEASE-CHECKLIST.md` 对应项；上线后至少观察 30 分钟日志和关键指标。未写验收标准的需求不得进入开发。

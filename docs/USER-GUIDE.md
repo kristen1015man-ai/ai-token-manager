@@ -176,3 +176,35 @@ Claude Code：
 - 自己的用量和 API Key。
 
 部门负责人只能看本部门数据。
+
+## 12. 客户端配置
+
+员工使用 Sparkloom Key，不使用供应商官方 Key。
+
+OpenAI 兼容客户端：
+
+- Base URL：`https://ai.seapllo.com/v1`
+- API Key：本页新建的 `sk-emp-...`
+- Model：选择后台已开放的模型，例如 DeepSeek 或其他渠道模型
+
+Claude Code：
+
+- Base URL：`https://ai.seapllo.com/anthropic`
+- API Key：本页新建的 `sk-emp-...`
+- 不要填写 DeepSeek、SiliconFlow、OpenAI 或 Anthropic 官方 Key。
+
+如果客户端提示 Key 无效，先确认复制的是新建时的一次性明文，不是带星号的脱敏值。
+
+## 13. 提交问题时需要提供的信息
+
+员工反馈问题时，请提供：
+
+- 登录账号姓名。
+- 问题发生时间。
+- 使用的客户端。
+- 模型名。
+- 错误截图。
+- 是否刚新建或删除过 Key。
+- 如为 API 调用问题，提供 HTTP 状态码和错误文本，不要提供完整 API Key。
+
+管理员排查时参考 `SUPPORT-RUNBOOK.md` 和 `TROUBLESHOOTING.md`。

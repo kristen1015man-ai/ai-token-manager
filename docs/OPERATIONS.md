@@ -52,6 +52,47 @@
 
 如果没有持久化目录，`railway/start.mjs` 会拒绝启动，除非显式设置 `ALLOW_EPHEMERAL_DATA=true`。生产禁止使用临时数据。
 
+### 2.1 生产环境变量分级
+
+必填：
+
+- `NODE_ENV=production`
+- `JWT_SECRET`
+- `ENCRYPTION_KEY`
+- `INTERNAL_API_KEY`
+- `FEISHU_APP_ID`
+- `FEISHU_APP_SECRET`
+- `FEISHU_REDIRECT_URI`
+- `NEXT_PUBLIC_FEISHU_APP_ID`
+- `NEXT_PUBLIC_FEISHU_REDIRECT_URI`
+- `CORS_ALLOWED_ORIGINS`
+- `PUBLIC_PROXY_BASE_URL`
+- `ADMIN_IDS`
+- `RAILWAY_VOLUME_MOUNT_PATH=/data` 或 `DATABASE_URL=/data/data.db`
+
+建议显式配置：
+
+- `USAGE_QUEUE_FILE=/data/usage-queue.jsonl`
+- `USAGE_DEAD_LETTER_FILE=/data/usage-dead-letter.jsonl`
+- `MAX_REQUEST_BODY_BYTES=2097152`
+- `MAX_CHAT_BODY_BYTES=2097152`
+- `QUOTA_RESERVATION_TTL_SECONDS=600`
+- `QUOTA_DEFAULT_OUTPUT_TOKEN_RESERVE=2000`
+
+生产禁止开启：
+
+- `ALLOW_EPHEMERAL_DATA=true`
+- `ALLOW_INSECURE_DEV_AUTH=true`
+- `ALLOW_INSECURE_UPSTREAMS=true`
+- `ALLOW_PRIVATE_UPSTREAMS=true`
+- `ALLOW_PLAINTEXT_SECRETS_FOR_DEV=true`
+- `ENABLE_DEV_LOGIN=true`
+- `ENABLE_DEBUG_ENDPOINT=true`
+- `ENABLE_SEED_ENDPOINT=true`
+- `ENABLE_CLEANUP_ENDPOINT=true`
+
+临时开启任何高危开关必须有审批、时间窗口、执行人、复核人和关闭后验证记录。
+
 ## 3. 密钥生成
 
 建议：
@@ -79,6 +120,82 @@ pnpm --filter web lint
 ```
 
 如果只改文档，不需要重新部署。
+
+## 4.1 本地开发启动
+
+推荐 Node 22 + pnpm 11.4.0，和 Dockerfile 保持一致。
+
+安装依赖：
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+Web 环境变量：
+
+```bash
+cp web/.env.local.example web/.env.local
+```
+
+本地建议设置：
+
+```env
+AUTO_SYNC_ENABLED=false
+AUTO_SYNC_ON_STARTUP=false
+ENABLE_DEV_LOGIN=true
+ENABLE_SEED_ENDPOINT=true
+```
+
+Proxy 环境变量：
+
+`pnpm --filter proxy dev` 的工作目录是 `proxy/`，Proxy 不会自动读取 `web/.env.local`。需要创建 `proxy/.env` 或在 shell 环境设置：
+
+```env
+WEB_URL=http://localhost:3000
+INTERNAL_API_KEY=<必须与 web/.env.local 一致>
+PROXY_PORT=3001
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+USAGE_QUEUE_FILE=../.tmp/usage-queue.jsonl
+USAGE_DEAD_LETTER_FILE=../.tmp/usage-dead-letter.jsonl
+```
+
+分别启动：
+
+```bash
+pnpm --filter web dev
+pnpm --filter proxy dev
+```
+
+验证：
+
+```bash
+curl http://localhost:3000/api/health
+curl http://localhost:3001/health
+```
+
+本地常见坑：
+
+- Web 读 `web/.env.local`；Proxy 读 `proxy/.env` 或 shell 环境。
+- 两边 `INTERNAL_API_KEY` 必须一致。
+- 本地不想触发飞书、价格、余额定时任务时，设置 `AUTO_SYNC_ENABLED=false`。
+- `ENCRYPTION_KEY` 一旦用于已有数据，不要随意更换。
+- sql.js 是内存 DB，写入后必须经过 `saveDb()` 或 `scheduleSave()` 落盘。
+- usage queue 和 dead-letter 要放在可写路径。
+
+## 4.2 本地测试数据
+
+当前仓库没有正式自动化测试脚本，也没有纳入 package script 的标准 seed 命令。
+
+可用但受限的入口：
+
+- `/api/auth/dev-login`：仅本地、非生产、`ENABLE_DEV_LOGIN=true`，固定以开发管理员 session 登录。
+- `/api/setup/seed`：仅本地、非生产、`ENABLE_SEED_ENDPOINT=true`，且需要 admin session，会删除旧 DB 并重建模拟数据。
+
+推荐接手团队维护一条明确测试数据路径：
+
+- 提供一份脱敏的本地 `data.db` 测试库。
+- 或补一个受控 CLI seed 脚本，生成 admin、员工 Key、渠道、模型价格、usage_logs。
+- 历史辅助脚本使用前必须核对 schema 和敏感数据，不应作为新人默认入口。
 
 ## 5. 定时任务
 
@@ -248,3 +365,41 @@ BALANCE_ALERT_NOTIFY_ENABLED=false
 4. 测试登录。
 5. 测试通讯录同步。
 6. 测试飞书私聊和群消息。
+
+## 12. Railway 发布和回滚
+
+发布前：
+
+- 备份 `data.db`。
+- 记录当前 Git commit。
+- 记录 Railway 当前 deployment。
+- 导出或截图环境变量状态，敏感值必须脱敏。
+- 执行 `RELEASE-CHECKLIST.md`。
+
+代码回滚：
+
+1. 优先在 Railway 控制台 redeploy 上一个成功 deployment。
+2. 如果需要从 Git 回滚，使用 revert commit 后重新部署。
+3. 不要在不清楚数据变更的情况下直接切旧代码长时间运行。
+
+环境变量回滚：
+
+- 只回滚本次变更的变量。
+- 必须对照发布前变量快照。
+- `ENCRYPTION_KEY`、`INTERNAL_API_KEY`、`JWT_SECRET` 不得随意回滚或轮换。
+
+数据回滚：
+
+- 只在确认数据损坏时执行。
+- 恢复前停止写流量。
+- 成套恢复 `data.db`、`usage-queue.jsonl`、`usage-dead-letter.jsonl`。
+- 不要混用不同时间点的 DB 和 queue。
+
+回滚后必须验证：
+
+- `https://ai.seapllo.com/health`
+- 内部 `/api/health`
+- 管理员飞书登录
+- `/v1/models`
+- 一次小流量 chat 调用并确认 usage 入库
+- Railway 日志 10 分钟内无 `[railway] exited`、`[Usage] Flush error`、`[FeishuBot] Failed`

@@ -169,3 +169,90 @@ disabled 渠道不应纳入当前余额风险。
 - dead-letter 有新增告警。
 - 启用渠道余额 danger 告警。
 - 飞书同步 failedDepartments 大于 0 告警。
+
+## 10. 健康检查边界
+
+`/health` 只能证明入口进程和基础依赖可用，不能证明业务全链路一定正常。
+
+必须额外验证：
+
+- 飞书 OAuth 登录。
+- `/v1/models`。
+- 一次小额 chat 调用。
+- usage 入库。
+- 渠道余额同步。
+- 飞书通知发送。
+
+如果 `/health` 为 ok 但用户仍不可用，按 `TROUBLESHOOTING.md` 从登录、权限、Key、渠道和限额链路继续排查。
+
+## 11. Railway 日志查询模板
+
+优先按关键词过滤：
+
+```text
+[railway]
+[ensureTables]
+[AutoSync]
+[BalanceSync]
+[PriceSync]
+[Usage]
+[InternalAPI]
+[Feishu]
+[FeishuBot]
+[NotificationRouter]
+[QuotaAlerts]
+[Proxy]
+```
+
+常见排查组合：
+
+- 登录失败：`[Feishu]`, `invalid_state`, `account_disabled`, `callback`
+- 计费失败：`[Usage]`, `[InternalAPI]`, `dead-letter`, `Flush error`
+- 渠道失败：`[Proxy]`, `upstream`, `401`, `403`, `502`
+- 余额错误：`[BalanceSync]`, `provider`, `balance`, `failed`
+- 通知没发：`[NotificationRouter]`, `[FeishuBot]`, `sent=0`, `skipped`
+
+日志中不得出现完整员工 Key、供应商 Key、`FEISHU_APP_SECRET`、`INTERNAL_API_KEY` 或 `ENCRYPTION_KEY`。一旦出现，按 `INCIDENT-RUNBOOK.md` 的密钥泄露流程处理。
+
+## 12. 告警分级
+
+| 级别 | 条件 | 响应 |
+| --- | --- | --- |
+| P0 | 资金异常扣费、密钥泄露、全员无法登录、全员 API 不可用、DB 损坏 | 立即止血，通知甲方负责人，必要时禁用渠道或回滚 |
+| P1 | 大量 5xx/502、usage queue 持续增长、余额同步全失败、飞书同步误判离职 | 30 分钟内处理，必要时关闭自动任务 |
+| P2 | 单个供应商异常、部分员工登录失败、排行榜或通知失败 | 当日处理，记录原因和修复 |
+| P3 | 页面慢、文案问题、非关键统计延迟 | 排期修复 |
+
+资金、密钥、权限、DB 相关问题默认至少按 P1 处理；出现实际损失或泄露时升级 P0。
+
+## 13. 财务和计费监控口径
+
+每天至少核对一次：
+
+- 供应商控制台余额与 Sparkloom 渠道余额是否一致。
+- 当日总费用与供应商实际扣费是否同量级。
+- 是否出现异常高单价模型或异常高 token。
+- 是否有 `fallback` 价格参与计费。
+- 是否使用过过期汇率或兜底汇率。
+
+如果 Sparkloom 费用明显高于供应商扣费，优先检查：
+
+- 模型价格单位是否按“每百万 token”录入。
+- 缓存命中 token 是否走 cache price。
+- 上游 usage 是否缺失导致估算。
+- 汇率是否异常。
+
+## 14. 飞书通知交付限制
+
+系统只能确认调用飞书发送接口是否成功，不能证明每个接收人已经阅读。
+
+排查提醒未收到时，按顺序确认：
+
+1. 通知总开关和类型开关。
+2. 接收人或群组配置。
+3. 机器人是否在群里。
+4. 飞书应用消息权限。
+5. 飞书 API 返回码。
+6. 用户是否被飞书免打扰、离职或不可见。
+
+严重余额、费用或密钥事故不能只依赖飞书通知，应同步电话或公司应急群确认。

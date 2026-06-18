@@ -247,3 +247,100 @@ USD 价格会按 USD/CNY 汇率换算成人民币。
 5. Base URL 是否正确。
 6. Proxy 是否能访问 Web 内部接口。
 7. `INTERNAL_API_KEY` 是否两边一致。
+
+## 17. usage queue 持续增长
+
+现象：
+
+- 告警提示 pending queue 增长。
+- API 可用，但后台统计延迟。
+- Railway 日志出现 `[Usage] Flush error`。
+
+排查：
+
+1. Web `/api/health` 是否 ok。
+2. `INTERNAL_API_KEY` 是否 Web 和 Proxy 一致。
+3. `USAGE_QUEUE_FILE` 是否在持久卷且可写。
+4. `/api/internal/usage` 是否返回 2xx。
+5. 是否有价格缺失导致 Web 拒绝 usage。
+6. 是否有 DB 写入错误或表结构缺失。
+
+处理：
+
+- 不要直接删除 queue 文件。
+- 先修复 Web 内部 usage 接口或价格数据。
+- 重启 Proxy，让队列重新 flush。
+- 如果写入失败进入 dead-letter，保留文件并按记录逐条分析原因。
+
+## 18. dead-letter 有新增
+
+dead-letter 表示 Proxy 已无法自动成功上报某些 usage。
+
+处理步骤：
+
+1. 复制并保存 `usage-dead-letter.jsonl`。
+2. 查看每条失败原因、userId、model、channelId、cost。
+3. 修复对应用户、渠道、模型价格或 DB 问题。
+4. 人工补账前必须得到甲方负责人确认。
+5. 补账完成后保留原始 dead-letter 作为审计材料。
+
+不要为了清空告警直接删文件；这会破坏资金审计链路。
+
+## 19. 定时任务错过或没有执行
+
+涉及任务：
+
+- 飞书通讯录同步。
+- 价格同步。
+- 余额同步。
+- 余额提醒。
+- 排行榜。
+- 额度提醒。
+
+排查：
+
+1. `AUTO_SYNC_ENABLED` 是否为 `true`。
+2. Railway 是否发生重启或休眠。
+3. 日志是否有 `[AutoSync]`。
+4. 任务执行时间是否按北京时间理解。
+5. 飞书通知是否只是 `skipped`，不是失败。
+6. 余额提醒是否未到 09:30、12:00、14:30、17:30 的发送窗口。
+
+补救：
+
+- 飞书同步、价格同步、余额同步可在后台手动触发。
+- 排行榜可在预警记录页面发送测试。
+- 额度和余额提醒不建议随意补发，先确认不会重复打扰员工。
+
+## 20. 飞书通知返回 sent=0 或 skipped
+
+常见原因：
+
+- 通知总开关关闭。
+- 该类型通知未启用。
+- 没有接收人。
+- 机器人不在群里。
+- 飞书权限不足。
+- 没有达到阈值或没有可发送内容。
+
+处理：
+
+1. 在预警记录页面检查通知配置。
+2. 刷新机器人群组列表。
+3. 对一个管理员发送私聊测试。
+4. 对目标群发送排行榜测试。
+5. 查看 `[NotificationRouter]` 和 `[FeishuBot]` 日志。
+
+## 21. 本地环境启动失败
+
+排查：
+
+1. Node 版本是否为 22.x。
+2. pnpm 是否为 11.4.1。
+3. 是否执行过 `pnpm install --frozen-lockfile`。
+4. `web/.env.local` 是否包含 `JWT_SECRET`、`INTERNAL_API_KEY`、`ENCRYPTION_KEY`。
+5. `proxy/.env` 是否与 Web 使用同一个 `INTERNAL_API_KEY`。
+6. `WEB_URL` 是否指向 `http://localhost:3000`。
+7. 本地是否误连生产 DB 或生产飞书通知。
+
+本地调试登录可临时启用 `ENABLE_DEV_LOGIN=true`，但该变量严禁出现在生产。

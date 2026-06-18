@@ -120,12 +120,12 @@ Web 健康检查。
 | 方法 | 路径 | 角色 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/admin/overview` | admin, finance | 全局概览 |
-| GET | `/api/admin/departments` | admin, dept_manager | 部门排行 |
+| GET | `/api/admin/departments` | admin, finance, dept_manager | 部门排行 |
 | GET | `/api/admin/employees` | admin, dept_manager | 员工排行 |
 | GET | `/api/admin/org-structure` | admin | 组织架构树、异常归属人员、层级统计 |
 | GET | `/api/admin/billing/by-channel` | admin, finance, dept_manager | 按渠道分账 |
 | GET | `/api/admin/billing/by-model` | admin, finance, dept_manager | 按模型分账 |
-| GET | `/api/admin/export` | admin, finance | 导出数据 |
+| GET | `/api/admin/export` | admin, finance, dept_manager | 导出数据，dept_manager 只导出本部门范围 |
 
 ### 渠道
 
@@ -171,6 +171,8 @@ Web 健康检查。
 | POST | `/api/admin/employee-status-check` | admin 或 internal | 员工状态检查 |
 | GET | `/api/admin/feishu/chats` | admin | 机器人所在群列表 |
 | POST | `/api/admin/leaderboard-send` | admin 或 internal | 发送排行榜 |
+
+注意：标记为 `admin 或 internal` 的接口虽然不在 `/api/internal/*` 路径下，但持有 `INTERNAL_API_KEY` 也能调用。`INTERNAL_API_KEY` 泄露时，这些接口也在影响范围内，包括飞书同步、价格同步、余额同步、员工状态检查、异常检测和排行榜发送。
 
 ### 清理和迁移
 

@@ -289,3 +289,13 @@ Sparkloom 使用 sql.js SQLite。Schema 定义在 `shared/schema.ts`，运行时
 - 大表变更必须考虑锁和写盘。
 - 涉及 `usage_logs` 的查询必须检查索引。
 - 删除或重建表前必须备份 `data.db`。
+
+当前真实迁移口径：
+
+1. 类型声明改 `shared/schema.ts`。
+2. 兼容已有 SQLite 文件的 DDL 写入 `web/src/lib/ensure-tables.ts`。
+3. 如涉及历史数据修复，必须保证幂等，可重复执行。
+4. 大表、删除列、重建表、批量 UPDATE 前必须备份 `data.db`。
+5. 在生产 DB 副本上验证启动、`/api/health`、关键页面和一次真实 usage 写入。
+
+注意：根 `package.json` 暴露了 `db:generate` / `db:migrate`，但当前生产迁移依赖运行时 `ensure-tables.ts`。除非后续补齐并验证 Drizzle 配置和迁移目录，否则不要把这两个脚本当成生产迁移流程。
