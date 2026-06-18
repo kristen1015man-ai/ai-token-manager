@@ -49,8 +49,27 @@ const COMETS = [
   { x: "34%", y: "28%", width: "120px", rotate: "16deg", delay: "7.4s", duration: "10.2s" },
 ];
 
-export default function LoginPage() {
+const LOGIN_ERROR_TEXT: Record<string, string> = {
+  feishu_config: "系统登录配置需要更新，请联系管理员。",
+  account_disabled: "当前账号已停用，请联系管理员。",
+  invalid_state: "登录状态已过期，请重新进入。",
+  feishu_denied: "授权未完成，请重新进入。",
+  no_code: "授权结果无效，请重新进入。",
+  auth_failed: "登录失败，请稍后重试。",
+};
+
+type LoginPageProps = {
+  searchParams?:
+    | Promise<Record<string, string | string[] | undefined>>
+    | Record<string, string | string[] | undefined>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   const feishuAuthUrl = "/api/auth/feishu/start";
+  const params = await searchParams;
+  const rawError = params?.error;
+  const errorCode = Array.isArray(rawError) ? rawError[0] : rawError;
+  const errorText = errorCode ? LOGIN_ERROR_TEXT[errorCode] || LOGIN_ERROR_TEXT.auth_failed : "";
 
   return (
     <div className="login-page">
@@ -157,6 +176,8 @@ export default function LoginPage() {
         <div className="login-actions">
           <LoginSparkWand href={feishuAuthUrl} />
         </div>
+
+        {errorText && <p className="login-error">{errorText}</p>}
 
         <div className="login-trails" aria-hidden="true">
           <svg viewBox="0 0 760 220" fill="none">

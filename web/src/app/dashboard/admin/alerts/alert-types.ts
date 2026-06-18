@@ -13,6 +13,15 @@ export interface AdminOption {
   department: string | null;
 }
 
+export interface FeishuChatOption {
+  chatId: string;
+  name: string;
+  avatar: string | null;
+  description: string | null;
+  external: boolean;
+  chatStatus: string | null;
+}
+
 export interface AlertSettings {
   personal_threshold: string;
   dept_threshold: string;

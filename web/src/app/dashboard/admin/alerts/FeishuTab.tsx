@@ -1,8 +1,14 @@
 "use client";
 
 import AdminMultiSelect from "@/components/AdminMultiSelect";
+import Avatar from "@/components/Avatar";
 import GlassSelect from "@/components/GlassSelect";
-import { type AdminOption, type AlertSettings, NOTIFY_TYPE_OPTIONS } from "./alert-types";
+import {
+  type AdminOption,
+  type AlertSettings,
+  type FeishuChatOption,
+  NOTIFY_TYPE_OPTIONS,
+} from "./alert-types";
 
 interface FeishuTabProps {
   settings: AlertSettings;
@@ -12,6 +18,10 @@ interface FeishuTabProps {
   onTestFeishu: () => void;
   testing: boolean;
   admins: AdminOption[];
+  feishuChats: FeishuChatOption[];
+  loadingFeishuChats: boolean;
+  feishuChatsError: string | null;
+  onRefreshFeishuChats: () => void;
   onSendLeaderboard: () => void;
   sendingLeaderboard: boolean;
 }
@@ -41,6 +51,10 @@ export default function FeishuTab({
   onTestFeishu,
   testing,
   admins,
+  feishuChats,
+  loadingFeishuChats,
+  feishuChatsError,
+  onRefreshFeishuChats,
   onSendLeaderboard,
   sendingLeaderboard,
 }: FeishuTabProps) {
@@ -68,6 +82,21 @@ export default function FeishuTab({
   const parseRecipients = (key: string): string[] => {
     return parseJsonList((settings as unknown as Record<string, string>)[key] || "[]");
   };
+
+  const updateLeaderboardChatIds = (ids: string[]) => {
+    setSettings({ ...settings, leaderboard_chat_ids: JSON.stringify([...new Set(ids)]) });
+  };
+
+  const toggleLeaderboardChat = (chatId: string) => {
+    updateLeaderboardChatIds(
+      leaderboardChatIds.includes(chatId)
+        ? leaderboardChatIds.filter((id) => id !== chatId)
+        : [...leaderboardChatIds, chatId]
+    );
+  };
+
+  const knownChatIds = new Set(feishuChats.map((chat) => chat.chatId));
+  const manualOnlyChatIds = leaderboardChatIds.filter((id) => !knownChatIds.has(id));
 
   const sendDayLabel = settings.leaderboard_schedule === "weekly" ? "发送星期" : "发送日期";
   const sendDayHint =
@@ -224,22 +253,100 @@ export default function FeishuTab({
             <p className="text-xs text-gray-400 mt-1">{sendDayHint}</p>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">飞书群组 Chat ID</label>
-            <textarea
-              value={leaderboardChatIds.join("\n")}
-              onChange={(e) =>
-                setSettings({ ...settings, leaderboard_chat_ids: encodeChatIds(e.target.value) })
-              }
-              placeholder={"oc_xxxxx\noc_yyyyy"}
-              rows={3}
-              className="glass-input w-full text-sm resize-y min-h-[86px]"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              多个群组可一行一个，也可用逗号分隔。机器人必须已加入对应群组。
-            </p>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="block text-xs font-medium text-gray-600">选择机器人所在群组</label>
+              <button
+                type="button"
+                onClick={onRefreshFeishuChats}
+                disabled={loadingFeishuChats}
+                className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors disabled:opacity-50"
+              >
+                {loadingFeishuChats ? "同步中..." : "同步群组"}
+              </button>
+            </div>
+
+            {feishuChatsError && (
+              <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                {feishuChatsError}
+              </p>
+            )}
+
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-100 bg-white/70">
+              {feishuChats.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-gray-400">
+                  {loadingFeishuChats ? "正在同步群组..." : "暂无可选群组"}
+                </div>
+              ) : (
+                feishuChats.map((chat) => {
+                  const selected = leaderboardChatIds.includes(chat.chatId);
+                  return (
+                    <button
+                      key={chat.chatId}
+                      type="button"
+                      onClick={() => toggleLeaderboardChat(chat.chatId)}
+                      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-rose-50/70 ${
+                        selected ? "bg-rose-50/80" : ""
+                      }`}
+                    >
+                      <Avatar name={chat.name} size="sm" avatarUrl={chat.avatar ?? undefined} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-gray-700">{chat.name}</span>
+                        <span className="block truncate text-xs text-gray-400">
+                          {chat.chatId}
+                          {chat.external ? " · 外部群" : ""}
+                        </span>
+                      </span>
+                      <span
+                        className={`h-4 w-4 flex-shrink-0 rounded border ${
+                          selected ? "border-rose-500 bg-rose-500" : "border-gray-300 bg-white"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {selected && (
+                          <svg viewBox="0 0 16 16" className="h-full w-full text-white">
+                            <path
+                              d="M4 8.2 6.7 11 12 5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {manualOnlyChatIds.length > 0 && (
+              <p className="text-xs text-gray-400">
+                已保存但本次同步未返回：{manualOnlyChatIds.join("、")}
+              </p>
+            )}
           </div>
         </div>
+
+        <details className="rounded-xl border border-gray-100 bg-gray-50/40 p-3">
+          <summary className="cursor-pointer text-xs font-medium text-gray-500">
+            备用：手动填写 Chat ID
+          </summary>
+          <textarea
+            value={leaderboardChatIds.join("\n")}
+            onChange={(e) =>
+              setSettings({ ...settings, leaderboard_chat_ids: encodeChatIds(e.target.value) })
+            }
+            placeholder={"oc_xxxxx\noc_yyyyy"}
+            rows={3}
+            className="glass-input mt-3 min-h-[86px] w-full resize-y text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            多个群组可一行一个，也可用逗号分隔。机器人必须已加入对应群组。
+          </p>
+        </details>
 
         <div className="flex flex-wrap items-center gap-3">
           <button

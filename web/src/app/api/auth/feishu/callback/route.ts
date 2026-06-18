@@ -26,6 +26,17 @@ function classifyDeptByName(name: string): "center" | "department" | "group" {
   return "department"; // 默认部门级
 }
 
+function classifyLoginError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("code=10014") || message.toLowerCase().includes("app secret invalid")) {
+    return "feishu_config";
+  }
+  if (message.includes("Account disabled")) {
+    return "account_disabled";
+  }
+  return "auth_failed";
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -177,12 +188,13 @@ export async function GET(request: NextRequest) {
     console.error("Feishu OAuth callback error:", error);
     const host = request.headers.get("host") || "ai.seapllo.com";
     const protocol = request.headers.get("x-forwarded-proto") || "https";
+    const loginError = classifyLoginError(error);
     // 生产环境不暴露内部错误详情，防止信息泄露
     const detail = process.env.NODE_ENV === "development"
       ? (error instanceof Error ? error.message : "unknown")
       : "认证过程中发生错误，请重试";
     return NextResponse.redirect(
-      new URL(`/login?error=auth_failed&detail=${encodeURIComponent(detail)}`, `${protocol}://${host}`)
+      new URL(`/login?error=${loginError}&detail=${encodeURIComponent(detail)}`, `${protocol}://${host}`)
     );
   }
 }

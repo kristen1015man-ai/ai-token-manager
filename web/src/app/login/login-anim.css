@@ -178,6 +178,22 @@
   animation: revealUp 0.84s 1.06s ease-out forwards;
 }
 
+.login-error {
+  position: relative;
+  z-index: 2;
+  max-width: min(420px, 86vw);
+  margin: 14px auto 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 111, 80, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 248, 243, 0.72);
+  color: #b94726;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  box-shadow: 0 12px 34px rgba(255, 111, 80, 0.13);
+}
+
 .login-enter {
   position: relative;
   display: inline-flex;

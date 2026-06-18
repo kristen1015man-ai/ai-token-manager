@@ -4,7 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import { ApiError, fetchApi } from "../../../../lib/fetcher";
 import FeishuTab from "./FeishuTab";
-import { DEFAULT_SETTINGS, TYPE_LABELS, type AdminOption, type Alert, type AlertSettings } from "./alert-types";
+import {
+  DEFAULT_SETTINGS,
+  TYPE_LABELS,
+  type AdminOption,
+  type Alert,
+  type AlertSettings,
+  type FeishuChatOption,
+} from "./alert-types";
 
 type TabKey = "threshold" | "feishu" | "history";
 
@@ -52,6 +59,9 @@ export default function AlertsPage() {
   const [testing, setTesting] = useState(false);
   const [sendingLeaderboard, setSendingLeaderboard] = useState(false);
   const [admins, setAdmins] = useState<AdminOption[]>([]);
+  const [feishuChats, setFeishuChats] = useState<FeishuChatOption[]>([]);
+  const [loadingFeishuChats, setLoadingFeishuChats] = useState(false);
+  const [feishuChatsError, setFeishuChatsError] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const loadSettings = useCallback(async () => {
@@ -81,11 +91,35 @@ export default function AlertsPage() {
     }
   }, []);
 
+  const loadFeishuChats = useCallback(async () => {
+    setLoadingFeishuChats(true);
+    setFeishuChatsError(null);
+    try {
+      const data = await fetchApi<{ chats: FeishuChatOption[] }>("/api/admin/feishu/chats");
+      setFeishuChats(data.chats || []);
+      if ((data.chats || []).length === 0) {
+        setFeishuChatsError("机器人当前没有可读取的群组，请先把机器人加入目标群。");
+      }
+    } catch (e) {
+      const text = e instanceof ApiError ? e.message : "读取飞书群组失败";
+      setFeishuChats([]);
+      setFeishuChatsError(text);
+    } finally {
+      setLoadingFeishuChats(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadSettings();
     void loadAlerts();
     void loadAdmins();
   }, [loadSettings, loadAlerts, loadAdmins]);
+
+  useEffect(() => {
+    if (tab === "feishu" && feishuChats.length === 0 && !loadingFeishuChats && !feishuChatsError) {
+      void loadFeishuChats();
+    }
+  }, [tab, feishuChats.length, feishuChatsError, loadFeishuChats, loadingFeishuChats]);
 
   const flash = (type: "ok" | "err", text: string) => {
     setMsg({ type, text });
@@ -226,6 +260,10 @@ export default function AlertsPage() {
           onTestFeishu={handleTestFeishu}
           testing={testing}
           admins={admins}
+          feishuChats={feishuChats}
+          loadingFeishuChats={loadingFeishuChats}
+          feishuChatsError={feishuChatsError}
+          onRefreshFeishuChats={loadFeishuChats}
           onSendLeaderboard={handleSendLeaderboard}
           sendingLeaderboard={sendingLeaderboard}
         />

@@ -77,6 +77,59 @@ export async function sendCardMessage(
   }
 }
 
+export interface BotChat {
+  chatId: string;
+  name: string;
+  avatar: string | null;
+  description: string | null;
+  external: boolean;
+  chatStatus: string | null;
+}
+
+export async function listBotChats(): Promise<BotChat[]> {
+  const feishuClient = getClient();
+  if (!feishuClient) throw new Error("FEISHU_APP_ID/FEISHU_APP_SECRET not configured");
+
+  const chats: BotChat[] = [];
+  let pageToken: string | undefined;
+  let pageCount = 0;
+
+  do {
+    const resp = await feishuClient.im.v1.chat.list({
+      params: {
+        user_id_type: "open_id",
+        sort_type: "ByActiveTimeDesc",
+        page_size: 100,
+        page_token: pageToken,
+      },
+    });
+
+    if (resp.code && resp.code !== 0) {
+      throw new Error(`Feishu chat list failed: code=${resp.code}, msg=${resp.msg || ""}`);
+    }
+
+    for (const chat of resp.data?.items || []) {
+      if (!chat.chat_id || chat.chat_status === "dissolved") continue;
+      chats.push({
+        chatId: chat.chat_id,
+        name: chat.name || chat.chat_id,
+        avatar: chat.avatar || null,
+        description: chat.description || null,
+        external: Boolean(chat.external),
+        chatStatus: chat.chat_status || null,
+      });
+    }
+
+    pageToken = resp.data?.has_more ? resp.data?.page_token : undefined;
+    pageCount += 1;
+    if (pageCount > 20) {
+      throw new Error("Feishu chat list exceeded pagination guard");
+    }
+  } while (pageToken);
+
+  return chats;
+}
+
 export function formatQuotaAlert(params: {
   userName: string;
   department: string;
