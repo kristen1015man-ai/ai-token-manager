@@ -107,7 +107,30 @@ Detailed health checks with internal Bearer:
 - Last 20 minutes 5xx HTTP logs: none returned by Railway CLI
 - Last 20 minutes >=400 HTTP logs: only the intentional `/api/internal/admin/reset-billing` 404 check was observed
 
-## 7. Remaining Sign-Off Evidence
+## 7. Backup / Restore Evidence
+
+Railway volume check:
+
+- Attached production volume: `web-volume-4jgN`
+- Mount path: `/data`
+- Storage used during check: about `117 MB / 500 MB`
+- Root files observed: `data.db`, `usage-queue.jsonl`, `backups/`
+- Existing backup files observed under `/backups`, all about `13.5 MB`:
+  - `data-before-billing-reset-2026-06-18T06-54-01-287Z.db`
+  - `data-before-billing-reset-2026-06-18T06-54-19-791Z.db`
+  - `data-before-billing-reset-2026-06-18T06-59-48-646Z.db`
+  - `data-before-reset-mock-20260617T090549Z.db`
+
+Attempted non-destructive backup drill:
+
+- `railway ssh -- ls -lah /data` did not return in time and was terminated.
+- `railway volume files download /data.db` also did not return in time and was terminated.
+- Local temporary directory used for the attempted download was deleted.
+- No production DB copy was intentionally retained locally.
+
+Conclusion: existing backups are present, but a full backup download and restore rehearsal is still not signed off.
+
+## 8. Remaining Sign-Off Evidence
 
 以下仍需业务侧或接收方配合完成，不能由本地代码单独证明：
 
@@ -120,4 +143,3 @@ Detailed health checks with internal Bearer:
 - 余额同步和余额低提醒真实群/个人通知
 - 排行榜测试发送
 - 生产备份下载、恢复演练和回滚演练
-
