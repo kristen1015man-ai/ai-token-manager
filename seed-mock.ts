@@ -116,9 +116,6 @@ async function seedMock() {
       [u.id, u.feishuId, u.name, u.email, u.dept, u.deptId, u.empId, apiKey, u.role, u.quota, userCreateTs, userCreateTs]
     );
   }
-  // 确保管理员 api_key 和 dev-login 一致
-  db.run(`UPDATE users SET api_key = 'sk-emp-test12345678' WHERE id = 'u_admin'`);
-
   // ===== 插入渠道 =====
   console.log("📡 插入 2 个渠道...");
   const channelTs = Math.floor(Date.now() / 1000) - 60 * 86400;

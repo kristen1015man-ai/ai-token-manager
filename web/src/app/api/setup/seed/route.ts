@@ -165,10 +165,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 何广明固定 API Key（方便 dev-login）
-  const devKey = "sk-emp-heguangming-dev-key";
-  dbAny.exec(`UPDATE users SET api_key = ?, api_key_hash = ? WHERE feishu_id = 'ou_f2e284bb6701647e664c938806b08627'`, [ensureEncrypted(devKey), searchableHash(devKey)]);
-
   // ===== 渠道 =====（API Key 加密存储）
   const chCols = "(id, name, base_url, api_key, models, priority, status, created_at, currency, provider)";
   dbAny.exec(`INSERT INTO channels ${chCols} VALUES ('ch_deepseek', 'DeepSeek 官方', 'https://api.deepseek.com', ?, '["deepseek-chat","deepseek-reasoner","deepseek-v4-flash","deepseek-v4-pro"]', 0, 'active', ?, 'CNY', 'deepseek')`, [ensureEncrypted('YOUR_DEEPSEEK_API_KEY'), regTs]);

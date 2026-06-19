@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "../../../../../lib/admin-check";
-import { syncPricesFromOfficial } from "../../../../../lib/price-sync";
+import { requireInternalRequest } from "../../../../../../lib/internal-auth";
+import { syncPricesFromOfficial } from "../../../../../../lib/price-sync";
 
-export async function POST() {
-  const { error } = await requireAdmin();
-  if (error) return error;
+export async function POST(request: Request) {
+  const authError = requireInternalRequest(request);
+  if (authError) return authError;
 
   try {
     const result = await syncPricesFromOfficial();

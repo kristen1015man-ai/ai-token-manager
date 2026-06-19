@@ -412,7 +412,7 @@ services:
 # 第一步：打开管理后台，飞书登录，复制专属 Key
 
 # 第二步：设置环境变量（只需设置一次）
-export OPENAI_API_KEY=sk-emp-zhangsan-abc123
+export OPENAI_API_KEY="<employee-key-created-in-dashboard>"
 export OPENAI_BASE_URL=https://ai.yourcompany.com/v1
 
 # 完成！所有兼容 OpenAI 格式的工具和代码自动走公司代理

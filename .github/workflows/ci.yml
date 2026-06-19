@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.4.0 --activate
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Handoff gate
+        run: pnpm test
+
+      - name: Web typecheck
+        run: pnpm --filter web lint
+
+      - name: Proxy build
+        run: pnpm --filter proxy build
+
+      - name: Migration smoke
+        run: |
+          DATABASE_URL=./tmp-ci-migrate.db pnpm --filter shared db:migrate
+          rm -f ./tmp-ci-migrate.db
+
+      - name: Web production build
+        run: pnpm --filter web build
+
+      - name: Dependency audit
+        run: pnpm audit --prod --registry=https://registry.npmjs.org

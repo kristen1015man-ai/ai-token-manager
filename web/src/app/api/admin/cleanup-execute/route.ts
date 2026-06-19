@@ -3,7 +3,7 @@ import { requireAdmin } from "../../../../lib/admin-check";
 import { getDb, saveDb, resetDb, type SqliteExec } from "../../../../lib/db";
 
 function cleanupEndpointEnabled(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.ENABLE_CLEANUP_ENDPOINT === "true";
+  return process.env.NODE_ENV !== "production" && process.env.ENABLE_CLEANUP_ENDPOINT === "true";
 }
 
 // 与 cleanup-preview 相同的映射

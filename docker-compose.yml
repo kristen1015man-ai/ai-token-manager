@@ -32,10 +32,10 @@ services:
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       - USAGE_QUEUE_FILE=/proxy-data/usage-queue.jsonl
-      # 敏感字段加密密钥（可选，未配置则明文存储）
+      # Proxy 只持久化 usage 队列，不直接读写 data.db
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
     volumes:
-      # ENV-01: 两个服务共享同一个数据库文件，必须用同一个 volume
+      # usage flush 失败时的本地队列，避免短暂故障丢账
       - proxy-data:/proxy-data
     restart: unless-stopped
     healthcheck:
@@ -66,7 +66,7 @@ services:
       # Web → Proxy 内部通信地址（Docker 网络用服务名）
       - PROXY_BASE_URL=http://proxy:3001
       - PROXY_INTERNAL_URL=http://proxy:3001
-      # 敏感字段加密密钥（可选）
+      # 敏感字段加密密钥，生产必填
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       - AUTO_SYNC_ENABLED=${AUTO_SYNC_ENABLED:-true}
       - AUTO_SYNC_ON_STARTUP=${AUTO_SYNC_ON_STARTUP:-true}
@@ -75,7 +75,7 @@ services:
       - BALANCE_ALERT_TIMES=${BALANCE_ALERT_TIMES:-09:30,12:00,14:30,17:30}
       - BALANCE_ALERT_NOTIFY_ENABLED=${BALANCE_ALERT_NOTIFY_ENABLED:-true}
     volumes:
-      # ENV-01: 与 proxy 共享同一个 volume，确保读写同一个 data.db
+      # data.db 只由 web 进程读写；proxy 通过内部 HTTP API 访问
       - app-data:/data
     # ENV-03: 添加 healthcheck
     healthcheck:

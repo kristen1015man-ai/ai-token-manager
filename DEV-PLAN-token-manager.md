@@ -17,7 +17,7 @@
 - 首次登录自动生成专属 API Key（`sk-emp-{feishu_id}-{8位随机码}`）
 - 管理后台基础布局：顶部导航栏（飞书头像+姓名+登出）+ 左侧菜单 + 内容区
 - 基础路由：登录页 `/login`、仪表盘首页 `/dashboard`（暂显示占位欢迎信息）
-- 角色区分：首次部署时指定管理员（通过环境变量 `ADMIN_EMAILS`），管理员 vs 普通员工菜单不同
+- 角色区分：首次部署时指定管理员（通过环境变量 `ADMIN_IDS`），管理员 vs 普通员工菜单不同
 
 **关键文件**：
 - `ai-token-manager/package.json` — monorepo 根配置（pnpm workspace）
@@ -86,7 +86,7 @@
 - 今日概览卡片：今日已用 Token 数、今日花费金额、本月累计花费、剩余额度（进度条展示）
 - 分时段用量折线图：支持按小时（今日）、按天（本月）、按周（近 3 月）、按月（全年）切换，使用 Recharts 绘制
 - 使用明细列表：表格展示每次调用的模型、输入 Token、输出 Token、费用、时间点，支持分页（每页 20 条）
-- 我的 API Key 页面：展示当前 API Key（脱敏显示，如 `sk-emp-xxx...****`）、一键复制完整 Key、一键复制环境变量配置命令、重置 Key 按钮（需二次确认）
+- 我的 API Key 页面：新建 Key 后只展示一次完整值；后续只展示脱敏值，丢失后必须新建。
 - 后端 API：`/api/usage/summary`（今日/本月汇总）、`/api/usage/chart?granularity=hourly|daily|weekly|monthly`（分时段数据）、`/api/usage/details?page=1&size=20`（明细列表）、`/api/user/key`（Key 管理）
 
 **关键文件**：

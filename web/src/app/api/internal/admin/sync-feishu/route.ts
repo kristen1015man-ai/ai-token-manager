@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { executeSync, type SyncResult } from "./execute-sync";
-import { requireAdmin } from "../../../../lib/admin-check";
+import { executeSync, type SyncResult } from "../../../setup/sync-feishu/execute-sync";
+import { requireInternalRequest } from "../../../../../lib/internal-auth";
 
 let syncStatus: {
   running: boolean;
@@ -12,8 +12,8 @@ let syncStatus: {
 } = { running: false, progress: "idle" };
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  const authError = requireInternalRequest(request);
+  if (authError) return authError;
 
   const shouldRun = request.nextUrl.searchParams.get("run") === "1";
   if (shouldRun) {
@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  const authError = requireInternalRequest(request);
+  if (authError) return authError;
 
   let background = false;
   try {
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const result = await executeSync();
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[Sync] Failed:", error);
+    console.error("[Sync/Internal] Failed:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Sync failed" },
       { status: 500 }

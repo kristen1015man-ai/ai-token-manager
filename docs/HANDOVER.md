@@ -464,7 +464,7 @@ https://ai.seapllo.com/api/auth/feishu/callback
 
 入口：
 
-- 定时：每天北京时间 12:00、19:00。
+- 定时：每天北京时间 12:00、19:00，经 `/api/internal/admin/sync-feishu` 内部入口触发。
 - 手动：`POST /api/setup/sync-feishu`。
 - 状态：`GET /api/setup/sync-feishu`。
 
@@ -633,13 +633,19 @@ https://ai.seapllo.com/api/auth/feishu/callback
 | `/api/internal/quota-alert` | 额度预警通知 |
 | `/api/internal/admin/flush-db` | 内部 flush DB |
 | `/api/internal/admin/reset-billing` | 内部计费重置；公网入口被 `railway/start.mjs` 屏蔽 |
+| `/api/internal/admin/sync-feishu` | 内部飞书通讯录同步 |
+| `/api/internal/admin/prices/sync` | 内部官方价格同步 |
+| `/api/internal/admin/channels/balance-sync` | 内部渠道余额同步 |
+| `/api/internal/admin/anomaly-check` | 内部异常检测 |
+| `/api/internal/admin/employee-status-check` | 内部员工状态检查 |
+| `/api/internal/admin/leaderboard-send` | 内部排行榜发送 |
 
 高危：
 
 | 路径 | 说明 |
 | --- | --- |
 | `/api/setup/seed` | 重置/种子数据接口。生产严禁误触。 |
-| `/api/setup/sync-feishu` | 飞书同步，允许 admin 或 INTERNAL_API_KEY |
+| `/api/setup/sync-feishu` | 手动飞书同步，仅 admin session；内部自动任务使用 `/api/internal/admin/sync-feishu`。 |
 
 ---
 

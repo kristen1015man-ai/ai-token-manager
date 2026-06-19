@@ -1,10 +1,17 @@
 import { getDb, getRawExec } from "../../../lib/db";
 import { NextRequest } from "next/server";
 import { timingSafeEqual } from "crypto";
+import { ensureDecrypted, isEncrypted } from "../../../lib/crypto";
 
 export const dynamic = "force-dynamic";
 
 const REQUIRED_TABLES = ["users", "channels", "usage_logs", "quota_rules"];
+
+interface SecretDecryptionCheck {
+  ok: boolean;
+  checked: number;
+  failures: string[];
+}
 
 function hasInternalAuth(request: NextRequest): boolean {
   const internalKey = process.env.INTERNAL_API_KEY;
@@ -17,6 +24,60 @@ function hasInternalAuth(request: NextRequest): boolean {
     providedBuffer.length === expectedBuffer.length &&
     timingSafeEqual(providedBuffer, expectedBuffer)
   );
+}
+
+function checkEncryptedValue(label: string, value: unknown, result: SecretDecryptionCheck): void {
+  if (typeof value !== "string" || !isEncrypted(value)) return;
+
+  result.checked += 1;
+  const decrypted = ensureDecrypted(value);
+  if (!decrypted || decrypted === value || isEncrypted(decrypted)) {
+    result.failures.push(label);
+  }
+}
+
+function checkSecretDecryption(
+  db: ReturnType<typeof getRawExec>,
+  tableSet: Set<string>
+): SecretDecryptionCheck {
+  const result: SecretDecryptionCheck = { ok: true, checked: 0, failures: [] };
+  const columnsFor = (table: string) => new Set(
+    (db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []).map((row) => String(row[1]))
+  );
+
+  if (tableSet.has("channels")) {
+    const cols = columnsFor("channels");
+    const hasAccessKeySecret = cols.has("access_key_secret");
+    const channelRows = db.exec(hasAccessKeySecret
+      ? "SELECT id, api_key, access_key_secret FROM channels WHERE api_key LIKE 'enc:v1:%' OR access_key_secret LIKE 'enc:v1:%' LIMIT 5"
+      : "SELECT id, api_key, NULL FROM channels WHERE api_key LIKE 'enc:v1:%' LIMIT 5"
+    );
+    for (const row of channelRows[0]?.values ?? []) {
+      const id = String(row[0] ?? "unknown");
+      checkEncryptedValue(`channels.${id}.api_key`, row[1], result);
+      checkEncryptedValue(`channels.${id}.access_key_secret`, row[2], result);
+    }
+  }
+
+  if (tableSet.has("users")) {
+    const userRows = db.exec("SELECT id, api_key FROM users WHERE api_key LIKE 'enc:v1:%' LIMIT 5");
+    for (const row of userRows[0]?.values ?? []) {
+      checkEncryptedValue(`users.${String(row[0] ?? "unknown")}.api_key`, row[1], result);
+    }
+  }
+
+  if (tableSet.has("user_api_keys")) {
+    const cols = columnsFor("user_api_keys");
+    if (cols.has("key_encrypted")) {
+      const keyRows = db.exec("SELECT id, key_encrypted FROM user_api_keys WHERE key_encrypted LIKE 'enc:v1:%' LIMIT 5");
+      for (const row of keyRows[0]?.values ?? []) {
+        checkEncryptedValue(`user_api_keys.${String(row[0] ?? "unknown")}.key_encrypted`, row[1], result);
+      }
+    }
+  }
+
+  result.ok = result.failures.length === 0;
+  return result;
 }
 
 export async function GET(request: NextRequest) {
@@ -46,6 +107,11 @@ export async function GET(request: NextRequest) {
     checks.dbReadable = true;
     checks.missingTables = missingTables;
     if (missingTables.length > 0) ok = false;
+    const secretDecryption = checkSecretDecryption(db, tableSet);
+    checks.secretDecryption = detailed
+      ? secretDecryption
+      : { ok: secretDecryption.ok, checked: secretDecryption.checked };
+    if (!secretDecryption.ok) ok = false;
     if (tableSet.has("users")) {
       const userRows = db.exec(`SELECT status, COUNT(*) FROM users GROUP BY status`);
       checks.users = Object.fromEntries(

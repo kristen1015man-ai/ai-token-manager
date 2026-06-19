@@ -1,6 +1,7 @@
 import initSqlJs from "sql.js";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 
 const DB_PATH = path.resolve(import.meta.dirname, "data.db");
 
@@ -48,11 +49,12 @@ async function seed() {
   )`);
 
   // Seed 测试数据
+  const devApiKey = `sk-emp-dev-${crypto.randomBytes(16).toString("hex")}`;
   db.run(`INSERT INTO users VALUES (
     'test001', 'test_fid', '测试用户', NULL, 'test@test.com', '研发部',
-    NULL, 'EMP001', 'sk-emp-TESTKEY_ONLY_FOR_DEV', 'admin', 'active', 200,
+    NULL, 'EMP001', ?, 'admin', 'active', 200,
     unixepoch(), unixepoch()
-  )`);
+  )`, [devApiKey]);
   db.run(`INSERT INTO channels VALUES (
     'ch001', 'DeepSeek官方', 'https://api.deepseek.com', 'YOUR_DEEPSEEK_API_KEY_HERE',
     '["deepseek-chat","deepseek-reasoner"]', 0, 'active', unixepoch()

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "../../../../lib/admin-check";
-import { detectAnomalies } from "../../../../lib/anomaly-detect";
+import { requireInternalRequest } from "../../../../../lib/internal-auth";
+import { detectAnomalies } from "../../../../../lib/anomaly-detect";
 
-export async function POST() {
-  const { error } = await requireAdmin();
-  if (error) return error;
+export async function POST(request: Request) {
+  const authError = requireInternalRequest(request);
+  if (authError) return authError;
 
   try {
     const result = await detectAnomalies();

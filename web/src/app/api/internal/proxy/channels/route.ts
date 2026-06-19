@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { channels, modelPrices } from "../../../../../../../shared/schema";
 import { getDb } from "../../../../../lib/db";
-import { ensureDecrypted } from "../../../../../lib/crypto";
+import { ensureDecrypted, isEncrypted } from "../../../../../lib/crypto";
 import { requireInternalRequest } from "../../../../../lib/internal-auth";
 
 export const dynamic = "force-dynamic";
@@ -41,14 +41,23 @@ export async function GET(request: NextRequest) {
     pricedKeys.has(`${channelId}:${modelName}`) || pricedKeys.has(`:${modelName}`);
 
   const mapped = activeChannels
-    .map((ch) => ({
-      id: ch.id,
-      name: ch.name,
-      baseUrl: ch.baseUrl,
-      apiKey: ensureDecrypted(ch.apiKey),
-      models: parseModels(ch.models),
-      priority: ch.priority,
-    }))
+    .map((ch) => {
+      const decryptedApiKey = ensureDecrypted(ch.apiKey);
+      if (!decryptedApiKey || (isEncrypted(ch.apiKey) && decryptedApiKey === ch.apiKey)) {
+        console.error(`[Internal/Proxy/Channels] Channel ${ch.id} has unreadable apiKey; excluded from proxy routing`);
+        return null;
+      }
+
+      return {
+        id: ch.id,
+        name: ch.name,
+        baseUrl: ch.baseUrl,
+        apiKey: decryptedApiKey,
+        models: parseModels(ch.models),
+        priority: ch.priority,
+      };
+    })
+    .filter((ch): ch is NonNullable<typeof ch> => ch !== null)
     .filter((ch) => {
       if (!model) return true;
       const modelMatches = ch.models.includes(model) || ch.models.includes("*");

@@ -268,7 +268,7 @@ curl -X POST \
   -H "Authorization: Bearer $INTERNAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"background":true}' \
-  http://127.0.0.1:3000/api/setup/sync-feishu
+  http://127.0.0.1:3000/api/internal/admin/sync-feishu
 ```
 
 价格同步：
@@ -276,7 +276,7 @@ curl -X POST \
 ```bash
 curl -X POST \
   -H "Authorization: Bearer $INTERNAL_API_KEY" \
-  http://127.0.0.1:3000/api/admin/prices/sync
+  http://127.0.0.1:3000/api/internal/admin/prices/sync
 ```
 
 余额同步：
@@ -286,7 +286,7 @@ curl -X POST \
   -H "Authorization: Bearer $INTERNAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"notify":false}' \
-  http://127.0.0.1:3000/api/admin/channels/balance-sync
+  http://127.0.0.1:3000/api/internal/admin/channels/balance-sync
 ```
 
 发送余额提醒时把 `notify` 改为 `true`。

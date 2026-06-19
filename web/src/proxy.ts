@@ -150,24 +150,30 @@ function isPublicRoute(pathname: string): boolean {
  * 检查请求是否携带有效的 INTERNAL_API_KEY Bearer token。
  * auto-sync 定时任务通过此方式调用自身 API，绕过 JWT session 校验。
  */
-const INTERNAL_API_ALLOWED_PATHS = new Set([
-  "/api/setup/sync-feishu",
-  "/api/admin/prices/sync",
-  "/api/admin/channels/balance-sync",
-  "/api/admin/anomaly-check",
-  "/api/admin/employee-status-check",
-  "/api/admin/leaderboard-send",
-]);
+const internalAuthEncoder = new TextEncoder();
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const aBytes = internalAuthEncoder.encode(a);
+  const bBytes = internalAuthEncoder.encode(b);
+  const length = Math.max(aBytes.length, bBytes.length);
+  let diff = aBytes.length ^ bBytes.length;
+
+  for (let i = 0; i < length; i++) {
+    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
+  }
+
+  return diff === 0;
+}
 
 function isInternalApiRequest(request: NextRequest): boolean {
   const pathname = request.nextUrl.pathname;
-  if (!pathname.startsWith("/api/internal/") && !INTERNAL_API_ALLOWED_PATHS.has(pathname)) {
+  if (!pathname.startsWith("/api/internal/")) {
     return false;
   }
   const internalKey = process.env.INTERNAL_API_KEY;
   if (!internalKey) return false;
   const authHeader = request.headers.get("Authorization") || "";
-  return authHeader === `Bearer ${internalKey}`;
+  return constantTimeEqual(authHeader, `Bearer ${internalKey}`);
 }
 
 // ===== CSRF / Origin 校验 =====

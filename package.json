@@ -2,17 +2,19 @@
   "name": "ai-token-manager",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=22 <25",
+    "pnpm": ">=11.4.0 <12"
+  },
   "description": "公司级 AI API 代理网关 + 管理后台",
   "scripts": {
     "dev:proxy": "pnpm --filter proxy dev",
     "dev:web": "pnpm --filter web dev",
     "build:proxy": "pnpm --filter proxy build",
     "build:web": "pnpm --filter web build",
-    "db:generate": "pnpm --filter shared db:generate",
+    "test": "node scripts/handoff-gate.mjs",
     "db:migrate": "pnpm --filter shared db:migrate"
-  },
-  "devDependencies": {
-    "tsx": "^4.22.3"
   },
   "dependencies": {
     "sql.js": "^1.14.1"

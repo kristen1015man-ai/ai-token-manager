@@ -4,7 +4,7 @@
 import { getDb } from "../db";
 import { channels, quotaRules, modelPrices } from "../../../../shared/schema";
 import { eq, type InferSelectModel } from "drizzle-orm";
-import { ensureDecrypted } from "../crypto";
+import { ensureDecrypted, isEncrypted } from "../crypto";
 import { getUsdCnyRate } from "../exchange-rate";
 
 // ========== 定价表（从数据库读取，60秒缓存，渠道+模型复合键） ==========
@@ -80,14 +80,24 @@ export async function loadActiveChannels(): Promise<ChannelInfo[]> {
 
   const { db } = await getDb();
   const result = await db.select().from(channels).where(eq(channels.status, "active")).orderBy(channels.priority);
-  channelCache = result.map((ch) => ({
-    id: ch.id,
-    name: ch.name,
-    baseUrl: ch.baseUrl,
-    apiKey: ensureDecrypted(ch.apiKey),
-    models: (typeof ch.models === "string" ? JSON.parse(ch.models) : ch.models) as string[],
-    priority: ch.priority,
-  }));
+  channelCache = result
+    .map((ch) => {
+      const decryptedApiKey = ensureDecrypted(ch.apiKey);
+      if (!decryptedApiKey || (isEncrypted(ch.apiKey) && decryptedApiKey === ch.apiKey)) {
+        console.error(`[ProxyCache] Channel ${ch.id} has unreadable apiKey; excluded from routing`);
+        return null;
+      }
+
+      return {
+        id: ch.id,
+        name: ch.name,
+        baseUrl: ch.baseUrl,
+        apiKey: decryptedApiKey,
+        models: (typeof ch.models === "string" ? JSON.parse(ch.models) : ch.models) as string[],
+        priority: ch.priority,
+      };
+    })
+    .filter((ch): ch is ChannelInfo => ch !== null);
   channelCacheExpireAt = now + CHANNEL_CACHE_TTL_MS;
   return channelCache;
 }

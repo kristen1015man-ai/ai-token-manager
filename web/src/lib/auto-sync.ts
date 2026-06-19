@@ -83,12 +83,12 @@ function formatDailyTime(time: DailyTime): string {
 // 运行时端口：Railway 等平台会覆盖 PORT 环境变量（如 8080），
 // 必须动态读取，否则所有定时任务都会 ECONNREFUSED
 const SYNC_BASE = `http://localhost:${process.env.PORT || 3000}`;
-const FEISHU_SYNC_URL = `${SYNC_BASE}/api/setup/sync-feishu`;
-const PRICE_SYNC_URL = `${SYNC_BASE}/api/admin/prices/sync`;
-const BALANCE_SYNC_URL = `${SYNC_BASE}/api/admin/channels/balance-sync`;
-const ANOMALY_CHECK_URL = `${SYNC_BASE}/api/admin/anomaly-check`;
-const EMPLOYEE_STATUS_CHECK_URL = `${SYNC_BASE}/api/admin/employee-status-check`;
-const LEADERBOARD_SEND_URL = `${SYNC_BASE}/api/admin/leaderboard-send`;
+const FEISHU_SYNC_URL = `${SYNC_BASE}/api/internal/admin/sync-feishu`;
+const PRICE_SYNC_URL = `${SYNC_BASE}/api/internal/admin/prices/sync`;
+const BALANCE_SYNC_URL = `${SYNC_BASE}/api/internal/admin/channels/balance-sync`;
+const ANOMALY_CHECK_URL = `${SYNC_BASE}/api/internal/admin/anomaly-check`;
+const EMPLOYEE_STATUS_CHECK_URL = `${SYNC_BASE}/api/internal/admin/employee-status-check`;
+const LEADERBOARD_SEND_URL = `${SYNC_BASE}/api/internal/admin/leaderboard-send`;
 const STARTUP_SYNC_ENABLED = process.env.AUTO_SYNC_ON_STARTUP !== "false";
 const STARTUP_SYNC_DELAY_MS = readNonNegativeIntEnv("AUTO_SYNC_STARTUP_DELAY_MS", DEFAULT_STARTUP_SYNC_DELAY_MS);
 const BALANCE_SYNC_INTERVAL_MINUTES = readPositiveIntEnv("BALANCE_SYNC_INTERVAL_MINUTES", DEFAULT_BALANCE_SYNC_INTERVAL_MINUTES);

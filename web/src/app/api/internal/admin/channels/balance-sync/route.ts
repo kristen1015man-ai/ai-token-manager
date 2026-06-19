@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "../../../../../lib/admin-check";
-import { syncChannelBalances, sendBalanceAlert } from "../../../../../lib/balance-sync";
-import { apiHandler } from "../../../../../lib/api-handler";
-import { safeErrorSummary } from "../../../../../lib/safe-error";
+import { requireInternalRequest } from "../../../../../../lib/internal-auth";
+import { syncChannelBalances, sendBalanceAlert } from "../../../../../../lib/balance-sync";
+import { safeErrorSummary } from "../../../../../../lib/safe-error";
 
-export const POST = apiHandler(async (request: NextRequest) => {
-  const { error } = await requireAdmin();
-  if (error) return error;
+export async function POST(request: NextRequest) {
+  const authError = requireInternalRequest(request);
+  if (authError) return authError;
 
   let channelId: string | undefined;
   let notify = false;
@@ -21,9 +20,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const result = await syncChannelBalances(channelId);
   if (notify && result.alerts.length > 0) {
     sendBalanceAlert(result.alerts).catch((err) =>
-      console.error("[BalanceSync] Failed to send balance alert", safeErrorSummary(err))
+      console.error("[BalanceSync/Internal] Failed to send balance alert", safeErrorSummary(err))
     );
   }
 
   return NextResponse.json(result);
-});
+}

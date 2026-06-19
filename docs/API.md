@@ -135,7 +135,7 @@ Web 健康检查。
 | POST | `/api/admin/channels` | admin | 新增渠道 |
 | PUT | `/api/admin/channels` | admin | 更新渠道 |
 | DELETE | `/api/admin/channels` | admin | 删除渠道 |
-| POST | `/api/admin/channels/balance-sync` | admin 或 internal | 余额同步 |
+| POST | `/api/admin/channels/balance-sync` | admin | 手动余额同步 |
 
 ### 模型价格
 
@@ -145,7 +145,7 @@ Web 健康检查。
 | POST | `/api/admin/prices` | admin | 新增价格 |
 | PUT | `/api/admin/prices` | admin | 更新价格 |
 | DELETE | `/api/admin/prices` | admin | 删除价格并写黑名单 |
-| POST | `/api/admin/prices/sync` | admin 或 internal | 官方价格同步 |
+| POST | `/api/admin/prices/sync` | admin | 手动官方价格同步 |
 | GET | `/api/admin/models` | admin | 模型列表 |
 | GET/POST | `/api/admin/exchange-rate` | admin | 汇率读取/刷新 |
 
@@ -169,12 +169,12 @@ Web 健康检查。
 | GET/PUT | `/api/admin/alerts/settings` | admin | 预警配置 |
 | POST | `/api/admin/alerts/test-feishu` | admin | 测试飞书通知 |
 | POST | `/api/admin/alerts/test-anomaly` | admin | 测试异常预警 |
-| POST | `/api/admin/anomaly-check` | admin 或 internal | 异常检测 |
-| POST | `/api/admin/employee-status-check` | admin 或 internal | 员工状态检查 |
+| POST | `/api/admin/anomaly-check` | admin | 手动异常检测 |
+| POST | `/api/admin/employee-status-check` | admin | 手动员工状态检查 |
 | GET | `/api/admin/feishu/chats` | admin | 机器人所在群列表 |
-| POST | `/api/admin/leaderboard-send` | admin 或 internal | 发送排行榜 |
+| POST | `/api/admin/leaderboard-send` | admin | 手动发送排行榜 |
 
-注意：标记为 `admin 或 internal` 的接口虽然不在 `/api/internal/*` 路径下，但持有 `INTERNAL_API_KEY` 也能调用。`INTERNAL_API_KEY` 泄露时，这些接口也在影响范围内，包括飞书同步、价格同步、余额同步、员工状态检查、异常检测和排行榜发送。
+自动任务不再调用公网管理路径。所有使用 `INTERNAL_API_KEY` 的任务入口统一收敛到 `/api/internal/*`。
 
 ### 清理和迁移
 
@@ -189,8 +189,8 @@ Web 健康检查。
 
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
-| GET | `/api/setup/sync-feishu` | admin 或 internal | 查看同步状态 |
-| POST | `/api/setup/sync-feishu` | admin 或 internal | 执行同步 |
+| GET | `/api/setup/sync-feishu` | admin | 查看同步状态 |
+| POST | `/api/setup/sync-feishu` | admin | 手动执行同步 |
 | POST | `/api/setup/seed` | 受保护 | 初始化模拟数据，生产慎用 |
 
 POST body：
@@ -219,6 +219,12 @@ Authorization: Bearer ${INTERNAL_API_KEY}
 | POST | `/api/internal/quota-alert` | Web/internal | 额度预警 |
 | POST | `/api/internal/admin/reset-billing` | internal | 重置计费数据 |
 | POST | `/api/internal/admin/flush-db` | internal | 强制 DB 落盘 |
+| GET/POST | `/api/internal/admin/sync-feishu` | Web auto-sync | 飞书通讯录同步 |
+| POST | `/api/internal/admin/prices/sync` | Web auto-sync | 官方价格同步 |
+| POST | `/api/internal/admin/channels/balance-sync` | Web auto-sync | 渠道余额同步 |
+| POST | `/api/internal/admin/anomaly-check` | Web auto-sync | 异常检测 |
+| POST | `/api/internal/admin/employee-status-check` | Web auto-sync | 员工状态检查 |
+| POST | `/api/internal/admin/leaderboard-send` | Web auto-sync | 排行榜发送 |
 
 公网访问 `/api/internal/*` 会被 `railway/start.mjs` 返回 404。
 

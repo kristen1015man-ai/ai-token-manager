@@ -298,4 +298,4 @@ Sparkloom 使用 sql.js SQLite。Schema 定义在 `shared/schema.ts`，运行时
 4. 大表、删除列、重建表、批量 UPDATE 前必须备份 `data.db`。
 5. 在生产 DB 副本上验证启动、`/api/health`、关键页面和一次真实 usage 写入。
 
-注意：根 `package.json` 暴露了 `db:generate` / `db:migrate`，但当前生产迁移依赖运行时 `ensure-tables.ts`。除非后续补齐并验证 Drizzle 配置和迁移目录，否则不要把这两个脚本当成生产迁移流程。
+注意：当前正式脚本只保留 `db:migrate`，它会执行 `shared/run-migrate.mjs` 并运行自定义幂等迁移脚本。不要使用临时 schema 生成物替代人工审查后的生产迁移。
