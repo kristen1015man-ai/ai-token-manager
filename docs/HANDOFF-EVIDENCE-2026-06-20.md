@@ -5,7 +5,7 @@
 ## 1. 本地基线
 
 - Branch: `codex/production-readiness-snapshot`
-- Commit: `3631137 fix: enforce railway production validation`
+- Runtime code commit: `a06dd1a fix: add internal backup verification`
 - Tag: `handoff-2026-06-20`
 - Workspace: clean after commit
 
@@ -29,9 +29,9 @@
 - Service: `web`
 - URL: `https://ai.seapllo.com`
 - Volume: `web-volume-4jgN` mounted at `/data`
-- Deployment ID: `d38a2309-9d29-427f-8676-fc158b7948c6`
+- Deployment ID: `e7ad52b3-4c34-448a-9419-84edd050a62b`
 - Deployment status: `SUCCESS`
-- Deployment time: `2026-06-20 00:54:07 +08:00`
+- Deployment time: `2026-06-20 01:28:27 +08:00`
 
 部署前已补齐非敏感生产变量：
 
@@ -60,6 +60,7 @@ Railway build succeeded:
 - Docker build used `node:22-alpine`
 - `pnpm install --frozen-lockfile` passed
 - `cd web && pnpm next build` passed
+- Next build route list includes `/api/internal/admin/backup`
 - `pnpm --filter proxy build` passed
 - image pushed successfully
 
@@ -100,12 +101,16 @@ Detailed health checks with internal Bearer:
 - proxy dead-letter file: `/data/usage-dead-letter.jsonl`
 - active users: 152
 - disabled users: 1
+- Public `POST https://ai.seapllo.com/api/internal/admin/backup` -> 404
+- Deployment runtime logs show edge, web, and proxy started successfully after `e7ad52b3-4c34-448a-9419-84edd050a62b`
+- Last 10 minutes 5xx HTTP logs after deployment: none returned by Railway CLI
 
 ## 6. Public Exposure Checks
 
 - `GET https://ai.seapllo.com/api/internal/admin/reset-billing` -> 404
+- `POST https://ai.seapllo.com/api/internal/admin/backup` -> 404
 - Last 20 minutes 5xx HTTP logs: none returned by Railway CLI
-- Last 20 minutes >=400 HTTP logs: only the intentional `/api/internal/admin/reset-billing` 404 check was observed
+- Last 20 minutes >=400 HTTP logs: only intentional `/api/internal/admin/reset-billing` and `/api/internal/admin/backup` 404 checks were observed
 
 ## 7. Backup / Restore Evidence
 
