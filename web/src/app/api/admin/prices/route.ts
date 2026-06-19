@@ -5,11 +5,17 @@ import { getDb, saveDb, type SqliteExec } from "../../../../lib/db";
 import { modelPrices, channels, syncBlacklist } from "../../../../../../shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { apiHandler } from "../../../../lib/api-handler";
+import { auditLog } from "../../../../lib/audit-log";
 
-function parseNonNegativeNumber(value: unknown, field: string): { value?: number; error?: NextResponse } {
+function parseNumber(value: unknown, field: string, options: { allowZero: boolean }): { value?: number; error?: NextResponse } {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return { error: NextResponse.json({ error: `${field} must be a non-negative number` }, { status: 400 }) };
+  if (!Number.isFinite(parsed) || parsed < 0 || (!options.allowZero && parsed === 0)) {
+    return {
+      error: NextResponse.json(
+        { error: options.allowZero ? `${field} must be a non-negative number` : `${field} must be greater than 0` },
+        { status: 400 }
+      ),
+    };
   }
   return { value: parsed };
 }
@@ -61,7 +67,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
 
 /** 创建模型价格（支持渠道专属定价） */
 export const POST = apiHandler(async (request: NextRequest) => {
-  const { error: authError } = await requireAdmin();
+  const { session, error: authError } = await requireAdmin();
   if (authError) return authError;
 
   const body = await request.json();
@@ -71,11 +77,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (inputPerMillion === undefined || outputPerMillion === undefined) {
     return NextResponse.json({ error: "缺少 inputPerMillion 或 outputPerMillion" }, { status: 400 });
   }
-  const input = parseNonNegativeNumber(inputPerMillion, "inputPerMillion");
+  const input = parseNumber(inputPerMillion, "inputPerMillion", { allowZero: false });
   if (input.error) return input.error;
-  const output = parseNonNegativeNumber(outputPerMillion, "outputPerMillion");
+  const output = parseNumber(outputPerMillion, "outputPerMillion", { allowZero: false });
   if (output.error) return output.error;
-  const cache = parseNonNegativeNumber(cachePerMillion ?? 0, "cachePerMillion");
+  const cache = parseNumber(cachePerMillion ?? 0, "cachePerMillion", { allowZero: true });
   if (cache.error) return cache.error;
 
   const { db } = await getDb();
@@ -116,13 +122,21 @@ export const POST = apiHandler(async (request: NextRequest) => {
     createdAt: now,
   });
   await saveDb();
+  await auditLog(session.userId, "create", "price", id, {
+    model,
+    channelId: normalizedChannelId,
+    inputPerMillion: input.value,
+    outputPerMillion: output.value,
+    cachePerMillion: cache.value,
+    currency: currency || "CNY",
+  });
 
   return NextResponse.json({ success: true, id });
 });
 
 /** 更新模型价格 */
 export const PUT = apiHandler(async (request: NextRequest) => {
-  const { error: authError } = await requireAdmin();
+  const { session, error: authError } = await requireAdmin();
   if (authError) return authError;
 
   const body = await request.json();
@@ -130,19 +144,23 @@ export const PUT = apiHandler(async (request: NextRequest) => {
   if (!id) return NextResponse.json({ error: "缺少 id" }, { status: 400 });
 
   const { db } = await getDb();
+  const beforeRows = await db.select().from(modelPrices).where(eq(modelPrices.id, id)).limit(1);
+  if (beforeRows.length === 0) {
+    return NextResponse.json({ error: "价格不存在" }, { status: 404 });
+  }
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
   if (inputPerMillion !== undefined) {
-    const parsed = parseNonNegativeNumber(inputPerMillion, "inputPerMillion");
+    const parsed = parseNumber(inputPerMillion, "inputPerMillion", { allowZero: false });
     if (parsed.error) return parsed.error;
     updateData.inputPerMillion = parsed.value;
   }
   if (outputPerMillion !== undefined) {
-    const parsed = parseNonNegativeNumber(outputPerMillion, "outputPerMillion");
+    const parsed = parseNumber(outputPerMillion, "outputPerMillion", { allowZero: false });
     if (parsed.error) return parsed.error;
     updateData.outputPerMillion = parsed.value;
   }
   if (cachePerMillion !== undefined) {
-    const parsed = parseNonNegativeNumber(cachePerMillion, "cachePerMillion");
+    const parsed = parseNumber(cachePerMillion, "cachePerMillion", { allowZero: true });
     if (parsed.error) return parsed.error;
     updateData.cachePerMillion = parsed.value;
   }
@@ -154,13 +172,18 @@ export const PUT = apiHandler(async (request: NextRequest) => {
 
   await db.update(modelPrices).set(updateData).where(eq(modelPrices.id, id));
   await saveDb();
+  await auditLog(session.userId, "update", "price", id, {
+    before: beforeRows[0],
+    updatedFields: Object.keys(updateData),
+    afterPatch: updateData,
+  });
 
   return NextResponse.json({ success: true });
 });
 
 /** 删除模型价格 */
 export const DELETE = apiHandler(async (request: NextRequest) => {
-  const { error: authError } = await requireAdmin();
+  const { session, error: authError } = await requireAdmin();
   if (authError) return authError;
 
   const { id } = await request.json();
@@ -196,6 +219,13 @@ export const DELETE = apiHandler(async (request: NextRequest) => {
   }
 
   await saveDb();
+  await auditLog(session.userId, "delete", "price", id, {
+    model: price.model,
+    channelId: price.channelId || null,
+    inputPerMillion: price.inputPerMillion,
+    outputPerMillion: price.outputPerMillion,
+    cachePerMillion: price.cachePerMillion,
+  });
 
   return NextResponse.json({ success: true });
 });

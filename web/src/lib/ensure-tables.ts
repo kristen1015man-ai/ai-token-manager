@@ -357,26 +357,40 @@ export async function ensureAllTables() {
   try { dbRaw.exec("CREATE INDEX IF NOT EXISTS idx_mp_model ON model_prices(model)"); } catch {}
 
   // ===== sync_blacklist 表 =====
-  const blHasChannelId = hasColumn(dbRaw, "sync_blacklist", "channel_id");
-  if (blHasChannelId) {
-    dbRaw.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);
-  } else {
-    const blExists = dbRaw.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='sync_blacklist'`);
-    if (blExists[0]?.values?.length) {
-      try {
-        dbRaw.exec(`BEGIN TRANSACTION`);
-        dbRaw.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist_new (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);
-        dbRaw.exec(`INSERT OR IGNORE INTO sync_blacklist_new (model, channel_id, created_at) SELECT model, NULL, created_at FROM sync_blacklist`);
-        dbRaw.exec(`DROP TABLE sync_blacklist`);
-        dbRaw.exec(`ALTER TABLE sync_blacklist_new RENAME TO sync_blacklist`);
-        dbRaw.exec(`COMMIT`);
-      } catch (e) {
-        try { dbRaw.exec(`ROLLBACK`); } catch {}
-        console.error("[ensureTables] sync_blacklist 迁移失败，已回滚:", e);
+  try {
+    const blExists = dbRaw.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='sync_blacklist'`);
+    const ddl = String(blExists[0]?.values?.[0]?.[0] || "");
+    const blHasChannelId = hasColumn(dbRaw, "sync_blacklist", "channel_id");
+    const needsMigration = !!ddl && (ddl.toUpperCase().includes("WITHOUT ROWID") || !blHasChannelId);
+
+    if (!ddl) {
+      dbRaw.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()))`);
+    } else if (needsMigration) {
+      dbRaw.exec(`BEGIN TRANSACTION`);
+      dbRaw.exec(`DROP TABLE IF EXISTS sync_blacklist_new`);
+      dbRaw.exec(`CREATE TABLE sync_blacklist_new (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()))`);
+      if (blHasChannelId) {
+        dbRaw.exec(`INSERT INTO sync_blacklist_new (model, channel_id, created_at) SELECT model, NULLIF(channel_id, ''), MIN(created_at) FROM sync_blacklist GROUP BY model, NULLIF(channel_id, '')`);
+      } else {
+        dbRaw.exec(`INSERT INTO sync_blacklist_new (model, channel_id, created_at) SELECT model, NULL, MIN(created_at) FROM sync_blacklist GROUP BY model`);
       }
-    } else {
-      dbRaw.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (model TEXT NOT NULL, channel_id TEXT, created_at INTEGER NOT NULL DEFAULT (unixepoch()), PRIMARY KEY (model, channel_id)) WITHOUT ROWID`);
+      dbRaw.exec(`DROP TABLE sync_blacklist`);
+      dbRaw.exec(`ALTER TABLE sync_blacklist_new RENAME TO sync_blacklist`);
+      dbRaw.exec(`COMMIT`);
     }
+    dbRaw.exec(`
+      DELETE FROM sync_blacklist
+      WHERE rowid NOT IN (
+        SELECT MIN(rowid)
+        FROM sync_blacklist
+        GROUP BY model, COALESCE(channel_id, '__global__')
+      )
+    `);
+    dbRaw.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blacklist_global_model ON sync_blacklist(model) WHERE channel_id IS NULL");
+    dbRaw.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blacklist_channel_model ON sync_blacklist(channel_id, model) WHERE channel_id IS NOT NULL");
+  } catch (e) {
+    try { dbRaw.exec(`ROLLBACK`); } catch {}
+    console.error("[ensureTables] sync_blacklist 迁移失败，已回滚:", e);
   }
 
   // ===== channels 表辅助列 =====

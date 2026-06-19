@@ -9,7 +9,7 @@ import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import anthropicRoutes from "./routes/anthropic.js";
 import chatRoutes from "./routes/chat.js";
 import modelRoutes from "./routes/models.js";
-import { flushUsageToWeb, getUsageQueueHealth } from "./services/usage.js";
+import { clearUsageQueue, flushUsageToWeb, getUsageQueueHealth } from "./services/usage.js";
 import { checkWebHealth, getProxyHealth } from "./services/web-internal.js";
 
 const app = new Hono();
@@ -67,6 +67,14 @@ app.get("/health", async (c) => {
     web,
     usageQueue,
   }, ok ? 200 : 503);
+});
+
+app.post("/internal/admin/usage-queue/clear", async (c) => {
+  if (!hasInternalAuth(c.req.header("authorization"))) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const result = clearUsageQueue();
+  return c.json({ success: true, ...result });
 });
 
 // ===== OpenAI 兼容接口 =====

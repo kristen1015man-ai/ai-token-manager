@@ -63,6 +63,28 @@ function cleanupProxyUsageQueue(dbPath: string) {
   };
 }
 
+async function clearProxyMemoryQueue(): Promise<{ ok: boolean; detail: unknown }> {
+  const internalKey = process.env.INTERNAL_API_KEY;
+  if (!internalKey) return { ok: false, detail: "INTERNAL_API_KEY missing" };
+
+  const proxyUrl = (process.env.PROXY_INTERNAL_URL || "http://127.0.0.1:3001").replace(/\/+$/, "");
+  try {
+    const resp = await fetch(`${proxyUrl}/internal/admin/usage-queue/clear`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${internalKey}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    const text = await resp.text();
+    let detail: unknown = text;
+    try {
+      detail = text ? JSON.parse(text) : null;
+    } catch {}
+    return { ok: resp.ok, detail };
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function POST(request: NextRequest) {
   const authError = requireInternalRequest(request);
   if (authError) return authError;
@@ -73,6 +95,14 @@ export async function POST(request: NextRequest) {
   await saveDb();
   const dbPath = resolveDbPath();
   const backupPath = backupDbFile(dbPath);
+  const proxyMemoryQueue = await clearProxyMemoryQueue();
+  if (!proxyMemoryQueue.ok) {
+    return NextResponse.json({
+      error: "Failed to clear proxy in-memory usage queue; billing reset aborted",
+      backupPath,
+      proxyMemoryQueue,
+    }, { status: 502 });
+  }
 
   const hasUsageLogs = tableExists(db, "usage_logs");
   const hasQuotaReservations = tableExists(db, "quota_reservations");
@@ -108,6 +138,7 @@ export async function POST(request: NextRequest) {
     cleared: {
       usageLogs: before.usageLogs,
       quotaReservations: before.quotaReservations,
+      proxyMemoryQueue,
       proxyQueue,
     },
   });

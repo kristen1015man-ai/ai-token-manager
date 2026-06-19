@@ -162,9 +162,10 @@ async function migrate() {
     `CREATE TABLE IF NOT EXISTS sync_blacklist (
       model TEXT NOT NULL,
       channel_id TEXT,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      PRIMARY KEY (model, channel_id)
-    ) WITHOUT ROWID`,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blacklist_global_model ON sync_blacklist(model) WHERE channel_id IS NULL`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blacklist_channel_model ON sync_blacklist(channel_id, model) WHERE channel_id IS NOT NULL`,
 
     // 预警设置表
     `CREATE TABLE IF NOT EXISTS alert_settings (

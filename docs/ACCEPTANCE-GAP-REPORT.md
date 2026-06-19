@@ -24,6 +24,8 @@
 
 ### 2.1 限额预占可被单次大请求打穿
 
+状态：已在 `web/src/app/api/internal/proxy/quota/check/route.ts` 修复为 `used + reserved + estimatedCost > limit` 即拒绝，且不再截断预占金额。仍需补自动化测试和线上回归证据。
+
 证据：
 
 - `web/src/app/api/internal/proxy/quota/check/route.ts`
@@ -121,6 +123,8 @@
 
 ### 2.6 员工 Key 泄露和误停用恢复缺少后台闭环
 
+状态：已新增管理员 API `GET/DELETE /api/admin/user-keys` 和 `GET/PATCH /api/admin/users/status`，并新增后台页面 `/dashboard/admin/emergency`，支持应急吊销员工 Key、查询/恢复/停用用户，并写入审计日志。仍需补演练证据。
+
 证据：
 
 - `docs/INCIDENT-RUNBOOK.md`
@@ -142,6 +146,8 @@
 ## 3. P1 必须补充或修复项
 
 ### 3.1 RBAC 管理员来源不一致
+
+状态：已移除源码硬编码管理员，飞书同步只按 `ADMIN_IDS` 维护 admin 角色，并修复复合角色撤权不彻底问题；`.env.example` 和 `docker-compose.yml` 已改为 `ADMIN_IDS`。仍需补生产 `ADMIN_IDS` 脱敏核对记录。
 
 证据：
 
@@ -188,6 +194,8 @@
 
 ### 3.3 审计日志覆盖不足
 
+状态：已补模型价格 CRUD 审计和管理员 Key/用户状态应急操作审计。余额同步、预警设置、cleanup、reset-billing 等仍需继续补齐。
+
 证据：
 
 - `docs/SECURITY-PERMISSIONS.md`
@@ -205,6 +213,8 @@
 - 对价格、额度、余额、账单重置等操作，审计失败应 fail-closed，或写入外部不可篡改日志。
 
 ### 3.4 usage queue/dead-letter 永久错误会重复重试
+
+状态：已修改 Proxy：Web 明确拒收的 usage 会写入 dead-letter 并移出重试队列，不再无限重试。仍需补人工 replay 工具和告警。
 
 证据：
 
@@ -224,6 +234,8 @@
 
 ### 3.5 计费重置不清 Proxy 内存队列
 
+状态：已新增 Proxy 内部接口 `POST /internal/admin/usage-queue/clear`，`reset-billing` 会先调用该接口清空 Proxy 内存 queue；清理失败则中止重置。仍需在线上演练。
+
 证据：
 
 - `web/src/app/api/internal/admin/reset-billing/route.ts`
@@ -241,6 +253,8 @@
 - 写入运维手册并演练。
 
 ### 3.6 `sync_blacklist` schema 与全局黑名单口径冲突
+
+状态：已修复运行时 DDL、seed 和 shared migrate，改为普通 rowid 表加两个 partial unique index，支持 `channel_id IS NULL` 的全局黑名单。仍需补删除全局价格后不被同步恢复的回归用例。
 
 证据：
 

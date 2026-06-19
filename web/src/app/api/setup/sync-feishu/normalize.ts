@@ -2,7 +2,6 @@ import { type SqliteExec } from "../../../../lib/db";
 import {
   USER_DEPT_OVERRIDE,
   DEPT_CENTER_FALLBACK,
-  HARDCODED_ADMIN_IDS,
   computeDepartment,
 } from "./constants";
 
@@ -10,7 +9,10 @@ import {
  * 部门规范化 + 中心归属补全 + 管理员保护
  * 从 executeSync 的步骤 5.5 提取。
  */
-export async function normalizeAndProtect(db: SqliteExec): Promise<{
+export async function normalizeAndProtect(
+  db: SqliteExec,
+  adminIds: string[] = []
+): Promise<{
   normalizedCount: number;
   centerFixedCount: number;
   adminProtectedCount: number;
@@ -60,9 +62,9 @@ export async function normalizeAndProtect(db: SqliteExec): Promise<{
       }
       const centerChanged = newCenter !== rawCenter;
 
-      // 管理员保护：硬编码管理员的 admin 角色不会被同步降级
+      // 管理员保护：仅以 ADMIN_IDS 环境变量作为同步期 admin 白名单。
       let newRole = rawRole;
-      if (HARDCODED_ADMIN_IDS.has(feishuId)) {
+      if (adminIds.includes(feishuId)) {
         const roles = rawRole.split(",").map((s: string) => s.trim()).filter(Boolean);
         if (!roles.includes("admin")) {
           roles.push("admin");

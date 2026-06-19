@@ -214,14 +214,11 @@ export async function flushUsageToWeb(): Promise<void> {
           const rejectedBatch = rejectedIds.size > 0 && rejectedIds.size >= rejectedCount
             ? batch.filter((record) => rejectedIds.has(record.id))
             : batch;
-          console.error(`[Usage] Web rejected ${rejectedBatch.length} usage records; kept in retry queue and copied to dead-letter file`);
+          console.error(`[Usage] Web rejected ${rejectedBatch.length} usage records; moved to dead-letter file and removed from retry queue`);
           appendDeadLetter(rejectedBatch, parsed);
-          pendingRecords = [
-            ...pendingRecords.slice(batch.length),
-            ...rejectedBatch,
-          ];
+          pendingRecords = pendingRecords.slice(batch.length);
           rewritePersistedQueue();
-          scheduleFlush(RETRY_INTERVAL_MS);
+          if (pendingRecords.length > 0) scheduleFlush(FLUSH_INTERVAL_MS);
           return;
         }
       } catch {
@@ -309,5 +306,21 @@ export function getUsageQueueHealth() {
     pendingRecords: pendingRecords.length,
     queueFile: QUEUE_FILE,
     persistedQueueConfigured: Boolean(QUEUE_FILE),
+  };
+}
+
+export function clearUsageQueue(): { clearedPendingRecords: number; queueFile: string; deadLetterFile: string } {
+  ensureQueueLoaded();
+  const clearedPendingRecords = pendingRecords.length;
+  pendingRecords = [];
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  rewritePersistedQueue();
+  return {
+    clearedPendingRecords,
+    queueFile: QUEUE_FILE,
+    deadLetterFile: DEAD_LETTER_FILE,
   };
 }

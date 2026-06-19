@@ -164,9 +164,15 @@ Proxy 不直接写 DB，而是向 Web 上报。
 - 每 2 秒 flush 一次。
 - 批量大小 50。
 - Web 不可用时 5 秒后重试。
-- Web 拒绝记录时写 dead-letter，并保留重试队列。
+- Web 明确拒绝记录时写 dead-letter，并从重试队列移除，避免永久坏数据无限重试。
 - Proxy 启动时加载持久队列。
 - SIGTERM/SIGINT 时 flush。
+
+内部维护：
+
+- `POST /internal/admin/usage-queue/clear` 可由 Web 使用 `INTERNAL_API_KEY` 调用。
+- `reset-billing` 会先清 Proxy 内存 queue；如果清理失败，会中止重置，避免旧 usage 在重置后写回。
+- dead-letter 不是自动重试队列，人工确认和补账前不得直接回灌。
 
 ## 8. 费用计算边界
 

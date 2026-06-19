@@ -191,6 +191,76 @@ export function deleteUserApiKey(db: SqliteExec, userId: string, keyId: string):
   return listUserApiKeys(db, userId);
 }
 
+export function adminRevokeUserApiKey(
+  db: SqliteExec,
+  userId: string,
+  keyId: string,
+  options: { allowLastKey?: boolean } = {}
+): { keys: UserApiKeyListItem[]; revoked: UserApiKeyListItem } {
+  ensureUserApiKeysTable(db);
+
+  const existing = db.exec(
+    `SELECT id, key_hash, masked_key, name, created_at, last_used_at
+     FROM user_api_keys
+     WHERE user_id = ?
+     ORDER BY created_at ASC`,
+    [userId]
+  );
+  const rows = existing[0]?.values || [];
+  if (rows.length === 0) {
+    throw new Error("API key not found");
+  }
+  if (rows.length <= 1 && options.allowLastKey !== true) {
+    throw new Error("At least one API key must remain");
+  }
+
+  const target = rows.find((row) => String(row[0]) === keyId);
+  if (!target) {
+    throw new Error("API key not found");
+  }
+
+  const revoked: UserApiKeyListItem = {
+    id: String(target[0]),
+    maskedKey: String(target[2] || ""),
+    name: String(target[3] || "API Key"),
+    createdAt: Number(target[4] || 0),
+    lastUsedAt: target[5] === null || target[5] === undefined ? null : Number(target[5]),
+  };
+  const targetHash = String(target[1] || "");
+  const now = Math.floor(Date.now() / 1000);
+
+  db.run("DELETE FROM user_api_keys WHERE user_id = ? AND id = ?", [userId, keyId]);
+
+  const replacement = db.exec(
+    `SELECT key_encrypted, key_hash
+     FROM user_api_keys
+     WHERE user_id = ?
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId]
+  );
+  const replacementRow = replacement[0]?.values?.[0];
+  const userHashResult = db.exec("SELECT api_key_hash FROM users WHERE id = ?", [userId]);
+  const currentUserHash = String(userHashResult[0]?.values?.[0]?.[0] || "");
+
+  if (replacementRow) {
+    if (currentUserHash === targetHash) {
+      db.run(
+        "UPDATE users SET api_key = ?, api_key_hash = ?, updated_at = ? WHERE id = ?",
+        [String(replacementRow[0]), String(replacementRow[1]), now, userId]
+      );
+    }
+  } else {
+    const revokedSentinel = `revoked-${randomBytes(16).toString("hex")}`;
+    db.run(
+      "UPDATE users SET api_key = ?, api_key_hash = ?, updated_at = ? WHERE id = ?",
+      [ensureEncrypted(revokedSentinel), searchableHash(revokedSentinel), now, userId]
+    );
+  }
+
+  return { keys: listUserApiKeys(db, userId), revoked };
+}
+
 export function findStoredApiKeyByHash(db: SqliteExec, keyHash: string): StoredUserApiKey | null {
   ensureUserApiKeysTable(db);
   const result = db.exec(

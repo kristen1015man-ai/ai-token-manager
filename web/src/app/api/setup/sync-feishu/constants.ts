@@ -38,12 +38,6 @@ export const USER_DEPT_OVERRIDE: Record<string, { department: string; center_nam
   "ou_6af5ecae880f5e73d8bb9cf11b765b0d": { department: "运营部", center_name: "营销中心" }, // 刘雨 → 运营部
 };
 
-/** 硬编码管理员（飞书 open_id），同步时不会被降级 */
-export const HARDCODED_ADMIN_IDS = new Set([
-  "ou_f2e284bb6701647e664c938806b08627", // 何广明
-  "ou_0d5004133227007a479e05d54d5c4b50", // 陈四华
-]);
-
 /** 计算用户最终部门归属 */
 export function computeDepartment(groupName: string | null, department: string): string {
   // 1. 组名映射优先

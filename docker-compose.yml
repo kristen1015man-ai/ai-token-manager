@@ -62,9 +62,10 @@ services:
       # ENV-02: JWT_SECRET 不提供默认值，强制用户在 .env 中设置
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
-      - ADMIN_EMAILS=${ADMIN_EMAILS:-admin@yourcompany.com}
+      - ADMIN_IDS=${ADMIN_IDS:?ADMIN_IDS is required}
       # Web → Proxy 内部通信地址（Docker 网络用服务名）
       - PROXY_BASE_URL=http://proxy:3001
+      - PROXY_INTERNAL_URL=http://proxy:3001
       # 敏感字段加密密钥（可选）
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       - AUTO_SYNC_ENABLED=${AUTO_SYNC_ENABLED:-true}

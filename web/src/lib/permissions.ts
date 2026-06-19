@@ -77,6 +77,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: "预警记录", href: "/dashboard/admin/alerts", icon: "bell", roles: ["admin"] },
   { label: "操作日志", href: "/dashboard/admin/logs", icon: "document", roles: ["admin"] },
   { label: "权限管理", href: "/dashboard/admin/permissions", icon: "lock", roles: ["admin"] },
+  { label: "员工应急", href: "/dashboard/admin/emergency", icon: "shield", roles: ["admin"] },
 ];
 
 /** 获取某个角色（逗号分隔）可见的菜单项（多角色取并集） */

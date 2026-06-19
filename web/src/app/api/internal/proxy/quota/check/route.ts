@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     message: string
   ) => {
     const remaining = Math.max(0, limit - used - reserved);
-    if (used + reserved >= limit) {
+    if (used + reserved >= limit || estimatedCost > remaining + 1e-9) {
       return NextResponse.json({
         ok: false,
         message,
@@ -122,7 +122,6 @@ export async function POST(request: NextRequest) {
         quotaInfo: { used, reserved, estimatedCost, remaining, limit, scope, period },
       }, { status: 429 });
     }
-    reservationCost = Math.min(reservationCost, remaining);
     return null;
   };
 

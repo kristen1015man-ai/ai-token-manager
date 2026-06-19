@@ -155,6 +155,8 @@ Web 健康检查。
 | --- | --- | --- | --- |
 | GET/POST | `/api/admin/quotas` | admin | 限额读取、单个或批量更新 |
 | GET/POST/DELETE/PUT | `/api/admin/permissions` | admin | 角色读取、添加、移除、兼容式覆盖 |
+| GET/DELETE | `/api/admin/user-keys` | admin | 查询员工 Key 脱敏列表、应急吊销员工 Key |
+| GET/PATCH | `/api/admin/users/status` | admin | 查询用户状态、恢复或停用用户 |
 | GET | `/api/admin/admins-list` | admin | 管理员选择列表 |
 | GET | `/api/admin/logs` | admin | 管理日志 |
 | GET | `/api/admin/audit-logs` | admin | 审计日志 |
@@ -219,6 +221,12 @@ Authorization: Bearer ${INTERNAL_API_KEY}
 | POST | `/api/internal/admin/flush-db` | internal | 强制 DB 落盘 |
 
 公网访问 `/api/internal/*` 会被 `railway/start.mjs` 返回 404。
+
+Proxy 内部管理接口：
+
+| 方法 | 路径 | 调用方 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/internal/admin/usage-queue/clear` | Web/internal | 清空 Proxy 内存 usage queue，并重写空持久队列文件 |
 
 ## 8. 已禁用旧代理 API
 

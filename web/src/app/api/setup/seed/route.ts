@@ -140,9 +140,10 @@ export async function POST(request: NextRequest) {
   // ===== 同步黑名单 =====
   dbAny.exec(`CREATE TABLE IF NOT EXISTS sync_blacklist (
     model TEXT NOT NULL, channel_id TEXT,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    PRIMARY KEY (model, channel_id)
-  ) WITHOUT ROWID`);
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  dbAny.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blacklist_global_model ON sync_blacklist(model) WHERE channel_id IS NULL`);
+  dbAny.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blacklist_channel_model ON sync_blacklist(channel_id, model) WHERE channel_id IS NOT NULL`);
 
   // ===== 插入用户 =====
   const now = Math.floor(Date.now() / 1000);

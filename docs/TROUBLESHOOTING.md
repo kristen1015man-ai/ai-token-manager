@@ -84,7 +84,7 @@ curl https://ai.seapllo.com/v1/models \
 规则：
 
 - Proxy 请求前按输入估算和输出 token 预占费用。
-- 如果 `used + reserved >= limit`，直接 429。
+- 如果 `used + reserved + estimatedCost > limit`，直接 429。
 - 请求成功落 usage 后会删除 reservation。
 - 上游失败会释放 reservation。
 
@@ -270,11 +270,11 @@ USD 价格会按 USD/CNY 汇率换算成人民币。
 - 不要直接删除 queue 文件。
 - 先修复 Web 内部 usage 接口或价格数据。
 - 重启 Proxy，让队列重新 flush。
-- 如果写入失败进入 dead-letter，保留文件并按记录逐条分析原因。
+- 如果 Web 明确拒收 usage，记录会进入 dead-letter 并从重试队列移除；保留文件并按记录逐条分析原因。
 
 ## 18. dead-letter 有新增
 
-dead-letter 表示 Proxy 已无法自动成功上报某些 usage。
+dead-letter 表示 Proxy 已无法自动成功上报某些 usage。当前规则是：Web 明确拒收的记录会移出自动重试队列，等待人工确认；Web 不可用或网络失败仍会保留在 queue 中重试。
 
 处理步骤：
 

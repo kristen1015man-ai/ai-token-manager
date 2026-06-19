@@ -224,10 +224,14 @@ export async function executeSync(): Promise<SyncResult> {
       const existingStatus = String(row[4] || "active");
 
       if (existingStatus !== "active") reactivated++;
-      if (adminIds.includes(openId) && !existingRole.split(",").map((r) => r.trim()).includes("admin")) {
-        existingRole = existingRole === "member" ? "admin" : `${existingRole},admin`;
+      const roleSet = new Set(existingRole.split(",").map((r) => r.trim()).filter(Boolean));
+      if (adminIds.includes(openId)) {
+        roleSet.add("admin");
+      } else {
+        roleSet.delete("admin");
       }
-      if (!adminIds.includes(openId) && existingRole === "admin") existingRole = "member";
+      if (roleSet.size === 0) roleSet.add("member");
+      existingRole = Array.from(roleSet).join(",");
 
       const decryptedExistingKey = ensureDecrypted(existingApiKey);
       let keyToPersist: string | null = null;
@@ -312,7 +316,7 @@ export async function executeSync(): Promise<SyncResult> {
     }
   }
 
-  const { normalizedCount, centerFixedCount, adminProtectedCount } = await normalizeAndProtect(db);
+  const { normalizedCount, centerFixedCount, adminProtectedCount } = await normalizeAndProtect(db, adminIds);
 
   const realFeishuIds = new Set(userMap.keys());
   const maxAutoDisableDeparted = readMaxAutoDisableDeparted();
