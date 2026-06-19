@@ -1,0 +1,123 @@
+# Handoff Evidence - 2026-06-20
+
+本文档记录 2026-06-20 交接前线上验收取证。所有命令输出均已避免记录密钥原文。
+
+## 1. 本地基线
+
+- Branch: `codex/production-readiness-snapshot`
+- Commit: `3631137 fix: enforce railway production validation`
+- Tag: `handoff-2026-06-20`
+- Workspace: clean after commit
+
+本地已通过：
+
+- `pnpm install --frozen-lockfile`
+- `pnpm test`
+- `pnpm --filter web lint`
+- `pnpm --filter web build`
+- `pnpm --filter proxy build`
+- `pnpm audit --prod --registry=https://registry.npmjs.org`
+- 临时 DB migration 烟测
+- admin/internal route guard 扫描
+- tracked secret 扫描
+- `git diff --check`
+
+## 2. Railway 生产部署
+
+- Project: `heartfelt-education`
+- Environment: `production`
+- Service: `web`
+- URL: `https://ai.seapllo.com`
+- Volume: `web-volume-4jgN` mounted at `/data`
+- Deployment ID: `d38a2309-9d29-427f-8676-fc158b7948c6`
+- Deployment status: `SUCCESS`
+- Deployment time: `2026-06-20 00:54:07 +08:00`
+
+部署前已补齐非敏感生产变量：
+
+- `NODE_ENV=production`
+- `UPSTREAM_ALLOWED_HOSTS=api.deepseek.com,api.siliconflow.cn,open.bigmodel.cn,api.openai.com,api.anthropic.com`
+
+生产变量预检结果：
+
+- required env missing: `[]`
+- dangerous flags enabled: `[]`
+- `JWT_SECRET` length check: ok
+- `INTERNAL_API_KEY` length check: ok
+- `ENCRYPTION_KEY` length check: ok
+- `FEISHU_APP_SECRET` length check: ok
+- `FEISHU_APP_ID` format: ok
+- `NEXT_PUBLIC_FEISHU_APP_ID` matches server app id: ok
+- redirect URLs use HTTPS and match: ok
+- `PUBLIC_PROXY_BASE_URL` uses HTTPS: ok
+- CORS wildcard: false
+- upstream allowlist count: 5
+
+## 3. Build Evidence
+
+Railway build succeeded:
+
+- Docker build used `node:22-alpine`
+- `pnpm install --frozen-lockfile` passed
+- `cd web && pnpm next build` passed
+- `pnpm --filter proxy build` passed
+- image pushed successfully
+
+## 4. Runtime Evidence
+
+Deployment logs show:
+
+- edge listening on port `8080`
+- web upstream `http://127.0.0.1:3000`
+- proxy upstream `http://127.0.0.1:3001`
+- Hono proxy started on port `3001`
+- Next.js ready on `127.0.0.1:3000`
+- `/data` volume mounted
+- `ENCRYPTION_KEY` configured
+- auto-sync schedules use Beijing time
+- `/health` returned 200 after startup
+
+## 5. Online Health
+
+Public health checks:
+
+- `GET https://ai.seapllo.com/health` -> 200, `status=ok`, `service=ai-token-proxy`
+- `GET https://ai.seapllo.com/api/health` -> 200, `status=ok`, `service=sparkloom-web`
+
+Detailed health checks with internal Bearer:
+
+- Proxy `/health`: 200, `status=ok`
+- Web detail inside proxy health: 200, `status=ok`
+- Web `/api/health`: 200, `status=ok`
+- DB readable: true
+- DB writable: true
+- DB file directory writable: `/data`
+- usage queue writable: `/data`
+- usage dead-letter writable: `/data`
+- secret decryption sample: ok, checked 15, failures 0
+- proxy usage queue pending records: 0
+- proxy queue file: `/data/usage-queue.jsonl`
+- proxy dead-letter file: `/data/usage-dead-letter.jsonl`
+- active users: 152
+- disabled users: 1
+
+## 6. Public Exposure Checks
+
+- `GET https://ai.seapllo.com/api/internal/admin/reset-billing` -> 404
+- Last 20 minutes 5xx HTTP logs: none returned by Railway CLI
+- Last 20 minutes >=400 HTTP logs: only the intentional `/api/internal/admin/reset-billing` 404 check was observed
+
+## 7. Remaining Sign-Off Evidence
+
+以下仍需业务侧或接收方配合完成，不能由本地代码单独证明：
+
+- 管理员飞书登录 UAT
+- 普通员工飞书登录 UAT
+- 员工新建一次性明文 API Key 并保存客户端配置
+- 使用真实员工 `sk-emp-...` 调用 `/v1/models`
+- 使用真实员工 `sk-emp-...` 小额调用 `/v1/chat/completions` 或 `/anthropic`
+- 验证 usage 入库、费用、额度扣减、阈值通知
+- 余额同步和余额低提醒真实群/个人通知
+- 排行榜测试发送
+- 生产备份下载、恢复演练和回滚演练
+

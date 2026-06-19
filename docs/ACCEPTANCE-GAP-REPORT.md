@@ -117,18 +117,20 @@
 - `web/src/app/api/health/route.ts`
 - `proxy/src/index.ts`
 - `docs/RELEASE-CHECKLIST.md`
+- `docs/HANDOFF-EVIDENCE-2026-06-20.md`
 
 现状：
 
 - 本地构建和门禁通过。
 - health 已能检查必填 env、DB 表、DB 可写、DB 文件目录可写、web/proxy usage queue 和 dead-letter 目录可写、encrypted secret 抽样解密。
-- 仍缺少当前线上环境的执行记录。
+- 2026-06-20 已完成 Railway production 部署和线上 health 取证。
+- 仍缺少真实登录、真实员工 API 调用、usage 入库、余额同步、飞书通知的业务 UAT 记录。
 
 签收要求：
 
-- 提供线上 `/api/health` 详细输出，敏感值必须脱敏。
-- 提供线上 `/health` 输出。
-- 提供登录、`/v1/models`、小额 chat、usage 入库、余额同步、飞书通知的 smoke 记录。
+- 线上 `/api/health` 详细输出，敏感值必须脱敏：已记录。
+- 线上 `/health` 输出：已记录。
+- 登录、`/v1/models`、小额 chat、usage 入库、余额同步、飞书通知的 smoke 记录：待业务 UAT。
 
 ### 4.5 远端 CI 和最终发布证据
 
@@ -142,12 +144,14 @@
 - CI workflow 已加入。
 - 本地绿色不能替代远端 CI 和生产 deployment 记录。
 - 当前仓库本地未配置 `origin` remote，无法从本机直接触发远端 CI。
+- Railway production deployment `d38a2309-9d29-427f-8676-fc158b7948c6` 已成功，详见 `docs/HANDOFF-EVIDENCE-2026-06-20.md`。
 
 签收要求：
 
-- 提供最终 commit、tag 或 release 编号。
-- 提供远端 CI 绿色截图或日志。
-- 提供 Railway deployment 编号、构建日志、回滚入口。
+- 最终 commit/tag：已记录到 `docs/HANDOFF-EVIDENCE-2026-06-20.md`。
+- Railway deployment 编号和构建日志：已记录到 `docs/HANDOFF-EVIDENCE-2026-06-20.md`。
+- 远端 CI 绿色截图或日志：待配置 remote 后补齐。
+- 回滚入口：Railway deployment history 可回滚到上一成功部署。
 
 ## 5. P2 建议整理
 
