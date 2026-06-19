@@ -27,12 +27,15 @@ pnpm --filter web lint
 - `JWT_SECRET` 已配置且不是默认值。
 - `ENCRYPTION_KEY` 已配置。
 - `INTERNAL_API_KEY` 已配置。
-- `FEISHU_APP_ID` 已配置。
+- `FEISHU_APP_ID` 已配置，格式为 `cli_...`，不得是 `cli_cli_...`。
+- `NEXT_PUBLIC_FEISHU_APP_ID` 与 `FEISHU_APP_ID` 完全一致。
 - `FEISHU_APP_SECRET` 已配置。
 - `FEISHU_REDIRECT_URI=https://ai.seapllo.com/api/auth/feishu/callback`。
 - `NEXT_PUBLIC_FEISHU_REDIRECT_URI` 同上。
 - `CORS_ALLOWED_ORIGINS=https://ai.seapllo.com`。
 - `PUBLIC_PROXY_BASE_URL=https://ai.seapllo.com/v1`。
+- `UPSTREAM_ALLOWED_HOSTS` 只包含已批准供应商域名。
+- 所有 `ALLOW_*`、`ENABLE_*` 高危开关在生产均未开启。
 - 数据库使用持久卷。
 
 ## 3. 安全检查

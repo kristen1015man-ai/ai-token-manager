@@ -14,6 +14,145 @@ const children = new Set();
 let shuttingDown = false;
 let serverListening = false;
 
+const DANGEROUS_DEFAULTS = new Set([
+  "dev-secret-change-in-production",
+  "change-me-to-a-random-string",
+  "your-random-secret-at-least-32-characters-long",
+  "xxx",
+  "your_app_secret",
+]);
+
+const PRODUCTION_DISABLED_FLAGS = [
+  "ALLOW_EPHEMERAL_DATA",
+  "ALLOW_INSECURE_DEV_AUTH",
+  "ALLOW_INSECURE_UPSTREAMS",
+  "ALLOW_PRIVATE_UPSTREAMS",
+  "ALLOW_PLAINTEXT_SECRETS_FOR_DEV",
+  "ENABLE_DEV_LOGIN",
+  "ENABLE_DEBUG_ENDPOINT",
+  "ENABLE_SEED_ENDPOINT",
+  "ENABLE_CLEANUP_ENDPOINT",
+];
+const BAD_FEISHU_APP_PREFIX = "cli_" + "cli_";
+
+function failProductionConfig(message) {
+  console.error(`[railway] ${message}`);
+  process.exit(1);
+}
+
+function envValue(name) {
+  return (process.env[name] || "").trim();
+}
+
+function isTruthyEnv(name) {
+  return envValue(name).toLowerCase() === "true";
+}
+
+function isPlaceholderValue(value) {
+  const normalized = value.trim().toLowerCase();
+  return (
+    !normalized ||
+    DANGEROUS_DEFAULTS.has(normalized) ||
+    normalized.includes("change-me") ||
+    normalized.includes("your_") ||
+    normalized.includes("<") ||
+    normalized.includes(">")
+  );
+}
+
+function assertStrongSecret(name, minLength) {
+  const value = envValue(name);
+  if (isPlaceholderValue(value) || value.length < minLength) {
+    failProductionConfig(`${name} must be a non-placeholder secret with at least ${minLength} characters`);
+  }
+}
+
+function parseUrlEnv(name) {
+  try {
+    return new URL(envValue(name));
+  } catch {
+    failProductionConfig(`${name} must be a valid URL`);
+  }
+}
+
+function assertHttpsUrl(name) {
+  const parsed = parseUrlEnv(name);
+  if (parsed.protocol !== "https:") {
+    failProductionConfig(`${name} must use https in production`);
+  }
+  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)) {
+    failProductionConfig(`${name} must not point to localhost in production`);
+  }
+  return parsed;
+}
+
+function assertFeishuConfig() {
+  const appId = envValue("FEISHU_APP_ID");
+  const publicAppId = envValue("NEXT_PUBLIC_FEISHU_APP_ID");
+  if (!/^cli_[A-Za-z0-9]+$/.test(appId) || appId.startsWith(BAD_FEISHU_APP_PREFIX)) {
+    failProductionConfig("FEISHU_APP_ID must be a valid Feishu app id like cli_xxx, not a duplicated cli prefix or a placeholder");
+  }
+  if (publicAppId !== appId) {
+    failProductionConfig("NEXT_PUBLIC_FEISHU_APP_ID must match FEISHU_APP_ID");
+  }
+
+  const redirect = assertHttpsUrl("FEISHU_REDIRECT_URI");
+  const publicRedirect = assertHttpsUrl("NEXT_PUBLIC_FEISHU_REDIRECT_URI");
+  if (redirect.href !== publicRedirect.href) {
+    failProductionConfig("NEXT_PUBLIC_FEISHU_REDIRECT_URI must match FEISHU_REDIRECT_URI");
+  }
+  if (!redirect.pathname.endsWith("/api/auth/feishu/callback")) {
+    failProductionConfig("FEISHU_REDIRECT_URI must end with /api/auth/feishu/callback");
+  }
+}
+
+function assertCorsOrigins() {
+  const origins = envValue("CORS_ALLOWED_ORIGINS")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (origins.length === 0) {
+    failProductionConfig("CORS_ALLOWED_ORIGINS must contain at least one production origin");
+  }
+  for (const origin of origins) {
+    if (origin === "*") {
+      failProductionConfig("CORS_ALLOWED_ORIGINS must not contain '*'");
+    }
+    let parsed;
+    try {
+      parsed = new URL(origin);
+    } catch {
+      failProductionConfig(`CORS_ALLOWED_ORIGINS contains invalid URL: ${origin}`);
+    }
+    if (parsed.protocol !== "https:") {
+      failProductionConfig("CORS_ALLOWED_ORIGINS must only contain https origins in production");
+    }
+  }
+}
+
+function assertUpstreamAllowlist() {
+  const hosts = envValue("UPSTREAM_ALLOWED_HOSTS")
+    .split(",")
+    .map((host) => host.trim().toLowerCase().replace(/\.$/, ""))
+    .filter(Boolean);
+  if (hosts.length === 0) {
+    failProductionConfig("UPSTREAM_ALLOWED_HOSTS must contain at least one approved provider host");
+  }
+  for (const host of hosts) {
+    if (
+      host === "*" ||
+      host.includes("/") ||
+      host.includes(":") ||
+      host === "localhost" ||
+      host.endsWith(".local") ||
+      !/^[a-z0-9.-]+$/.test(host) ||
+      !host.includes(".")
+    ) {
+      failProductionConfig(`UPSTREAM_ALLOWED_HOSTS contains invalid production host: ${host}`);
+    }
+  }
+}
+
 function assertProductionConfig() {
   if (process.env.NODE_ENV !== "production") return;
 
@@ -24,21 +163,39 @@ function assertProductionConfig() {
     "FEISHU_APP_ID",
     "FEISHU_APP_SECRET",
     "FEISHU_REDIRECT_URI",
+    "NEXT_PUBLIC_FEISHU_APP_ID",
+    "NEXT_PUBLIC_FEISHU_REDIRECT_URI",
+    "PUBLIC_PROXY_BASE_URL",
+    "CORS_ALLOWED_ORIGINS",
+    "ADMIN_IDS",
+    "UPSTREAM_ALLOWED_HOSTS",
   ].filter(
-    (name) => !process.env[name]
+    (name) => !envValue(name)
   );
   if (missing.length > 0) {
-    console.error(`[railway] Missing required production env vars: ${missing.join(", ")}`);
-    process.exit(1);
+    failProductionConfig(`Missing required production env vars: ${missing.join(", ")}`);
   }
+
+  const enabledDangerousFlags = PRODUCTION_DISABLED_FLAGS.filter(isTruthyEnv);
+  if (enabledDangerousFlags.length > 0) {
+    failProductionConfig(`Dangerous production flags must be disabled: ${enabledDangerousFlags.join(", ")}`);
+  }
+
+  assertStrongSecret("JWT_SECRET", 32);
+  assertStrongSecret("INTERNAL_API_KEY", 32);
+  assertStrongSecret("ENCRYPTION_KEY", 32);
+  assertStrongSecret("FEISHU_APP_SECRET", 16);
+  assertFeishuConfig();
+  assertHttpsUrl("PUBLIC_PROXY_BASE_URL");
+  assertCorsOrigins();
+  assertUpstreamAllowlist();
 
   const databasePath = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes(":")
     ? process.env.DATABASE_URL
     : null;
   const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || (databasePath ? path.dirname(databasePath) : "");
-  if (!dataDir && process.env.ALLOW_EPHEMERAL_DATA !== "true") {
-    console.error("[railway] Missing persistent DATABASE_URL or RAILWAY_VOLUME_MOUNT_PATH. Refusing to start with ephemeral data.");
-    process.exit(1);
+  if (!dataDir) {
+    failProductionConfig("Missing persistent DATABASE_URL or RAILWAY_VOLUME_MOUNT_PATH. Refusing to start with ephemeral data.");
   }
   if (dataDir) {
     try {
@@ -47,8 +204,7 @@ function assertProductionConfig() {
       fs.writeFileSync(checkPath, String(Date.now()), "utf8");
       fs.unlinkSync(checkPath);
     } catch (err) {
-      console.error(`[railway] Persistent data directory is not writable: ${dataDir}`, err);
-      process.exit(1);
+      failProductionConfig(`Persistent data directory is not writable: ${dataDir}. ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }

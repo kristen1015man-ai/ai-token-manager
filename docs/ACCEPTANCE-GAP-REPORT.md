@@ -1,12 +1,12 @@
 # 接收方交接审查退回清单
 
-最后更新：2026-06-19
+最后更新：2026-06-20
 
 本文档用于交接前严格签收。口径按“接收方需要重金购买项目”的标准执行，不只看功能是否可用，还看资金安全、密钥安全、权限边界、发布证据和后续维护可接手性。
 
 ## 1. 本地验证结果
 
-上一轮已通过：
+已通过：
 
 - `pnpm install --frozen-lockfile`
 - `pnpm test`
@@ -17,8 +17,10 @@
 - `pnpm audit --prod --registry=https://registry.npmjs.org`
 - `git diff --check`
 - 阻断关键字扫描：固定员工 key、公开 admin internal 绕过、废弃 `ADMIN_` + `EMAILS`、`INTERNAL_API_` + `ALLOWED_PATHS` 均无命中
-
-本轮改动后需要重新跑同一组门禁。
+- tracked 文件真实形态密钥扫描，无真实飞书 Secret、供应商 Key、员工 Key 命中
+- admin/internal route guard 扫描：所有 `/api/admin/*` 有角色守卫，所有 `/api/internal/*` 有内部 Bearer 守卫
+- `node --check railway/start.mjs`
+- Railway 生产入口负向测试：弱 JWT、重复 `cli_` 前缀飞书 App ID、危险开关开启均被拒绝启动
 
 ## 2. 已完成的代码级整改
 
@@ -34,6 +36,9 @@
 - `/api/health` 已增加 DB 文件所在目录、usage queue、dead-letter 目录的持久写入检查。
 - `/health` 已增加 proxy usage queue/dead-letter 路径可写检查。
 - 生产上游 base URL 已增加 host allowlist，默认只允许 DeepSeek、SiliconFlow、GLM、OpenAI、Anthropic。
+- 后台渠道保存已复用上游安全校验，非法状态、非法余额同步模式、未批准供应商域名会在保存时被拒绝。
+- 管理员通知接收人已改为统一 `parseRoles()` 精确判断，不再用 SQL 模糊匹配管理员角色。
+- Railway 生产入口已增加 fail-fast 校验：弱密钥、占位符、飞书 App ID 配错、危险开关、非 HTTPS/CORS 通配符、无持久卷都会拒绝启动。
 - 根目录旧 `seed.ts`、`seed-mock.ts` 已移出正式交接包。
 - `proxy/src/services/usage.ts` 已删除历史死代码块。
 - 新增 CI 工作流与 handoff gate。

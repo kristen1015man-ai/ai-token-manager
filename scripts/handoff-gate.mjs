@@ -48,6 +48,33 @@ for (const suffix of [
   assert(autoSync.includes(suffix), `auto-sync must call ${suffix}`);
 }
 
+const railwayStart = read("railway/start.mjs");
+for (const token of [
+  "PRODUCTION_DISABLED_FLAGS",
+  "assertStrongSecret",
+  "assertFeishuConfig",
+  "BAD_FEISHU_APP_PREFIX",
+  "assertCorsOrigins",
+  "assertUpstreamAllowlist",
+  "ALLOW_EPHEMERAL_DATA",
+]) {
+  assert(railwayStart.includes(token), `railway/start.mjs must keep production fail-fast check: ${token}`);
+}
+
+const channelRoute = read("web/src/app/api/admin/channels/route.ts");
+for (const token of [
+  "assertSafeUpstreamBaseUrl",
+  "status must be active or disabled",
+  "balanceSyncMode must be auto, manual, or empty",
+]) {
+  assert(channelRoute.includes(token), `channel admin route must keep validation: ${token}`);
+}
+
+const notificationRouter = read("web/src/lib/notification-router.ts");
+const fuzzyAdminToken = "%" + "admin" + "%";
+assert(!notificationRouter.includes(fuzzyAdminToken), "notification router must not use fuzzy admin role matching");
+assert(notificationRouter.includes("parseRoles"), "notification router must use parseRoles for admin recipient checks");
+
 const productionEnv = read(".env.production.example");
 const deprecatedAdminEmailsToken = "ADMIN_" + "EMAILS";
 assert(!productionEnv.includes(deprecatedAdminEmailsToken), ".env.production.example must not expose deprecated admin email variable");

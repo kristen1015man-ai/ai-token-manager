@@ -126,7 +126,7 @@ curl -X POST \
   -H "Authorization: Bearer $INTERNAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"notify":false}' \
-  http://127.0.0.1:3000/api/admin/channels/balance-sync
+  http://127.0.0.1:3000/api/internal/admin/channels/balance-sync
 ```
 
 发送提醒：

@@ -51,7 +51,7 @@
 - Railway 推荐：`RAILWAY_VOLUME_MOUNT_PATH=/data`
 - 或：`DATABASE_URL=/data/data.db`
 
-如果没有持久化目录，`railway/start.mjs` 会拒绝启动，除非显式设置 `ALLOW_EPHEMERAL_DATA=true`。生产禁止使用临时数据。
+如果没有持久化目录，`railway/start.mjs` 会拒绝启动；生产不允许通过 `ALLOW_EPHEMERAL_DATA=true` 绕过。
 
 ### 2.1 生产环境变量分级
 

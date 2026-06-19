@@ -12,9 +12,10 @@
 import { getDb, saveDb } from "./db";
 import { alertSettings, alertLogs, users } from "../../../shared/schema";
 import { sendCardMessage } from "./feishu-bot";
-import { eq, like, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { safeErrorSummary } from "./safe-error";
+import { parseRoles } from "./permissions";
 
 // ===== 类型定义 =====
 
@@ -97,10 +98,6 @@ async function resolveRecipients(
   // 如果指定了接收人，解析为 feishuId
   if (userIds.length > 0) {
     const { db } = await getDb();
-    const rows = await db
-      .select({ feishuId: users.feishuId })
-      .from(users)
-      .where(eq(users.status, "active"));
     const feishuIdMap = new Map<string, string>();
     // 需要拿到 id -> feishuId 的映射
     const allUsers = await db
@@ -122,13 +119,13 @@ async function resolveRecipients(
 async function getAllAdminFeishuIds(): Promise<string[]> {
   const { db } = await getDb();
   const rows = await db
-    .select({ feishuId: users.feishuId })
+    .select({ feishuId: users.feishuId, role: users.role })
     .from(users)
-    .where(and(
-      like(users.role, "%admin%"),
-      eq(users.status, "active")
-    ));
-  return rows.map((r) => r.feishuId).filter(Boolean);
+    .where(eq(users.status, "active"));
+  return rows
+    .filter((r) => parseRoles(r.role).includes("admin"))
+    .map((r) => r.feishuId)
+    .filter(Boolean);
 }
 
 // ===== 写入 alert_logs =====
@@ -246,11 +243,11 @@ export async function getAdminListForSelect(): Promise<
       name: users.name,
       feishuId: users.feishuId,
       department: users.department,
+      role: users.role,
     })
     .from(users)
-    .where(and(
-      like(users.role, "%admin%"),
-      eq(users.status, "active")
-    ));
-  return rows;
+    .where(eq(users.status, "active"));
+  return rows
+    .filter((row) => parseRoles(row.role).includes("admin"))
+    .map(({ role, ...row }) => row);
 }

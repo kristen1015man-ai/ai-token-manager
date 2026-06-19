@@ -9,6 +9,10 @@ import { auditLog } from "../../../../lib/audit-log";
 import { apiHandler } from "../../../../lib/api-handler";
 import { inferAutoProvider } from "../../../../lib/balance-fetchers";
 import { isMaskedSecret, secretStatus, validateProviderApiKey } from "../../../../lib/provider-secrets";
+import { assertSafeUpstreamBaseUrl } from "../../../../lib/upstream-safety";
+
+const CHANNEL_STATUSES = new Set(["active", "disabled"]);
+const BALANCE_SYNC_MODES = new Set(["auto", "manual"]);
 
 function normalizeSecretInput(value: unknown): string | null {
   if (value === undefined || value === null) return null;
@@ -89,7 +93,23 @@ function isUnsafeChannelHost(hostname: string): boolean {
   return isPrivateIpv4(host) || isPrivateIpv6(host);
 }
 
-function validateChannelBaseUrl(value: unknown): string | null {
+function parseChannelStatus(value: unknown, fallback: "active" | "disabled"): "active" | "disabled" | null {
+  if (value === undefined || value === null || value === "") return fallback;
+  const normalized = String(value).trim();
+  return CHANNEL_STATUSES.has(normalized) ? normalized as "active" | "disabled" : null;
+}
+
+function parseBalanceSyncMode(value: unknown): { ok: true; value: string | null | undefined } | { ok: false; error: string } {
+  if (value === undefined) return { ok: true, value: undefined };
+  if (value === null || String(value).trim() === "") return { ok: true, value: null };
+  const normalized = String(value).trim();
+  if (!BALANCE_SYNC_MODES.has(normalized)) {
+    return { ok: false, error: "balanceSyncMode must be auto, manual, or empty" };
+  }
+  return { ok: true, value: normalized };
+}
+
+async function validateChannelBaseUrl(value: unknown): Promise<string | null> {
   let parsed: URL;
   try {
     parsed = new URL(String(value));
@@ -107,6 +127,11 @@ function validateChannelBaseUrl(value: unknown): string | null {
   }
   if (isUnsafeChannelHost(parsed.hostname)) {
     return "baseUrl must not point to localhost, metadata, or private network addresses";
+  }
+  try {
+    await assertSafeUpstreamBaseUrl(String(value));
+  } catch (err) {
+    return err instanceof Error ? err.message : "baseUrl failed upstream safety validation";
   }
   return null;
 }
@@ -174,9 +199,17 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (!name || !baseUrl || !apiKey || !models) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
-  const baseUrlError = validateChannelBaseUrl(baseUrl);
+  const baseUrlError = await validateChannelBaseUrl(baseUrl);
   if (baseUrlError) {
     return NextResponse.json({ error: baseUrlError }, { status: 400 });
+  }
+  const parsedStatus = parseChannelStatus(status, "active");
+  if (!parsedStatus) {
+    return NextResponse.json({ error: "status must be active or disabled" }, { status: 400 });
+  }
+  const parsedBalanceSyncMode = parseBalanceSyncMode(balanceSyncMode);
+  if (!parsedBalanceSyncMode.ok) {
+    return NextResponse.json({ error: parsedBalanceSyncMode.error }, { status: 400 });
   }
   const parsedModels = parseModels(models);
   if (!parsedModels) {
@@ -205,10 +238,10 @@ export const POST = apiHandler(async (request: NextRequest) => {
     apiKey: ensureEncrypted(apiKey),
     models: parsedModels,
     priority: parsedPriority,
-    status: status ?? "active",
+    status: parsedStatus,
     currency: currency ?? "CNY",
     provider: inferredProvider,
-    balanceSyncMode: balanceSyncMode || null,
+    balanceSyncMode: parsedBalanceSyncMode.value ?? null,
     balanceAlertThreshold: parsedBalanceAlertThreshold,
     createdAt: new Date(),
   });
@@ -240,7 +273,7 @@ export const PUT = apiHandler(async (request: NextRequest) => {
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name;
   if (baseUrl !== undefined) {
-    const baseUrlError = validateChannelBaseUrl(baseUrl);
+    const baseUrlError = await validateChannelBaseUrl(baseUrl);
     if (baseUrlError) {
       return NextResponse.json({ error: baseUrlError }, { status: 400 });
     }
@@ -250,7 +283,11 @@ export const PUT = apiHandler(async (request: NextRequest) => {
   const nextBaseUrl = baseUrl !== undefined ? String(baseUrl) : existing.baseUrl;
   const requestedProvider = provider !== undefined ? provider : existing.provider;
   const inferredProvider = inferChannelProvider(requestedProvider, nextBaseUrl, nextName, id);
-  const nextBalanceSyncMode = balanceSyncMode !== undefined ? (balanceSyncMode || null) : existing.balanceSyncMode;
+  const parsedBalanceSyncMode = parseBalanceSyncMode(balanceSyncMode);
+  if (!parsedBalanceSyncMode.ok) {
+    return NextResponse.json({ error: parsedBalanceSyncMode.error }, { status: 400 });
+  }
+  const nextBalanceSyncMode = parsedBalanceSyncMode.value !== undefined ? parsedBalanceSyncMode.value : existing.balanceSyncMode;
   let apiKeyChanged = false;
   try {
     const normalizedApiKey = normalizeSecretInput(apiKey);
@@ -280,7 +317,13 @@ export const PUT = apiHandler(async (request: NextRequest) => {
     }
     updateData.priority = parsedPriority;
   }
-  if (status !== undefined) updateData.status = status;
+  if (status !== undefined) {
+    const parsedStatus = parseChannelStatus(status, existing.status === "disabled" ? "disabled" : "active");
+    if (!parsedStatus) {
+      return NextResponse.json({ error: "status must be active or disabled" }, { status: 400 });
+    }
+    updateData.status = parsedStatus;
+  }
   if (currency !== undefined) updateData.currency = currency;
   if (provider !== undefined || inferredProvider !== existing.provider) updateData.provider = inferredProvider;
 
@@ -305,7 +348,7 @@ export const PUT = apiHandler(async (request: NextRequest) => {
     updateData.balanceSyncedAt = new Date(); // 手动设余额时自动更新同步时间
   }
   if (balanceCurrency !== undefined) updateData.balanceCurrency = balanceCurrency;
-  if (balanceSyncMode !== undefined) updateData.balanceSyncMode = balanceSyncMode || null;
+  if (balanceSyncMode !== undefined) updateData.balanceSyncMode = parsedBalanceSyncMode.value ?? null;
   if (balanceAlertThreshold !== undefined) {
     const parsedThreshold = parseOptionalNonNegative(balanceAlertThreshold);
     if (Number.isNaN(parsedThreshold)) {
