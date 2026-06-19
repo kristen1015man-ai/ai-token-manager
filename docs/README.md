@@ -25,7 +25,7 @@
 | 运维/平台 | `OPERATIONS.md`, `monitoring.md`, `backup-restore.md`, `reverse-proxy.md` | 部署、监控、备份恢复 |
 | 安全/审计 | `SECURITY-PERMISSIONS.md`, `INCIDENT-RUNBOOK.md`, `API.md`, `DATABASE-SCHEMA.md` | 权限、密钥、资金安全审查 |
 | 客服/管理员 | `USER-GUIDE.md`, `SUPPORT-RUNBOOK.md`, `TROUBLESHOOTING.md` | 指导员工使用和排查常见问题 |
-| 发布负责人 | `RELEASE-CHECKLIST.md` | 每次上线前回归验收 |
+| 发布负责人 | `RELEASE-CHECKLIST.md`, `ACCEPTANCE-GAP-REPORT.md` | 每次上线前回归验收和交接退回项跟踪 |
 
 ## 文档职责
 
@@ -39,6 +39,7 @@
 | `PROXY-INTERNALS.md` | Hono Proxy 转发、鉴权、限额、计费、流式处理 |
 | `SECURITY-PERMISSIONS.md` | RBAC、密钥、CSRF、SSRF、内部 API 和审计要求 |
 | `INCIDENT-RUNBOOK.md` | 生产事故分级、止血、回滚、密钥泄露和费用异常处理 |
+| `ACCEPTANCE-GAP-REPORT.md` | 接收方多岗位审查后的 P0/P1/P2 退回清单 |
 | `USER-GUIDE.md` | 管理员、员工、财务、部门负责人使用说明 |
 | `SUPPORT-RUNBOOK.md` | 一线管理员/客服 SOP、话术和升级标准 |
 | `OPERATIONS.md` | 环境变量、部署、重启、日常任务、应急操作 |
