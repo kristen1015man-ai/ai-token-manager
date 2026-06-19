@@ -4,9 +4,9 @@
 
 本文档用于交接前严格签收。口径按“接收方需要重金购买项目”的标准执行，不只看功能是否可用，还看资金安全、密钥安全、权限边界、发布证据和后续维护可接手性。
 
-## 1. 本轮本地验证结果
+## 1. 本地验证结果
 
-已通过：
+上一轮已通过：
 
 - `pnpm install --frozen-lockfile`
 - `pnpm test`
@@ -15,10 +15,12 @@
 - `pnpm --filter proxy build`
 - `pnpm --filter shared db:migrate`，使用临时 DB 烟测
 - `pnpm audit --prod --registry=https://registry.npmjs.org`
-- `git diff --check`，无格式错误，仅 Windows CRLF 提示
+- `git diff --check`
 - 阻断关键字扫描：固定员工 key、公开 admin internal 绕过、废弃 `ADMIN_` + `EMAILS`、`INTERNAL_API_` + `ALLOWED_PATHS` 均无命中
 
-## 2. 本轮已修复
+本轮改动后需要重新跑同一组门禁。
+
+## 2. 已完成的代码级整改
 
 - 公网 admin/setup 路由不再接受 `INTERNAL_API_KEY`，只接受管理员 session。
 - 定时任务改走 `/api/internal/admin/*` 内部路由。
@@ -29,14 +31,19 @@
 - `auditLog()` 已改为 fail-closed，写入失败会抛错，不再静默吞掉。
 - `/api/admin/cleanup-execute` 已改为生产环境不可开启，只允许非生产且显式设置 `ENABLE_CLEANUP_ENDPOINT=true`。
 - `/api/health` 已增加 encrypted secret 抽样解密检查；解密失败时 health 进入 degraded。
+- `/api/health` 已增加 DB 文件所在目录、usage queue、dead-letter 目录的持久写入检查。
+- `/health` 已增加 proxy usage queue/dead-letter 路径可写检查。
+- 生产上游 base URL 已增加 host allowlist，默认只允许 DeepSeek、SiliconFlow、GLM、OpenAI、Anthropic。
+- 根目录旧 `seed.ts`、`seed-mock.ts` 已移出正式交接包。
+- `proxy/src/services/usage.ts` 已删除历史死代码块。
 - 新增 CI 工作流与 handoff gate。
 - 新增 checked-in DB migration runner。
 
-## 3. 签收结论
+## 3. 当前签收结论
 
-当前代码已清掉本轮可复现的 P0/P1 代码阻断，但仍不建议无条件正式签收。
+当前代码层面的 P0/P1 阻断已处理到可进入真实数据 UAT 的状态。
 
-可以进入真实数据 UAT。正式交接签字前，接收方仍需要拿到生产平台证据、备份恢复证据、线上 smoke/UAT 证据和资产交割记录。这些不是代码能单方面证明的内容。
+正式交接签字前，接收方仍需要拿到生产平台证据、备份恢复证据、线上 smoke/UAT 证据和资产交割记录。这些不是本地代码能单方面证明的内容。
 
 ## 4. 仍需补齐的签收证据
 
@@ -109,7 +116,7 @@
 现状：
 
 - 本地构建和门禁通过。
-- health 已能检查必填 env、DB 表、DB 可写、encrypted secret 抽样解密。
+- health 已能检查必填 env、DB 表、DB 可写、DB 文件目录可写、web/proxy usage queue 和 dead-letter 目录可写、encrypted secret 抽样解密。
 - 仍缺少当前线上环境的执行记录。
 
 签收要求：
@@ -128,8 +135,8 @@
 现状：
 
 - CI workflow 已加入。
-- 当前工作区仍有未提交改动。
 - 本地绿色不能替代远端 CI 和生产 deployment 记录。
+- 当前仓库本地未配置 `origin` remote，无法从本机直接触发远端 CI。
 
 签收要求：
 
@@ -137,29 +144,11 @@
 - 提供远端 CI 绿色截图或日志。
 - 提供 Railway deployment 编号、构建日志、回滚入口。
 
-### 4.6 上游 URL SSRF 残余风险
-
-证据文件：
-
-- `proxy/src/services/upstream-safety.ts`
-- `web/src/lib/upstream-safety.ts`
-
-现状：
-
-- 代码会校验协议、禁止本地/metadata host、解析 DNS 并阻止私网地址。
-- 校验后实际 `fetch()` 仍由运行时重新解析域名，理论上仍存在 DNS rebinding/TOCTOU 残余风险。
-
-签收要求：
-
-- 生产建议限制供应商 base URL 到 allowlist，如 DeepSeek、SiliconFlow、OpenAI、Anthropic、GLM。
-- 或实现 DNS pinning/固定 IP 出口校验。
-
 ## 5. P2 建议整理
 
-- 根目录 `seed.ts`、`seed-mock.ts` 仍是旧开发脚本，包含占位供应商 key 和明文 seed 逻辑。建议移到 `scripts/dev-only` 并加明显保护，或从正式交接包移除。
 - 多个早期文件存在注释乱码，不影响编译，但影响接收方维护效率。建议逐步修复核心文件注释。
-- `proxy/src/services/usage.ts` 仍有 `if (false)` 死代码，建议清理。
 - 审计日志已经 fail-closed，但字段粒度仍可增强：actor、authType、route、IP、requestId、before/after、批量数量和结果。
+- 如果未来需要接入新供应商，必须先更新 `UPSTREAM_ALLOWED_HOSTS`，再增加价格、余额同步和 smoke 用例。
 
 ## 6. 正式签收条件
 

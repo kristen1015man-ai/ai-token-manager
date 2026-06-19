@@ -50,7 +50,12 @@ app.get("/health", async (c) => {
   const config = getProxyHealth();
   const web = await checkWebHealth();
   const usageQueue = getUsageQueueHealth();
-  const ok = config.internalKeyConfigured && web.ok && usageQueue.persistedQueueConfigured;
+  const ok =
+    config.internalKeyConfigured &&
+    web.ok &&
+    usageQueue.persistedQueueConfigured &&
+    usageQueue.queueWritable.ok &&
+    usageQueue.deadLetterWritable.ok;
   if (!detailed) {
     return c.json({
       status: ok ? "ok" : "degraded",

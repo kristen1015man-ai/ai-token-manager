@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { dirname } from "path";
 
 export interface UsageRecord {
@@ -100,6 +100,29 @@ const RETRY_INTERVAL_MS = 5_000;
 const MAX_BATCH_SIZE = 50;
 const QUEUE_FILE = process.env.USAGE_QUEUE_FILE || "/tmp/ai-token-usage-queue.jsonl";
 const DEAD_LETTER_FILE = process.env.USAGE_DEAD_LETTER_FILE || "/tmp/ai-token-usage-dead-letter.jsonl";
+
+interface WritablePathCheck {
+  ok: boolean;
+  path: string;
+  error?: string;
+}
+
+function checkWritableFileTarget(filePath: string, probeName: string): WritablePathCheck {
+  const targetDir = dirname(filePath);
+  const probePath = `${targetDir}/${probeName}`;
+  try {
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(probePath, String(Date.now()), "utf8");
+    unlinkSync(probePath);
+    return { ok: true, path: targetDir };
+  } catch (err) {
+    return {
+      ok: false,
+      path: targetDir,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
 
 function ensureQueueLoaded(): void {
   if (queueLoaded) return;
@@ -265,12 +288,6 @@ export async function recordUsage(
   pendingRecords.push(record);
   appendPersistedRecord(record);
 
-  if (false) {
-    const dropped: PendingRecord[] = [];
-    const lostRecordCount = dropped.length;
-    console.error(`[Usage] Pending buffer overflow, dropped ${dropped.length} oldest records. 累计丢失: ${lostRecordCount}`);
-  }
-
   if (pendingRecords.length >= MAX_BATCH_SIZE) {
     if (flushTimer) {
       clearTimeout(flushTimer);
@@ -302,10 +319,15 @@ export function estimateUsage(input: unknown, output: unknown): UsageRecord {
 
 export function getUsageQueueHealth() {
   ensureQueueLoaded();
+  const queueWritable = checkWritableFileTarget(QUEUE_FILE, ".sparkloom-proxy-queue-write-check");
+  const deadLetterWritable = checkWritableFileTarget(DEAD_LETTER_FILE, ".sparkloom-proxy-dead-letter-write-check");
   return {
     pendingRecords: pendingRecords.length,
     queueFile: QUEUE_FILE,
+    deadLetterFile: DEAD_LETTER_FILE,
     persistedQueueConfigured: Boolean(QUEUE_FILE),
+    queueWritable,
+    deadLetterWritable,
   };
 }
 

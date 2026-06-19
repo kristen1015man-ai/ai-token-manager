@@ -92,14 +92,14 @@ curl -X POST \
 相关接口：
 
 - `GET /api/admin/cleanup-preview`
-- `POST /api/admin/cleanup-execute`
+- `POST /api/admin/cleanup-execute`，仅非生产可用；生产环境固定返回 404
 
 使用规范：
 
 1. 先执行 preview。
 2. 核对将删除的用户和记录。
 3. 备份 DB。
-4. 再执行 execute。
+4. 非生产可执行 execute；生产真实数据清理必须走审批后的离线脚本或受控维护流程，不允许临时打开 `ENABLE_CLEANUP_ENDPOINT`。
 
 飞书同步本身也会清理非 `ou_` 的 seed 用户，并尝试转移 usage。
 

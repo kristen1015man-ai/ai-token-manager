@@ -19,7 +19,7 @@ function nameToPinyin(name: string): string {
 
 /**
  * 生成员工 API Key: sk-emp-{名字拼音}-{128bit随机hex}
- * 示例: sk-emp-heguangming-a1b2c3d4e5f678901234567890abcdef
+ * Example shape: sk-emp-<name-pinyin>-<128bit-random-hex>
  */
 export function generateApiKey(name?: string): string {
   const prefix = nameToPinyin(name || "");

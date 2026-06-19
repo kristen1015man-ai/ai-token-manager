@@ -8,6 +8,10 @@ function read(rel) {
   return fs.readFileSync(path.join(root, rel), "utf8");
 }
 
+function exists(rel) {
+  return fs.existsSync(path.join(root, rel));
+}
+
 function assert(condition, message) {
   if (!condition) failures.push(message);
 }
@@ -73,6 +77,7 @@ for (const [rel, forbidden] of [
   ["web/src/app/api/setup/seed/route.ts", "sk-emp-" + "heguangming-dev-key"],
   ["ai-token-manager.md", "sk-emp-" + "zhangsan-abc123"],
 ]) {
+  if (!exists(rel)) continue;
   assert(!read(rel).includes(forbidden), `${rel} contains forbidden fixed key: ${forbidden}`);
 }
 

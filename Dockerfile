@@ -53,6 +53,7 @@ ENV USAGE_QUEUE_FILE=/data/usage-queue.jsonl
 ENV USAGE_DEAD_LETTER_FILE=/data/usage-dead-letter.jsonl
 ENV MAX_REQUEST_BODY_BYTES=2097152
 ENV MAX_CHAT_BODY_BYTES=2097152
+ENV UPSTREAM_ALLOWED_HOSTS=api.deepseek.com,api.siliconflow.cn,open.bigmodel.cn,api.openai.com,api.anthropic.com
 
 USER appuser
 

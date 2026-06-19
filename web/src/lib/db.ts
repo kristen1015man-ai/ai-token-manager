@@ -12,6 +12,10 @@ const DB_PATH = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("
     ? `${process.env.RAILWAY_VOLUME_MOUNT_PATH}/data.db`
     : "./data.db";
 
+export function getDbPath(): string {
+  return path.resolve(DB_PATH);
+}
+
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 let sqliteInstance: InstanceType<Awaited<ReturnType<typeof initSqlJs>>["Database"]> | null = null;
 let lastExportHash: string | null = null;

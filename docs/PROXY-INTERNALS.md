@@ -250,6 +250,8 @@ Authorization: Bearer ${INTERNAL_API_KEY}
 - Web health
 - usageQueue pending 数量
 - queue file 路径
+- dead-letter file 路径
+- queue/dead-letter 目录可写性
 
 ## 11. 常见改动规范
 

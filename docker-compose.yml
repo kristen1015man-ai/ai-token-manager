@@ -31,6 +31,7 @@ services:
       - WEB_URL=${WEB_URL:-http://web:3000}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      - UPSTREAM_ALLOWED_HOSTS=${UPSTREAM_ALLOWED_HOSTS:-api.deepseek.com,api.siliconflow.cn,open.bigmodel.cn,api.openai.com,api.anthropic.com}
       - USAGE_QUEUE_FILE=/proxy-data/usage-queue.jsonl
       # Proxy 只持久化 usage 队列，不直接读写 data.db
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
@@ -66,6 +67,7 @@ services:
       # Web → Proxy 内部通信地址（Docker 网络用服务名）
       - PROXY_BASE_URL=http://proxy:3001
       - PROXY_INTERNAL_URL=http://proxy:3001
+      - UPSTREAM_ALLOWED_HOSTS=${UPSTREAM_ALLOWED_HOSTS:-api.deepseek.com,api.siliconflow.cn,open.bigmodel.cn,api.openai.com,api.anthropic.com}
       # 敏感字段加密密钥，生产必填
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       - AUTO_SYNC_ENABLED=${AUTO_SYNC_ENABLED:-true}

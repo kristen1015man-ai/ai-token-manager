@@ -44,6 +44,7 @@
 | `CORS_ALLOWED_ORIGINS` | 允许的浏览器来源 |
 | `PUBLIC_PROXY_BASE_URL` | 前端展示给员工的 `/v1` 地址 |
 | `ADMIN_IDS` | 飞书 open_id 管理员白名单 |
+| `UPSTREAM_ALLOWED_HOSTS` | 生产允许访问的上游供应商域名白名单 |
 
 生产必须有持久化数据目录：
 
@@ -68,6 +69,7 @@
 - `CORS_ALLOWED_ORIGINS`
 - `PUBLIC_PROXY_BASE_URL`
 - `ADMIN_IDS`
+- `UPSTREAM_ALLOWED_HOSTS`
 - `RAILWAY_VOLUME_MOUNT_PATH=/data` 或 `DATABASE_URL=/data/data.db`
 
 建议显式配置：

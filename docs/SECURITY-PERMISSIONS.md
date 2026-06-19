@@ -42,7 +42,7 @@
 员工 Key 由 `web/src/lib/user-service.ts` 生成：
 
 - 格式：`sk-emp-{name-pinyin}-{128bit hex}`
-- 例：`sk-emp-zhangsan-0123456789abcdef0123456789abcdef`
+- 例：`sk-emp-<name-pinyin>-<128bit-random-hex>`，文档示例不得写成可复制的真实形态。
 
 存储位置：
 
@@ -133,6 +133,7 @@
 
 - 管理后台保存渠道时拒绝 localhost、metadata、私网 IP、带用户名密码的 URL。
 - 生产环境拒绝非 HTTPS Base URL。
+- 生产环境只允许 `UPSTREAM_ALLOWED_HOSTS` 中的供应商域名；新增供应商必须先更新环境变量、价格同步和 smoke 用例。
 - Proxy 请求前调用 `assertSafeUpstreamBaseUrl()`。
 
 关键代码：

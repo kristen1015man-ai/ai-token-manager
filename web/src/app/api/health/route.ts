@@ -1,9 +1,12 @@
-import { getDb, getRawExec } from "../../../lib/db";
+import * as fs from "fs";
+import * as path from "path";
+import { getDb, getDbPath, getRawExec } from "../../../lib/db";
 import { NextRequest } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { ensureDecrypted, isEncrypted } from "../../../lib/crypto";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const REQUIRED_TABLES = ["users", "channels", "usage_logs", "quota_rules"];
 
@@ -11,6 +14,12 @@ interface SecretDecryptionCheck {
   ok: boolean;
   checked: number;
   failures: string[];
+}
+
+interface WritablePathCheck {
+  ok: boolean;
+  path?: string;
+  error?: string;
 }
 
 function hasInternalAuth(request: NextRequest): boolean {
@@ -80,6 +89,25 @@ function checkSecretDecryption(
   return result;
 }
 
+function checkDirectoryWritable(filePath: string | undefined, probeName: string): WritablePathCheck {
+  if (!filePath) return { ok: true };
+
+  const targetDir = path.dirname(path.resolve(filePath));
+  const probePath = path.join(targetDir, probeName);
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(probePath, String(Date.now()), "utf8");
+    fs.unlinkSync(probePath);
+    return { ok: true, path: targetDir };
+  } catch (err) {
+    return {
+      ok: false,
+      path: targetDir,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 export async function GET(request: NextRequest) {
   const detailed = hasInternalAuth(request);
   const checks: Record<string, unknown> = {
@@ -128,6 +156,17 @@ export async function GET(request: NextRequest) {
       checks.dbWritable = false;
       checks.dbWriteError = writeErr instanceof Error ? writeErr.message : "unknown";
     }
+    const dbFileWritable = checkDirectoryWritable(getDbPath(), ".sparkloom-health-db-write-check");
+    checks.dbFileWritable = detailed ? dbFileWritable : dbFileWritable.ok;
+    if (!dbFileWritable.ok) ok = false;
+
+    const queueWritable = checkDirectoryWritable(process.env.USAGE_QUEUE_FILE, ".sparkloom-health-queue-write-check");
+    checks.usageQueueWritable = detailed ? queueWritable : queueWritable.ok;
+    if (!queueWritable.ok) ok = false;
+
+    const deadLetterWritable = checkDirectoryWritable(process.env.USAGE_DEAD_LETTER_FILE, ".sparkloom-health-dead-letter-write-check");
+    checks.usageDeadLetterWritable = detailed ? deadLetterWritable : deadLetterWritable.ok;
+    if (!deadLetterWritable.ok) ok = false;
   } catch (err) {
     ok = false;
     checks.dbReadable = false;

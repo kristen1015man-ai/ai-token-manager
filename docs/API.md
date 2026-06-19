@@ -181,7 +181,7 @@ Web 健康检查。
 | 方法 | 路径 | 角色 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/admin/cleanup-preview` | admin | 清理预览 |
-| POST | `/api/admin/cleanup-execute` | admin | 执行清理 |
+| POST | `/api/admin/cleanup-execute` | admin | 非生产清理执行；生产环境固定返回 404 |
 | POST | `/api/admin/migrate/encrypt` | admin | 旧密钥加密迁移 |
 | GET | `/api/admin/debug` | admin | 调试信息 |
 

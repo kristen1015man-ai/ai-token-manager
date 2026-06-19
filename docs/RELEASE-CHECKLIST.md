@@ -159,7 +159,7 @@ pnpm --filter web lint
 - Proxy `/health` 详细检查 ok。
 - Railway Volume 可写。
 - `/data/data.db` 已备份。
-- usage queue 文件在持久卷。
+- usage queue 和 dead-letter 文件在持久卷，且 `/health` 详细响应显示目录可写。
 - 重启后数据不丢。
 
 ## 14. 发布后观察

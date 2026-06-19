@@ -6,6 +6,13 @@ const allowInsecureUpstreams =
   process.env.NODE_ENV !== "production" && process.env.ALLOW_INSECURE_UPSTREAMS === "true";
 const allowPrivateUpstreams =
   process.env.NODE_ENV !== "production" && process.env.ALLOW_PRIVATE_UPSTREAMS === "true";
+const DEFAULT_PRODUCTION_ALLOWED_HOSTS = [
+  "api.deepseek.com",
+  "api.siliconflow.cn",
+  "open.bigmodel.cn",
+  "api.openai.com",
+  "api.anthropic.com",
+];
 
 interface SafetyCacheEntry {
   expiresAt: number;
@@ -55,6 +62,22 @@ function isBlockedHostname(hostname: string): boolean {
   );
 }
 
+function allowedUpstreamHosts(): Set<string> {
+  const configured = (process.env.UPSTREAM_ALLOWED_HOSTS || "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase().replace(/\.$/, ""))
+    .filter(Boolean);
+  return new Set(configured.length > 0 ? configured : DEFAULT_PRODUCTION_ALLOWED_HOSTS);
+}
+
+function assertAllowedProductionHostname(hostname: string): void {
+  if (process.env.NODE_ENV !== "production") return;
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (!allowedUpstreamHosts().has(host)) {
+    throw new Error(`Unsafe upstream URL: host '${host}' is not in UPSTREAM_ALLOWED_HOSTS`);
+  }
+}
+
 function isPrivateAddress(address: string): boolean {
   const family = isIP(address);
   if (family === 4) return isPrivateIpv4(address);
@@ -95,6 +118,7 @@ export async function assertSafeUpstreamBaseUrl(rawBaseUrl: string): Promise<URL
   if (isBlockedHostname(hostname)) {
     throw new Error("Unsafe upstream URL: local/metadata host is blocked");
   }
+  assertAllowedProductionHostname(hostname);
 
   const directIpFamily = isIP(hostname);
   if (directIpFamily) {
