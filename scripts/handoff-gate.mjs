@@ -51,6 +51,7 @@ for (const suffix of [
 const railwayStart = read("railway/start.mjs");
 for (const token of [
   "PRODUCTION_DISABLED_FLAGS",
+  "isProductionRuntime",
   "assertStrongSecret",
   "assertFeishuConfig",
   "BAD_FEISHU_APP_PREFIX",

@@ -38,7 +38,7 @@
 - 生产上游 base URL 已增加 host allowlist，默认只允许 DeepSeek、SiliconFlow、GLM、OpenAI、Anthropic。
 - 后台渠道保存已复用上游安全校验，非法状态、非法余额同步模式、未批准供应商域名会在保存时被拒绝。
 - 管理员通知接收人已改为统一 `parseRoles()` 精确判断，不再用 SQL 模糊匹配管理员角色。
-- Railway 生产入口已增加 fail-fast 校验：弱密钥、占位符、飞书 App ID 配错、危险开关、非 HTTPS/CORS 通配符、无持久卷都会拒绝启动。
+- Railway 生产入口已增加 fail-fast 校验：`NODE_ENV=production` 或 `RAILWAY_ENVIRONMENT_NAME=production` 都按生产处理，弱密钥、占位符、飞书 App ID 配错、危险开关、非 HTTPS/CORS 通配符、无持久卷都会拒绝启动。
 - 根目录旧 `seed.ts`、`seed-mock.ts` 已移出正式交接包。
 - `proxy/src/services/usage.ts` 已删除历史死代码块。
 - 新增 CI 工作流与 handoff gate。

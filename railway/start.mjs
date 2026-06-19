@@ -48,6 +48,10 @@ function isTruthyEnv(name) {
   return envValue(name).toLowerCase() === "true";
 }
 
+function isProductionRuntime() {
+  return envValue("NODE_ENV") === "production" || envValue("RAILWAY_ENVIRONMENT_NAME") === "production";
+}
+
 function isPlaceholderValue(value) {
   const normalized = value.trim().toLowerCase();
   return (
@@ -154,7 +158,7 @@ function assertUpstreamAllowlist() {
 }
 
 function assertProductionConfig() {
-  if (process.env.NODE_ENV !== "production") return;
+  if (!isProductionRuntime()) return;
 
   const missing = [
     "JWT_SECRET",
