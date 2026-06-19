@@ -169,3 +169,24 @@
 6. 飞书、Railway、DNS、供应商账号、通知群、备份存储的 owner 和权限交割完成。
 
 以上任一项失败，不建议视为完成正式交接。
+
+## 7. 2026-06-20 追加整改记录
+
+新增非破坏性内部备份接口：
+
+- `POST /api/internal/admin/backup`
+- 仅接受 `INTERNAL_API_KEY`。
+- 公网仍应由 `railway/start.mjs` 对 `/api/internal/*` 返回 404。
+- 执行时会先 flush DB，再把 `data.db`、usage queue、dead-letter 复制到 `/data/backups/handoff-<timestamp>/`。
+- 对复制出来的 SQLite 文件执行 `PRAGMA integrity_check`。
+- 写入 `manifest.json`，记录文件大小、SHA-256、核心表数量和校验结果。
+- 不返回明文 Secret、员工 Key 或供应商 Key。
+
+本地接口级烟测已完成：使用临时 DB 副本启动生产模式 web，确认缺失 `ENCRYPTION_KEY` 会 fail-fast；补齐本地测试密钥后调用 `/api/internal/admin/backup`，返回 `success=true` 且 `verification.integrity=ok`。临时 DB 和备份文件已清理。
+
+此整改解决“缺少可重复执行的生产备份校验入口”的代码缺口，但不等于已经完成正式灾备签收。正式交接仍必须补齐：
+
+- 在生产内部执行一次 `/api/internal/admin/backup`，记录返回的 `backupDir`、`manifest.sha256`、`verification.integrity` 和核心表数量。
+- 把备份下载到公司受控存储。
+- 在临时环境恢复并验证登录、渠道、价格、usage、余额和通知。
+- 将执行人、时间、源文件、恢复位置、验证结果写入变更单。

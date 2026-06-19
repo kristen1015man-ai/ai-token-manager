@@ -219,6 +219,7 @@ Authorization: Bearer ${INTERNAL_API_KEY}
 | POST | `/api/internal/quota-alert` | Web/internal | 额度预警 |
 | POST | `/api/internal/admin/reset-billing` | internal | 重置计费数据 |
 | POST | `/api/internal/admin/flush-db` | internal | 强制 DB 落盘 |
+| POST | `/api/internal/admin/backup` | internal | 生成非破坏性备份并校验 SQLite integrity |
 | GET/POST | `/api/internal/admin/sync-feishu` | Web auto-sync | 飞书通讯录同步 |
 | POST | `/api/internal/admin/prices/sync` | Web auto-sync | 官方价格同步 |
 | POST | `/api/internal/admin/channels/balance-sync` | Web auto-sync | 渠道余额同步 |

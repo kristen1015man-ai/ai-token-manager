@@ -32,6 +32,24 @@ for (const rel of publicAdminRoutes) {
   assert(!source.includes("Bearer ${internalKey}"), `${rel} must not accept internal Bearer auth`);
 }
 
+const internalAdminRoutes = [
+  "web/src/app/api/internal/admin/backup/route.ts",
+  "web/src/app/api/internal/admin/flush-db/route.ts",
+  "web/src/app/api/internal/admin/reset-billing/route.ts",
+  "web/src/app/api/internal/admin/sync-feishu/route.ts",
+  "web/src/app/api/internal/admin/prices/sync/route.ts",
+  "web/src/app/api/internal/admin/channels/balance-sync/route.ts",
+  "web/src/app/api/internal/admin/anomaly-check/route.ts",
+  "web/src/app/api/internal/admin/employee-status-check/route.ts",
+  "web/src/app/api/internal/admin/leaderboard-send/route.ts",
+];
+
+for (const rel of internalAdminRoutes) {
+  assert(exists(rel), `${rel} must exist`);
+  const source = read(rel);
+  assert(source.includes("requireInternalRequest"), `${rel} must require internal Bearer auth`);
+}
+
 const proxyMiddleware = read("web/src/proxy.ts");
 const internalAllowedPathsToken = "INTERNAL_API_" + "ALLOWED_PATHS";
 assert(!proxyMiddleware.includes(internalAllowedPathsToken), "web/src/proxy.ts must not whitelist public admin paths for internal auth");
@@ -81,6 +99,7 @@ const deprecatedAdminEmailsToken = "ADMIN_" + "EMAILS";
 assert(!productionEnv.includes(deprecatedAdminEmailsToken), ".env.production.example must not expose deprecated admin email variable");
 
 const apiDocs = read("docs/API.md");
+assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must document the internal backup route");
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
     line.includes("`/api/admin/") ||

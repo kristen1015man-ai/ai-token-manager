@@ -293,6 +293,16 @@ curl -X POST \
 
 发送余额提醒时把 `notify` 改为 `true`。
 
+非破坏性备份并校验：
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $INTERNAL_API_KEY" \
+  http://127.0.0.1:3000/api/internal/admin/backup
+```
+
+执行后检查返回的 `verification.integrity` 必须为 `ok`，并把 `backupDir`、`manifest.sha256`、核心表数量记录到变更单。该备份仍位于 Railway Volume 内，正式灾备还需要下载到公司受控存储并做恢复演练。
+
 ## 8. 数据文件
 
 数据库路径优先级：

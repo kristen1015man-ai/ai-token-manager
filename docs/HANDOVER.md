@@ -632,6 +632,7 @@ https://ai.seapllo.com/api/auth/feishu/callback
 | `/api/internal/usage` | Proxy 批量上报用量 |
 | `/api/internal/quota-alert` | 额度预警通知 |
 | `/api/internal/admin/flush-db` | 内部 flush DB |
+| `/api/internal/admin/backup` | 内部非破坏性备份和 SQLite integrity 校验 |
 | `/api/internal/admin/reset-billing` | 内部计费重置；公网入口被 `railway/start.mjs` 屏蔽 |
 | `/api/internal/admin/sync-feishu` | 内部飞书通讯录同步 |
 | `/api/internal/admin/prices/sync` | 内部官方价格同步 |

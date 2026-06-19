@@ -38,6 +38,29 @@
 
 ## 4. 手动备份步骤
 
+推荐先使用非破坏性内部备份接口生成一份带校验信息的备份：
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $INTERNAL_API_KEY" \
+  http://127.0.0.1:3000/api/internal/admin/backup
+```
+
+该接口会：
+
+- 先把内存 DB flush 到磁盘。
+- 复制 `data.db`、`usage-queue.jsonl`、`usage-dead-letter.jsonl` 到 `/data/backups/handoff-<timestamp>/`。
+- 对复制出来的 `data.db` 执行 `PRAGMA integrity_check`。
+- 写入 `manifest.json`，记录文件大小、SHA-256、核心表数量和校验结果。
+
+注意：
+
+- 该接口只接受 `INTERNAL_API_KEY`，公网入口仍应被 `railway/start.mjs` 返回 404。
+- 该接口只在 Railway Volume 内生成备份，不能替代下载到公司受控存储的灾备。
+- 返回内容不得包含明文 Secret、员工 Key 或供应商 Key。
+
+如果需要人工复制文件，执行以下步骤：
+
 1. 进入 Railway shell 或使用平台文件下载能力。
 2. 确认应用低流量。
 3. 调内部 flush：

@@ -130,6 +130,27 @@ Attempted non-destructive backup drill:
 
 Conclusion: existing backups are present, but a full backup download and restore rehearsal is still not signed off.
 
+Additional code remediation added after this evidence snapshot:
+
+- Added `POST /api/internal/admin/backup`.
+- The route requires `INTERNAL_API_KEY`.
+- It flushes the sql.js DB to disk, copies `data.db`, `usage-queue.jsonl`, and `usage-dead-letter.jsonl` into `/data/backups/handoff-<timestamp>/`.
+- It verifies the copied SQLite DB with `PRAGMA integrity_check`.
+- It writes a `manifest.json` with file sizes, SHA-256 hashes, and core table counts.
+- Public access must still return 404 through `railway/start.mjs` because the path is under `/api/internal/*`.
+
+This closes the code-level backup-verification gap, but the production drill still needs execution and sign-off.
+
+Local route smoke evidence:
+
+- Started `web` in production mode on a temporary local DB copy.
+- Confirmed missing `ENCRYPTION_KEY` triggers production fail-fast before the smoke test.
+- Re-ran with a local test `ENCRYPTION_KEY` and `INTERNAL_API_KEY`.
+- `POST /api/internal/admin/backup` returned `success=true`.
+- `verification.integrity` returned `ok`.
+- `manifest.sha256` and `files.dataDb.sha256` were generated.
+- Temporary local DB and backup files were deleted after the smoke test.
+
 ## 8. Remaining Sign-Off Evidence
 
 以下仍需业务侧或接收方配合完成，不能由本地代码单独证明：
