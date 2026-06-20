@@ -221,6 +221,7 @@
 - Railway 大文件下载通道在本机下载 `data.db` 和历史备份时卡住，未能完成生产 DB 下载。
 - 2026-06-20 18:01 +08 再次尝试：目录 listing 和 `manifest.json` 下载成功，`data.db` 下载仍因 Railway CLI `Timeout` 失败并只留下 `2097152` bytes 残缺文件；本地残缺文件和 manifest 已删除。
 - 同次尝试中，`railway ssh --service web -- ls/sha256sum ...` 未返回，已终止本地挂起进程。
+- 2026-06-20 18:08 +08 追加尝试下载整个备份目录并把 `--concurrency` 降到 `1`，仍在 `data.db` 下载阶段因 Railway CLI `Timeout` 失败；本地临时目录已删除。
 - 生产备份尚未落到公司受控存储。
 - 尚未在临时环境完成完整恢复演练。
 

@@ -114,6 +114,8 @@ node scripts/verify-sqlite-backup.mjs /path/to/data.db
 
 该脚本只读打开 SQLite 文件，不会修改备份内容，也不会输出密钥明文。
 
+注意：2026-06-20 交接演练中，Railway CLI 可以列出备份目录并下载 `manifest.json`，但下载约 13.5 MB 的 `data.db` 多次因 `Timeout` 失败，目录下载并降低 concurrency 也未解决。因此正式灾备不能只依赖本机 Railway CLI 大文件下载；接收方应使用 Railway 可用的文件下载通道、对象存储备份任务，或公司认可的运维通道，把完整备份搬运到受控存储后再执行 `verify-sqlite-backup.mjs` 和恢复演练。
+
 ## 5. 恢复步骤
 
 1. 停止线上服务或切维护窗口。

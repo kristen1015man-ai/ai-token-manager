@@ -237,6 +237,7 @@ Additional external-download retry:
 - `railway volume files ... download .../data.db ...` failed with Railway CLI `Timeout` after leaving a partial local file of `2097152` bytes.
 - Two `railway ssh --service web -- ...` attempts for listing/checksum did not return after waiting and were terminated locally.
 - The temporary local directory containing the partial DB and manifest was deleted. No production DB copy is retained locally.
+- A directory download retry with `railway volume files ... download /backups/handoff-2026-06-20T02-50-12-179Z ... --concurrency 1 --json` also failed on `data.db` with Railway CLI `Timeout`. The temporary local directory was deleted.
 
 Conclusion after retry: Railway volume listing and manifest download are available, but full DB download through the current local Railway CLI/SSH channel is still blocked. Formal disaster-recovery sign-off still requires a reliable platform download path, object storage backup job, or another approved operations channel to move the full backup into company-controlled storage and restore it in a temporary environment.
 
