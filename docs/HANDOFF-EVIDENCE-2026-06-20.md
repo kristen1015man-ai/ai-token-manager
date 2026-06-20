@@ -20,6 +20,8 @@
 - 临时 DB migration 烟测
 - admin/internal route guard 扫描
 - tracked secret 扫描
+- directory-level admin/setup/internal route auth scan
+- tracked env concrete secret scan
 - `git diff --check`
 
 ## 2. Railway 生产部署

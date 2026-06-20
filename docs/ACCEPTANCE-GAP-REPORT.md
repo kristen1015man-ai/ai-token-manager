@@ -18,7 +18,8 @@
 - `git diff --check`
 - 阻断关键字扫描：固定员工 key、公开 admin internal 绕过、废弃 `ADMIN_` + `EMAILS`、`INTERNAL_API_` + `ALLOWED_PATHS` 均无命中
 - tracked 文件真实形态密钥扫描，无真实飞书 Secret、供应商 Key、员工 Key 命中
-- admin/internal route guard 扫描：所有 `/api/admin/*` 有角色守卫，所有 `/api/internal/*` 有内部 Bearer 守卫
+- admin/internal route guard 目录级扫描：所有 `/api/admin/**/route.ts` 有 `requireAdmin` 或 `requireRole`，所有 `/api/setup/**/route.ts` 有 `requireAdmin`，所有 `/api/internal/**/route.ts` 有内部 Bearer 守卫
+- tracked env 文件 Secret 扫描：`SECRET`、`TOKEN`、`PASSWORD`、`API_KEY`、`APP_SECRET` 类变量不允许出现具体值，只允许空值或占位符
 - `node --check railway/start.mjs`
 - Railway 生产入口负向测试：弱 JWT、重复 `cli_` 前缀飞书 App ID、危险开关开启均被拒绝启动
 
