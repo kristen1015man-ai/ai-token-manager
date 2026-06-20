@@ -32,9 +32,27 @@ function runJson(command, commandArgs) {
   }
 }
 
-function readJson(filePath) {
-  if (!filePath) return null;
-  return JSON.parse(fs.readFileSync(path.resolve(filePath), "utf8"));
+function readJsonEvidence(filePath) {
+  if (!filePath) {
+    return {
+      provided: false,
+      value: null,
+      error: null,
+    };
+  }
+  try {
+    return {
+      provided: true,
+      value: JSON.parse(fs.readFileSync(path.resolve(filePath), "utf8")),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      provided: true,
+      value: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function git(args) {
@@ -45,10 +63,84 @@ const uatEvidencePath = argValue("--uat-evidence");
 const backupVerificationPath = argValue("--backup-verification");
 const assetSignoffPath = argValue("--asset-signoff");
 
+const requiredAssetIds = [
+  "code-repository",
+  "railway-project",
+  "domain-dns",
+  "feishu-app",
+  "supplier-accounts",
+  "notification-groups",
+  "production-secrets",
+  "backup-storage",
+];
+
+function nonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function validateAssetSignoff(signoff, readResult) {
+  if (readResult?.error) {
+    return {
+      provided: true,
+      complete: false,
+      readError: readResult.error,
+      missingAssetIds: requiredAssetIds,
+      incompleteAssetIds: [],
+      invalidAssetIds: [],
+      schemaErrors: [],
+    };
+  }
+  if (!signoff) {
+    return {
+      provided: readResult?.provided === true,
+      complete: false,
+      missingAssetIds: requiredAssetIds,
+      incompleteAssetIds: [],
+      invalidAssetIds: [],
+      schemaErrors: [],
+    };
+  }
+  const schemaErrors = [];
+  if (!Array.isArray(signoff.assets)) {
+    schemaErrors.push("assets must be an array");
+  }
+  const assets = Array.isArray(signoff.assets) ? signoff.assets : [];
+  const byId = new Map(assets.map((asset) => [asset?.id, asset]));
+  const missingAssetIds = requiredAssetIds.filter((id) => !byId.has(id));
+  const incompleteAssetIds = [];
+  const invalidAssetIds = [];
+
+  for (const id of requiredAssetIds) {
+    const asset = byId.get(id);
+    if (!asset) continue;
+    if (asset.complete !== true) incompleteAssetIds.push(id);
+    if (!nonEmptyString(asset.owner) || !nonEmptyString(asset.permission) || !nonEmptyString(asset.evidenceRef)) {
+      invalidAssetIds.push(id);
+    }
+  }
+
+  return {
+    provided: true,
+    complete:
+      schemaErrors.length === 0 &&
+      missingAssetIds.length === 0 &&
+      incompleteAssetIds.length === 0 &&
+      invalidAssetIds.length === 0,
+    missingAssetIds,
+    incompleteAssetIds,
+    invalidAssetIds,
+    schemaErrors,
+  };
+}
+
 const handoffStatus = runJson(process.execPath, ["scripts/handoff-status.mjs", "handoff-2026-06-20"]);
-const uatEvidence = readJson(uatEvidencePath);
-const backupVerification = readJson(backupVerificationPath);
-const assetSignoffExists = assetSignoffPath ? fs.existsSync(path.resolve(assetSignoffPath)) : false;
+const uatEvidenceRead = readJsonEvidence(uatEvidencePath);
+const backupVerificationRead = readJsonEvidence(backupVerificationPath);
+const assetSignoffRead = readJsonEvidence(assetSignoffPath);
+const uatEvidence = uatEvidenceRead.value;
+const backupVerification = backupVerificationRead.value;
+const assetSignoff = assetSignoffRead.value;
+const assetSignoffValidation = validateAssetSignoff(assetSignoff, assetSignoffRead);
 
 const businessUatComplete = Boolean(
   uatEvidence?.environment?.employeeKeyProvided &&
@@ -70,18 +162,21 @@ const requiredExternalEvidence = [
     description: "真实员工登录、员工 Key、/v1/models、小额非流式/流式调用、usage 入库和费用核对",
     complete: businessUatComplete,
     evidence: uatEvidencePath || null,
+    readError: uatEvidenceRead.error,
   },
   {
     id: "backup-restore",
     description: "生产备份下载到公司受控存储，并在临时环境完成只读校验和恢复演练",
     complete: backupRestoreComplete,
     evidence: backupVerificationPath || null,
+    readError: backupVerificationRead.error,
   },
   {
     id: "asset-handoff",
-    description: "Railway、DNS、飞书应用、供应商账号、通知群、备份存储 owner 和权限交割记录",
-    complete: assetSignoffExists,
+    description: "代码仓库、Railway、DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储 owner 和权限交割记录",
+    complete: assetSignoffValidation.complete,
     evidence: assetSignoffPath || null,
+    validation: assetSignoffValidation,
   },
 ];
 

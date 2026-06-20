@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "project": "Sparkloom",
+  "handoffTag": "handoff-2026-06-20",
+  "completedAt": "",
+  "completedBy": "",
+  "assets": [
+    {
+      "id": "code-repository",
+      "name": "代码仓库",
+      "owner": "",
+      "permission": "admin/write/read",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认接收方可以拉取 handoff tag、查看提交历史、创建分支和提交变更。"
+    },
+    {
+      "id": "railway-project",
+      "name": "Railway 项目和生产环境",
+      "owner": "",
+      "permission": "admin",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认 Project、Service、Variables、Deployments、Volume 查看和恢复权限。"
+    },
+    {
+      "id": "domain-dns",
+      "name": "域名、DNS 和 TLS",
+      "owner": "",
+      "permission": "admin",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认 ai.seapllo.com 解析、证书、反代或托管平台权限。"
+    },
+    {
+      "id": "feishu-app",
+      "name": "飞书应用",
+      "owner": "",
+      "permission": "admin",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认应用管理员、OAuth 回调、权限 scopes、可用范围、机器人入群状态。"
+    },
+    {
+      "id": "supplier-accounts",
+      "name": "上游供应商账号",
+      "owner": "",
+      "permission": "billing/admin",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认 DeepSeek、SiliconFlow 等账号 owner、充值责任、Key 轮换流程。不得记录明文 Key。"
+    },
+    {
+      "id": "notification-groups",
+      "name": "通知群和接收人",
+      "owner": "",
+      "permission": "group owner/admin",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认余额、异常、排行榜通知群 owner，机器人在群且可发送。"
+    },
+    {
+      "id": "production-secrets",
+      "name": "生产密钥库",
+      "owner": "",
+      "permission": "vault admin",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认 JWT_SECRET、INTERNAL_API_KEY、ENCRYPTION_KEY、FEISHU_APP_SECRET 已在公司密钥库；不得记录明文 Secret。"
+    },
+    {
+      "id": "backup-storage",
+      "name": "备份存储和恢复责任",
+      "owner": "",
+      "permission": "admin/write/read",
+      "evidenceRef": "",
+      "complete": false,
+      "notes": "确认外部受控存储位置、保留周期、恢复负责人和最近恢复演练记录。"
+    }
+  ]
+}

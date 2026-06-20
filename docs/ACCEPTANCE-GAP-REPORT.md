@@ -165,6 +165,26 @@
 - 远端 CI 绿色截图或日志：待配置 remote 后补齐。
 - 回滚入口：Railway deployment history 可回滚到上一成功部署。
 
+### 4.6 结构化资产交割证据
+
+证据文件：
+
+- `docs/HANDOFF-ASSET-SIGNOFF.template.json`
+- `scripts/handoff-readiness-report.mjs`
+
+现状：
+
+- 已新增资产交割 JSON 模板。
+- `pnpm handoff:readiness` 已改为校验资产签收文件结构，不再只判断文件是否存在。
+- `asset-handoff` 需要以下八项都通过：代码仓库、Railway 项目、域名/DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储。
+
+签收要求：
+
+- 接收方复制模板到公司受控目录，填写实际 `owner`、`permission`、`evidenceRef`。
+- 每项资产必须 `complete=true`，否则 readiness report 保持 `formalSignoffReady=false`。
+- 签收文件不得包含明文 Key、Secret、cookie、token 或供应商真实密钥。
+- 资产签收文件应作为受控证据归档，不提交 Git。
+
 ## 5. P2 建议整理
 
 - 多个早期文件存在注释乱码，不影响编译，但影响接收方维护效率。建议逐步修复核心文件注释。
@@ -178,7 +198,7 @@
 3. 自动备份和恢复演练完成并归档。
 4. 高危操作有审批、审计、备份和回滚记录。
 5. 线上 smoke/UAT 全部通过。
-6. 飞书、Railway、DNS、供应商账号、通知群、备份存储的 owner 和权限交割完成。
+6. 代码仓库、Railway、DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储的 owner 和权限交割完成，并通过 `HANDOFF-ASSET-SIGNOFF.template.json` 结构化签收。
 
 以上任一项失败，不建议视为完成正式交接。
 
@@ -235,7 +255,8 @@
 - `scripts/verify-sqlite-backup.mjs`：接收方下载 `data.db` 后可执行只读 SQLite 校验，输出 `integrity`、SHA-256、文件大小、缺失表和核心表计数。
 - `scripts/production-smoke.mjs`：接收方可执行线上非计费 smoke；如提供员工 Key，可继续验证 `/v1/models` 和授权的小额 chat。
 - `scripts/handoff-uat-evidence.mjs`：接收方可生成脱敏 JSON 证据包，默认不调用模型；显式传入员工 Key 和计费参数后才执行小额调用。
-- `scripts/handoff-readiness-report.mjs`：接收方可把 UAT、备份校验和资产交割证据输入脚本，输出 `formalSignoffReady` 和剩余缺口。
+- `docs/HANDOFF-ASSET-SIGNOFF.template.json`：接收方可复制后填写结构化资产交割证据；实际签收文件不要提交 Git。
+- `scripts/handoff-readiness-report.mjs`：接收方可把 UAT、备份校验和资产交割证据输入脚本，输出 `formalSignoffReady` 和剩余缺口；坏 JSON 或路径错误会在 `readError` 中显示。
 - `scripts/handoff-gate.mjs` 已纳入签收表、备份校验脚本和生产 smoke 脚本存在性检查。
 
-接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、`pnpm handoff:uat`、员工 Key smoke 的输出归档到公司受控存储或变更单。
+接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、`pnpm handoff:uat`、员工 Key smoke、`handoff-asset-signoff.json` 的输出或文件归档到公司受控存储或变更单。

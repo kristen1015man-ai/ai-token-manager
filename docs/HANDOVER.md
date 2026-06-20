@@ -31,6 +31,7 @@
 | `docs/backup-restore.md` | 备份、恢复和计费重置 |
 | `docs/monitoring.md` | 健康检查、日志、指标和告警 |
 | `docs/reverse-proxy.md` | Railway 入口层和未来反代规则 |
+| `docs/HANDOFF-ASSET-SIGNOFF.template.json` | 结构化资产交割签收模板，实际签收文件不要提交 Git |
 
 ---
 
@@ -99,14 +100,16 @@ Sparkloom 是公司内部 AI API 网关和用量管理后台：
 
 | 资产 | 必须确认 |
 | --- | --- |
+| 代码仓库 | 接收方能拉取 `handoff-2026-06-20` tag、查看提交历史、创建分支、提交变更 |
 | Railway | Project `heartfelt-education`、Service `web`、变量读写、部署、Volume 查看/备份权限 |
 | 飞书开放平台 | 企业自建应用管理权限、OAuth 回调、通讯录权限、机器人消息权限、应用可用范围 |
 | 域名和 DNS | `ai.seapllo.com` 的 DNS/TLS/反向代理管理权限 |
 | 供应商控制台 | DeepSeek、SiliconFlow、OpenAI、Anthropic、GLM、阿里云等账号和 Key 轮换流程 |
 | 通知资产 | 飞书告警群、排行榜群、机器人入群状态 |
+| 生产密钥库 | `JWT_SECRET`、`INTERNAL_API_KEY`、`ENCRYPTION_KEY`、`FEISHU_APP_SECRET` 的受控存放和轮换责任 |
 | 数据资产 | `/data/data.db`、usage queue、dead-letter 的备份位置和恢复演练记录 |
 
-不得在交接文档中记录明文 secret。只记录 Owner、备份 Owner、权限级别、找回方式和交接状态。
+不得在交接文档中记录明文 secret。只记录 Owner、备份 Owner、权限级别、找回方式和交接状态。资产交割必须复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到公司受控目录并填写，`pnpm handoff:readiness -- --asset-signoff <file>` 只有在八项资产都 `complete=true` 且有 `owner`、`permission`、`evidenceRef` 时才会认可。
 
 重要入口文件：
 
@@ -683,6 +686,12 @@ pnpm --filter proxy build
 node --check railway/start.mjs
 ```
 
+正式签收时不要只跑裸 `pnpm handoff:readiness`。应提供 UAT、备份恢复、资产交割三类证据：
+
+```powershell
+pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <handoff-asset-signoff.json>
+```
+
 部署后检查：
 
 ```powershell
@@ -920,7 +929,8 @@ git diff --check
 - `pnpm smoke:production` 返回 `ok=true`。
 - `pnpm handoff:status` 返回 `ok=true`，确认 handoff tag 指向当前提交且工作区干净。
 - `pnpm handoff:uat` 输出脱敏 JSON；提供员工 Key 时可用 `--out <受控目录>` 归档业务 UAT 证据。
-- `pnpm handoff:readiness` 输出 `formalSignoffReady` 和剩余签收缺口。
+- `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 输出 `formalSignoffReady` 和剩余签收缺口。
+- `asset.json` 必须来自 `docs/HANDOFF-ASSET-SIGNOFF.template.json`，八项资产均确认后才算通过；不得包含明文 Key/Secret。
 - 登录页可打开。
 - 飞书登录可进入后台。
 - `/api/health` 返回 200。

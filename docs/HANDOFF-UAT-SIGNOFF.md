@@ -35,7 +35,8 @@
 | T-09 | `https://ai.seapllo.com/api/health` | HTTP 200，`status=ok` | 响应摘要 |  |
 | T-10 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `ok=true`，危险内部接口公网不可访问 | 命令输出 |  |
 | T-11 | `pnpm handoff:uat -- --out <受控目录>` | 生成脱敏 JSON 证据，不包含明文 Key/Secret | 证据文件 |  |
-| T-12 | `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset-file>` | `formalSignoffReady=true` | 命令输出 |  |
+| T-12 | 复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录并填写 | 八项资产均 `complete=true`，且每项都有 owner、permission、evidenceRef | `handoff-asset-signoff.json` |  |
+| T-13 | `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset-file>` | `formalSignoffReady=true` | 命令输出 |  |
 
 ## 3. 登录与权限
 
@@ -115,15 +116,18 @@
 
 ## 9. 资产交割
 
+资产交割必须使用 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 作为结构化签收模板。实际填写文件应放在公司受控目录或变更单附件中，不要提交到 Git。`owner` 填实际负责人或团队，`permission` 填已确认的权限级别，`evidenceRef` 填截图、审批单、密钥库记录、平台权限页或存储路径编号。禁止在该 JSON 中写入明文 Key、Secret、cookie 或 token。
+
 | 编号 | 资产 | 期望结果 | 证据 | 结果 |
 | --- | --- | --- | --- | --- |
-| O-01 | Railway 项目 | 接收方管理员拥有权限 | 权限截图 |  |
-| O-02 | 域名/DNS | 接收方确认 owner 和解析权限 | 权限截图 |  |
-| O-03 | 飞书应用 | 接收方确认应用管理员、权限、数据范围 | 权限截图 |  |
-| O-04 | 供应商账号 | DeepSeek、SiliconFlow 等 owner 和充值责任明确 | 交割记录 |  |
-| O-05 | 通知群 | 余额、异常、排行榜通知群 owner 明确 | 群设置截图 |  |
-| O-06 | 生产密钥 | `JWT_SECRET`、`INTERNAL_API_KEY`、`ENCRYPTION_KEY` 已进入公司密钥库 | 密钥库记录，禁止明文截图 |  |
-| O-07 | 备份存储 | 备份存储 owner、保留周期、恢复负责人明确 | 存储策略 |  |
+| O-01 | 代码仓库 | 接收方可拉取 handoff tag、查看提交历史、创建分支和提交变更 | 权限截图/仓库邀请记录 |  |
+| O-02 | Railway 项目 | 接收方管理员拥有 Project、Service、Variables、Deployments、Volume 权限 | 权限截图 |  |
+| O-03 | 域名/DNS | 接收方确认 owner、解析权限、证书/TLS 管理权限 | 权限截图 |  |
+| O-04 | 飞书应用 | 接收方确认应用管理员、OAuth 回调、权限、数据范围、机器人入群 | 权限截图 |  |
+| O-05 | 供应商账号 | DeepSeek、SiliconFlow 等 owner、充值责任、Key 轮换流程明确 | 交割记录 |  |
+| O-06 | 通知群 | 余额、异常、排行榜通知群 owner 明确，机器人可发送 | 群设置截图 |  |
+| O-07 | 生产密钥库 | `JWT_SECRET`、`INTERNAL_API_KEY`、`ENCRYPTION_KEY`、`FEISHU_APP_SECRET` 已进入公司密钥库 | 密钥库记录，禁止明文截图 |  |
+| O-08 | 备份存储 | 外部受控备份存储、保留周期、恢复负责人、最近恢复演练明确 | 存储策略/演练记录 |  |
 
 ## 10. 签收结论
 

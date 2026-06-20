@@ -186,10 +186,11 @@ assert(!productionEnv.includes(deprecatedAdminEmailsToken), ".env.production.exa
 const apiDocs = read("docs/API.md");
 assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must document the internal backup route");
 const gitignore = read(".gitignore");
-for (const token of ["handoff-evidence/", "handoff-uat-evidence-*.json"]) {
+for (const token of ["handoff-evidence/", "handoff-uat-evidence-*.json", "handoff-asset-signoff.json", "handoff-asset-signoff-*.json"]) {
   assert(gitignore.includes(token), `.gitignore must keep ${token}`);
 }
 assert(exists("docs/HANDOFF-UAT-SIGNOFF.md"), "handoff UAT sign-off document must exist");
+assert(exists("docs/HANDOFF-ASSET-SIGNOFF.template.json"), "handoff asset sign-off template must exist");
 assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification script must exist");
 assert(exists("scripts/production-smoke.mjs"), "production smoke script must exist");
 assert(exists("scripts/handoff-status.mjs"), "handoff status script must exist");
@@ -242,14 +243,44 @@ const handoffReadiness = read("scripts/handoff-readiness-report.mjs");
 for (const token of [
   "formalSignoffReady",
   "codeHandoffReady",
+  "validateAssetSignoff",
+  "readJsonEvidence",
+  "readError",
+  "schemaErrors",
   "business-uat",
   "backup-restore",
   "asset-handoff",
+  "requiredAssetIds",
   "--uat-evidence",
   "--backup-verification",
   "--asset-signoff",
 ]) {
   assert(handoffReadiness.includes(token), `handoff readiness report must keep ${token}`);
+}
+const assetTemplate = JSON.parse(read("docs/HANDOFF-ASSET-SIGNOFF.template.json"));
+const templateAssetIds = new Set((assetTemplate.assets || []).map((asset) => asset.id));
+for (const id of [
+  "code-repository",
+  "railway-project",
+  "domain-dns",
+  "feishu-app",
+  "supplier-accounts",
+  "notification-groups",
+  "production-secrets",
+  "backup-storage",
+]) {
+  assert(templateAssetIds.has(id), `handoff asset template must include ${id}`);
+}
+for (const rel of [
+  "docs/README.md",
+  "docs/HANDOFF-UAT-SIGNOFF.md",
+  "docs/HANDOVER.md",
+  "docs/ACCEPTANCE-GAP-REPORT.md",
+  "docs/HANDOFF-EVIDENCE-2026-06-20.md",
+  "docs/RELEASE-CHECKLIST.md",
+]) {
+  const source = read(rel);
+  assert(source.includes("HANDOFF-ASSET-SIGNOFF.template.json"), `${rel} must document the asset sign-off template`);
 }
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =

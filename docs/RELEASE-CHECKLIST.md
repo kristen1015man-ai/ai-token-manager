@@ -27,6 +27,7 @@ pnpm --filter web lint
 - handoff tag 指向当前提交，工作区干净。
 - UAT 证据脚本可生成脱敏 JSON，不输出明文 Key/Secret。
 - readiness report 能明确输出 `formalSignoffReady=false/true` 和剩余外部证据缺口。
+- 正式交接或重大资金敏感发布时，必须使用 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 填写资产签收 JSON，并通过 `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 校验。
 
 ## 2. 环境变量检查
 
@@ -196,6 +197,7 @@ pnpm --filter web lint
 - Railway deployment。
 - 是否涉及资金、密钥、权限、飞书或 DB。
 - 发布前备份文件位置。
+- 如涉及交接，资产签收文件位置；签收文件不得包含明文 Key/Secret。
 - 回滚方案。
 - 甲方验收人。
 - 乙方发布人。
@@ -243,6 +245,7 @@ pnpm --filter web lint
 - `/health` 和内部 `/api/health` 结果。
 - 发布前后 Git commit。
 - 发布前备份位置。
+- 资产签收 JSON 或变更单附件位置。
 - 发布后 30 分钟观察结论。
 
 这些记录用于后续审计和事故追溯。
