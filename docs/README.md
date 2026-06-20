@@ -34,9 +34,10 @@
 pnpm test
 pnpm handoff:status
 pnpm smoke:production
+pnpm handoff:uat
 ```
 
-`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。
+`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用。`pnpm handoff:uat` 输出可归档的脱敏 JSON 证据。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。
 
 ## 文档职责
 

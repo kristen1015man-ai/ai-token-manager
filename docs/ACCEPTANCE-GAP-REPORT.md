@@ -11,6 +11,7 @@
 - `pnpm install --frozen-lockfile`
 - `pnpm test`
 - `pnpm handoff:status`
+- `pnpm handoff:uat`
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `pnpm --filter proxy build`
@@ -139,6 +140,7 @@
 - 员工 Key 技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com`。
 - 小额计费技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --chat-model <model>`。
 - 小额流式技术命令：在小额计费命令后追加 `--include-stream`。
+- 脱敏证据包命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>`。
 
 ### 4.5 远端 CI 和最终发布证据
 
@@ -227,6 +229,7 @@
 - `docs/HANDOFF-UAT-SIGNOFF.md`：覆盖登录权限、员工 Key、模型调用计费、渠道余额价格、飞书同步通知、灾备恢复、资产交割和签字结论。
 - `scripts/verify-sqlite-backup.mjs`：接收方下载 `data.db` 后可执行只读 SQLite 校验，输出 `integrity`、SHA-256、文件大小、缺失表和核心表计数。
 - `scripts/production-smoke.mjs`：接收方可执行线上非计费 smoke；如提供员工 Key，可继续验证 `/v1/models` 和授权的小额 chat。
+- `scripts/handoff-uat-evidence.mjs`：接收方可生成脱敏 JSON 证据包，默认不调用模型；显式传入员工 Key 和计费参数后才执行小额调用。
 - `scripts/handoff-gate.mjs` 已纳入签收表、备份校验脚本和生产 smoke 脚本存在性检查。
 
-接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、员工 Key smoke 的输出归档到公司受控存储或变更单。
+接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、`pnpm handoff:uat`、员工 Key smoke 的输出归档到公司受控存储或变更单。

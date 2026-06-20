@@ -185,10 +185,15 @@ assert(!productionEnv.includes(deprecatedAdminEmailsToken), ".env.production.exa
 
 const apiDocs = read("docs/API.md");
 assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must document the internal backup route");
+const gitignore = read(".gitignore");
+for (const token of ["handoff-evidence/", "handoff-uat-evidence-*.json"]) {
+  assert(gitignore.includes(token), `.gitignore must keep ${token}`);
+}
 assert(exists("docs/HANDOFF-UAT-SIGNOFF.md"), "handoff UAT sign-off document must exist");
 assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification script must exist");
 assert(exists("scripts/production-smoke.mjs"), "production smoke script must exist");
 assert(exists("scripts/handoff-status.mjs"), "handoff status script must exist");
+assert(exists("scripts/handoff-uat-evidence.mjs"), "handoff UAT evidence script must exist");
 const uatSignoff = read("docs/HANDOFF-UAT-SIGNOFF.md");
 for (const token of [
   "登录与权限",
@@ -220,6 +225,18 @@ const handoffStatus = read("scripts/handoff-status.mjs");
 for (const token of ["rev-list", "tagMatchesHead", "workspaceClean", "dirtyFiles", "process.exitCode"]) {
   assert(handoffStatus.includes(token), `handoff status must keep ${token}`);
 }
+const handoffUatEvidence = read("scripts/handoff-uat-evidence.mjs");
+for (const token of [
+  "SPARKLOOM_EMPLOYEE_API_KEY",
+  "--allow-billable",
+  "--include-stream",
+  "redactText",
+  "handoff-status.mjs",
+  "production-smoke.mjs",
+  "process.exitCode",
+]) {
+  assert(handoffUatEvidence.includes(token), `handoff UAT evidence must keep ${token}`);
+}
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
     line.includes("`/api/admin/") ||
@@ -241,6 +258,10 @@ assert(
 assert(
   rootPkg.scripts?.["handoff:status"] === "node scripts/handoff-status.mjs handoff-2026-06-20",
   "root package must expose the handoff status command"
+);
+assert(
+  rootPkg.scripts?.["handoff:uat"] === "node scripts/handoff-uat-evidence.mjs --base https://ai.seapllo.com",
+  "root package must expose the handoff UAT evidence command"
 );
 assert(!sharedPkg.scripts?.[dbGenerateScript], "shared package must not expose a non-source-of-truth db generate script");
 assert(sharedPkg.scripts?.["db:migrate"] === "node run-migrate.mjs", "shared db:migrate must use the checked-in migration runner");

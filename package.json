@@ -16,6 +16,7 @@
     "test": "node scripts/handoff-gate.mjs",
     "db:migrate": "pnpm --filter shared db:migrate",
     "handoff:status": "node scripts/handoff-status.mjs handoff-2026-06-20",
+    "handoff:uat": "node scripts/handoff-uat-evidence.mjs --base https://ai.seapllo.com",
     "smoke:production": "node scripts/production-smoke.mjs --base https://ai.seapllo.com"
   },
   "dependencies": {

@@ -17,6 +17,7 @@
 - `pnpm install --frozen-lockfile`
 - `pnpm test`
 - `pnpm handoff:status`
+- `pnpm handoff:uat`
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `pnpm --filter proxy build`
@@ -29,6 +30,7 @@
 - backup verification helper smoke test: `scripts/verify-sqlite-backup.mjs`
 - production public smoke helper: `scripts/production-smoke.mjs`
 - handoff status helper: `scripts/handoff-status.mjs`
+- handoff UAT evidence helper: `scripts/handoff-uat-evidence.mjs`
 - formal UAT/sign-off checklist: `docs/HANDOFF-UAT-SIGNOFF.md`
 - `git diff --check`
 

@@ -10,6 +10,7 @@
 pnpm install --frozen-lockfile
 pnpm test
 pnpm handoff:status
+pnpm handoff:uat
 pnpm --filter web build
 pnpm --filter proxy build
 pnpm --filter web lint
@@ -23,6 +24,7 @@ pnpm --filter web lint
 - TypeScript 无错误。
 - handoff gate 通过，关键权限/内部接口/密钥扫描规则未被破坏。
 - handoff tag 指向当前提交，工作区干净。
+- UAT 证据脚本可生成脱敏 JSON，不输出明文 Key/Secret。
 
 ## 2. 环境变量检查
 
@@ -206,6 +208,7 @@ pnpm --filter web lint
 - 真实员工能登录并新建 API Key。
 - Claude Code 或 OpenAI 兼容客户端能使用员工 Key。
 - `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com` 返回 `/v1/models` 通过，输出不包含明文 Key。
+- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --out <受控目录>` 生成可归档证据。
 - 如需验证真实计费，使用 `--allow-billable --chat-model <model>`，只选接收方认可的小额模型。
 - 如需验证流式调用，在计费 smoke 命令后追加 `--include-stream`。
 - 管理员能查看该员工产生的用量和费用。
