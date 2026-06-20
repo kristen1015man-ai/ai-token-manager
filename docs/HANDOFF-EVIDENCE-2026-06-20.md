@@ -228,6 +228,18 @@ Drill cleanup:
 
 Conclusion after drill: production in-volume backup generation and SQLite integrity verification are signed off. External backup download to company-controlled storage and full temporary-environment restore rehearsal are still not signed off.
 
+Additional external-download retry:
+
+- Time: `2026-06-20 18:01:02 +08:00`
+- Production volume ID used: `dc6af80e-f35b-4892-b19e-cc13bd0ece5e` (`web-volume-4jgN`, `/data`).
+- `railway volume files --volume dc6af80e-f35b-4892-b19e-cc13bd0ece5e list /backups/handoff-2026-06-20T02-50-12-179Z --json` succeeded and listed `data.db`, `manifest.json`, `usage-queue.jsonl`.
+- `manifest.json` downloaded successfully and matched the previous drill metadata: DB size `13545472`, DB SHA-256 `d17f8c4102515f4fc08269b7fd347b93e011f386a1d16fb3d8cbe68e20c3de2a`, `verification.integrity=ok`.
+- `railway volume files ... download .../data.db ...` failed with Railway CLI `Timeout` after leaving a partial local file of `2097152` bytes.
+- Two `railway ssh --service web -- ...` attempts for listing/checksum did not return after waiting and were terminated locally.
+- The temporary local directory containing the partial DB and manifest was deleted. No production DB copy is retained locally.
+
+Conclusion after retry: Railway volume listing and manifest download are available, but full DB download through the current local Railway CLI/SSH channel is still blocked. Formal disaster-recovery sign-off still requires a reliable platform download path, object storage backup job, or another approved operations channel to move the full backup into company-controlled storage and restore it in a temporary environment.
+
 ## 8. Remaining Sign-Off Evidence
 
 以下仍需业务侧或接收方配合完成，不能由本地代码单独证明：
