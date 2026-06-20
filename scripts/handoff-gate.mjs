@@ -185,6 +185,22 @@ assert(!productionEnv.includes(deprecatedAdminEmailsToken), ".env.production.exa
 
 const apiDocs = read("docs/API.md");
 assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must document the internal backup route");
+assert(exists("docs/HANDOFF-UAT-SIGNOFF.md"), "handoff UAT sign-off document must exist");
+assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification script must exist");
+const uatSignoff = read("docs/HANDOFF-UAT-SIGNOFF.md");
+for (const token of [
+  "登录与权限",
+  "员工 Key 与客户端调用",
+  "模型调用与计费",
+  "灾备与恢复",
+  "资产交割",
+]) {
+  assert(uatSignoff.includes(token), `handoff UAT sign-off must cover ${token}`);
+}
+const backupVerifier = read("scripts/verify-sqlite-backup.mjs");
+for (const token of ["PRAGMA integrity_check", "missingTables", "sha256", "process.exitCode"]) {
+  assert(backupVerifier.includes(token), `backup verifier must keep ${token}`);
+}
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
     line.includes("`/api/admin/") ||

@@ -99,6 +99,21 @@ curl -X POST \
 5. 复制 queue 和 dead-letter 文件。
 6. 保存到公司受控存储。
 
+下载到公司受控存储后，必须在本地或临时环境执行只读校验：
+
+```bash
+node scripts/verify-sqlite-backup.mjs /path/to/data.db
+```
+
+输出必须满足：
+
+- `ok=true`
+- `integrity=ok`
+- `missingTables=[]`
+- `users`、`channels`、`model_prices`、`usage_logs` 等核心表计数符合预期
+
+该脚本只读打开 SQLite 文件，不会修改备份内容，也不会输出密钥明文。
+
 ## 5. 恢复步骤
 
 1. 停止线上服务或切维护窗口。

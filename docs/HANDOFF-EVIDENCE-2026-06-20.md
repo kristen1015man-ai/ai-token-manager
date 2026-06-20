@@ -22,6 +22,8 @@
 - tracked secret 扫描
 - directory-level admin/setup/internal route auth scan
 - tracked env concrete secret scan
+- backup verification helper smoke test: `scripts/verify-sqlite-backup.mjs`
+- formal UAT/sign-off checklist: `docs/HANDOFF-UAT-SIGNOFF.md`
 - `git diff --check`
 
 ## 2. Railway 生产部署

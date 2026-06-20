@@ -212,3 +212,13 @@
 - 尚未在临时环境完成完整恢复演练。
 
 结论：生产卷内备份生成与 SQLite 完整性校验已完成；正式灾备签收仍需要接收方使用可用的云平台文件下载、对象存储备份任务或运维通道完成外部备份和恢复演练。
+
+## 9. 2026-06-20 签收材料补充
+
+已补充：
+
+- `docs/HANDOFF-UAT-SIGNOFF.md`：覆盖登录权限、员工 Key、模型调用计费、渠道余额价格、飞书同步通知、灾备恢复、资产交割和签字结论。
+- `scripts/verify-sqlite-backup.mjs`：接收方下载 `data.db` 后可执行只读 SQLite 校验，输出 `integrity`、SHA-256、文件大小、缺失表和核心表计数。
+- `scripts/handoff-gate.mjs` 已纳入签收表和备份校验脚本存在性检查。
+
+接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>` 的输出归档到公司受控存储或变更单。
