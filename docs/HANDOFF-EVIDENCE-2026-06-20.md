@@ -5,17 +5,18 @@
 ## 1. 本地基线
 
 - Branch: `codex/production-readiness-snapshot`
-- Handoff repository commit: `11a4388 test: add production handoff smoke`
+- Handoff repository commit: 以 `pnpm handoff:status` 或 `git rev-list -n 1 handoff-2026-06-20` 输出为准
 - Runtime deployment commit: `6f7bccb fix: add startup backup drill`
 - Tag: `handoff-2026-06-20`
 - Workspace: clean after commit
 
-说明：`11a4388` 只新增交接 smoke 脚本和文档证据，不改变线上运行时代码；当前线上稳定 deployment 仍为 `d96ff72c-f4a1-45ec-ae18-bf4168faf442`。
+说明：`handoff-2026-06-20` 是 annotated tag，核对提交时必须使用 `git rev-list -n 1 handoff-2026-06-20`，不要用 `git rev-parse handoff-2026-06-20` 直接当作提交 SHA。当前 handoff tag 只新增交接 smoke/status 脚本和文档证据，不改变线上运行时代码；当前线上稳定 deployment 仍为 `d96ff72c-f4a1-45ec-ae18-bf4168faf442`。
 
 本地已通过：
 
 - `pnpm install --frozen-lockfile`
 - `pnpm test`
+- `pnpm handoff:status`
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `pnpm --filter proxy build`
@@ -27,6 +28,7 @@
 - tracked env concrete secret scan
 - backup verification helper smoke test: `scripts/verify-sqlite-backup.mjs`
 - production public smoke helper: `scripts/production-smoke.mjs`
+- handoff status helper: `scripts/handoff-status.mjs`
 - formal UAT/sign-off checklist: `docs/HANDOFF-UAT-SIGNOFF.md`
 - `git diff --check`
 

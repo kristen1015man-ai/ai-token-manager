@@ -188,6 +188,7 @@ assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must docum
 assert(exists("docs/HANDOFF-UAT-SIGNOFF.md"), "handoff UAT sign-off document must exist");
 assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification script must exist");
 assert(exists("scripts/production-smoke.mjs"), "production smoke script must exist");
+assert(exists("scripts/handoff-status.mjs"), "handoff status script must exist");
 const uatSignoff = read("docs/HANDOFF-UAT-SIGNOFF.md");
 for (const token of [
   "登录与权限",
@@ -215,6 +216,10 @@ for (const token of [
 ]) {
   assert(productionSmoke.includes(token), `production smoke must keep ${token}`);
 }
+const handoffStatus = read("scripts/handoff-status.mjs");
+for (const token of ["rev-list", "tagMatchesHead", "workspaceClean", "dirtyFiles", "process.exitCode"]) {
+  assert(handoffStatus.includes(token), `handoff status must keep ${token}`);
+}
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
     line.includes("`/api/admin/") ||
@@ -232,6 +237,10 @@ assert(!rootPkg.scripts?.[dbGenerateScript], "root package must not expose a non
 assert(
   rootPkg.scripts?.["smoke:production"] === "node scripts/production-smoke.mjs --base https://ai.seapllo.com",
   "root package must expose the production smoke command"
+);
+assert(
+  rootPkg.scripts?.["handoff:status"] === "node scripts/handoff-status.mjs handoff-2026-06-20",
+  "root package must expose the handoff status command"
 );
 assert(!sharedPkg.scripts?.[dbGenerateScript], "shared package must not expose a non-source-of-truth db generate script");
 assert(sharedPkg.scripts?.["db:migrate"] === "node run-migrate.mjs", "shared db:migrate must use the checked-in migration runner");

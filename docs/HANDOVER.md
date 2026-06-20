@@ -673,6 +673,7 @@ railway up
 
 ```powershell
 pnpm test
+pnpm handoff:status
 pnpm install --frozen-lockfile
 pnpm --filter web exec tsc --noEmit --pretty false
 pnpm --filter web build
@@ -915,6 +916,7 @@ git diff --check
 线上 smoke test：
 
 - `pnpm smoke:production` 返回 `ok=true`。
+- `pnpm handoff:status` 返回 `ok=true`，确认 handoff tag 指向当前提交且工作区干净。
 - 登录页可打开。
 - 飞书登录可进入后台。
 - `/api/health` 返回 200。

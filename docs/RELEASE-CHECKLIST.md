@@ -9,6 +9,7 @@
 ```bash
 pnpm install --frozen-lockfile
 pnpm test
+pnpm handoff:status
 pnpm --filter web build
 pnpm --filter proxy build
 pnpm --filter web lint
@@ -21,6 +22,7 @@ pnpm --filter web lint
 - Proxy 能构建。
 - TypeScript 无错误。
 - handoff gate 通过，关键权限/内部接口/密钥扫描规则未被破坏。
+- handoff tag 指向当前提交，工作区干净。
 
 ## 2. 环境变量检查
 

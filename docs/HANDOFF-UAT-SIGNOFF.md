@@ -18,7 +18,7 @@
 | Railway 项目/环境 | `heartfelt-education` / `production` |
 | 当前稳定 deployment | `d96ff72c-f4a1-45ec-ae18-bf4168faf442` |
 | 当前 handoff tag | `handoff-2026-06-20` |
-| 当前 handoff commit | `11a4388 test: add production handoff smoke` |
+| 当前 handoff commit | 以 `pnpm handoff:status` 输出的 `tagCommit` 为准 |
 
 ## 2. 技术门禁
 
@@ -26,13 +26,14 @@
 | --- | --- | --- | --- | --- |
 | T-01 | `pnpm install --frozen-lockfile` | 通过 | 命令输出 |  |
 | T-02 | `pnpm test` | `Handoff gate passed` | 命令输出 |  |
-| T-03 | `pnpm --filter web lint` | TypeScript 无错误 | 命令输出 |  |
-| T-04 | `pnpm --filter web build` | Next production build 通过 | 命令输出 |  |
-| T-05 | `pnpm --filter proxy build` | Proxy TypeScript build 通过 | 命令输出 |  |
-| T-06 | `git diff --check` | 无空白错误 | 命令输出 |  |
-| T-07 | `https://ai.seapllo.com/health` | HTTP 200，`status=ok` | 响应摘要 |  |
-| T-08 | `https://ai.seapllo.com/api/health` | HTTP 200，`status=ok` | 响应摘要 |  |
-| T-09 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `ok=true`，危险内部接口公网不可访问 | 命令输出 |  |
+| T-03 | `pnpm handoff:status` | `ok=true`，`tagMatchesHead=true`，`workspaceClean=true` | 命令输出 |  |
+| T-04 | `pnpm --filter web lint` | TypeScript 无错误 | 命令输出 |  |
+| T-05 | `pnpm --filter web build` | Next production build 通过 | 命令输出 |  |
+| T-06 | `pnpm --filter proxy build` | Proxy TypeScript build 通过 | 命令输出 |  |
+| T-07 | `git diff --check` | 无空白错误 | 命令输出 |  |
+| T-08 | `https://ai.seapllo.com/health` | HTTP 200，`status=ok` | 响应摘要 |  |
+| T-09 | `https://ai.seapllo.com/api/health` | HTTP 200，`status=ok` | 响应摘要 |  |
+| T-10 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `ok=true`，危险内部接口公网不可访问 | 命令输出 |  |
 
 ## 3. 登录与权限
 

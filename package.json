@@ -15,6 +15,7 @@
     "build:web": "pnpm --filter web build",
     "test": "node scripts/handoff-gate.mjs",
     "db:migrate": "pnpm --filter shared db:migrate",
+    "handoff:status": "node scripts/handoff-status.mjs handoff-2026-06-20",
     "smoke:production": "node scripts/production-smoke.mjs --base https://ai.seapllo.com"
   },
   "dependencies": {

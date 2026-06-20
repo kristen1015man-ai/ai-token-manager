@@ -10,6 +10,7 @@
 
 - `pnpm install --frozen-lockfile`
 - `pnpm test`
+- `pnpm handoff:status`
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `pnpm --filter proxy build`
