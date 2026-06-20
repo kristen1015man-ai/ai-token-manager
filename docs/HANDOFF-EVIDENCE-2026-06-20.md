@@ -5,9 +5,12 @@
 ## 1. 本地基线
 
 - Branch: `codex/production-readiness-snapshot`
-- Runtime code commit: `6f7bccb fix: add startup backup drill`
+- Handoff repository commit: `11a4388 test: add production handoff smoke`
+- Runtime deployment commit: `6f7bccb fix: add startup backup drill`
 - Tag: `handoff-2026-06-20`
 - Workspace: clean after commit
+
+说明：`11a4388` 只新增交接 smoke 脚本和文档证据，不改变线上运行时代码；当前线上稳定 deployment 仍为 `d96ff72c-f4a1-45ec-ae18-bf4168faf442`。
 
 本地已通过：
 

@@ -18,6 +18,7 @@
 | Railway 项目/环境 | `heartfelt-education` / `production` |
 | 当前稳定 deployment | `d96ff72c-f4a1-45ec-ae18-bf4168faf442` |
 | 当前 handoff tag | `handoff-2026-06-20` |
+| 当前 handoff commit | `11a4388 test: add production handoff smoke` |
 
 ## 2. 技术门禁
 
