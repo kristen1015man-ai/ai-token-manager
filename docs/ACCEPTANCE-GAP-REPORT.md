@@ -190,3 +190,24 @@
 - 把备份下载到公司受控存储。
 - 在临时环境恢复并验证登录、渠道、价格、usage、余额和通知。
 - 将执行人、时间、源文件、恢复位置、验证结果写入变更单。
+
+## 8. 2026-06-20 生产备份演练进展
+
+已完成：
+
+- 通过 `RUN_BACKUP_DRILL_ON_START=true` 在生产容器启动阶段执行一次真实 `/data` 卷内备份。
+- 生成备份目录：`/data/backups/handoff-2026-06-20T02-50-12-179Z`。
+- `manifest.json` 校验结果：`verification.integrity=ok`。
+- 备份 DB 大小：`13545472`。
+- 核心表计数：`tables=13`、`users=153`、`userApiKeys=8`、`channels=5`、`modelPrices=30`、`usageLogs=104`、`quotaReservations=0`、`alertLogs=3`。
+- 演练变量 `RUN_BACKUP_DRILL_ON_START` 和 `BACKUP_DRILL_RUN_ID` 已删除。
+- 已重新部署默认关闭版本：`d96ff72c-f4a1-45ec-ae18-bf4168faf442`。
+- 默认关闭版本 health 正常，近 15 分钟 5xx 日志为空。
+
+仍未完成：
+
+- Railway 大文件下载通道在本机下载 `data.db` 和历史备份时卡住，未能完成生产 DB 下载。
+- 生产备份尚未落到公司受控存储。
+- 尚未在临时环境完成完整恢复演练。
+
+结论：生产卷内备份生成与 SQLite 完整性校验已完成；正式灾备签收仍需要接收方使用可用的云平台文件下载、对象存储备份任务或运维通道完成外部备份和恢复演练。

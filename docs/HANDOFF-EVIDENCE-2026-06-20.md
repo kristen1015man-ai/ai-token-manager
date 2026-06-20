@@ -5,7 +5,7 @@
 ## 1. 本地基线
 
 - Branch: `codex/production-readiness-snapshot`
-- Runtime code commit: `a06dd1a fix: add internal backup verification`
+- Runtime code commit: `6f7bccb fix: add startup backup drill`
 - Tag: `handoff-2026-06-20`
 - Workspace: clean after commit
 
@@ -29,9 +29,9 @@
 - Service: `web`
 - URL: `https://ai.seapllo.com`
 - Volume: `web-volume-4jgN` mounted at `/data`
-- Deployment ID: `e7ad52b3-4c34-448a-9419-84edd050a62b`
+- Deployment ID: `d96ff72c-f4a1-45ec-ae18-bf4168faf442`
 - Deployment status: `SUCCESS`
-- Deployment time: `2026-06-20 01:28:27 +08:00`
+- Deployment time: `2026-06-20 10:51:42 +08:00`
 
 部署前已补齐非敏感生产变量：
 
@@ -61,6 +61,7 @@ Railway build succeeded:
 - `pnpm install --frozen-lockfile` passed
 - `cd web && pnpm next build` passed
 - Next build route list includes `/api/internal/admin/backup`
+- Build includes default-disabled startup backup drill hook
 - `pnpm --filter proxy build` passed
 - image pushed successfully
 
@@ -102,7 +103,7 @@ Detailed health checks with internal Bearer:
 - active users: 152
 - disabled users: 1
 - Public `POST https://ai.seapllo.com/api/internal/admin/backup` -> 404
-- Deployment runtime logs show edge, web, and proxy started successfully after `e7ad52b3-4c34-448a-9419-84edd050a62b`
+- Deployment runtime logs show edge, web, and proxy started successfully after `d96ff72c-f4a1-45ec-ae18-bf4168faf442`
 - Last 10 minutes 5xx HTTP logs after deployment: none returned by Railway CLI
 
 ## 6. Public Exposure Checks
@@ -133,7 +134,7 @@ Attempted non-destructive backup drill:
 - Local temporary directory used for the attempted download was deleted.
 - No production DB copy was intentionally retained locally.
 
-Conclusion: existing backups are present, but a full backup download and restore rehearsal is still not signed off.
+Conclusion at this point: existing backups are present, but a full backup download and restore rehearsal was not signed off yet.
 
 Additional code remediation added after this evidence snapshot:
 
@@ -144,7 +145,7 @@ Additional code remediation added after this evidence snapshot:
 - It writes a `manifest.json` with file sizes, SHA-256 hashes, and core table counts.
 - Public access must still return 404 through `railway/start.mjs` because the path is under `/api/internal/*`.
 
-This closes the code-level backup-verification gap, but the production drill still needs execution and sign-off.
+This closes the code-level backup-verification gap.
 
 Local route smoke evidence:
 
@@ -155,6 +156,38 @@ Local route smoke evidence:
 - `verification.integrity` returned `ok`.
 - `manifest.sha256` and `files.dataDb.sha256` were generated.
 - Temporary local DB and backup files were deleted after the smoke test.
+
+Production startup backup drill evidence:
+
+- Drill deployment: `28fc0b94-c076-4eb3-9092-2a58340aebd6`
+- Drill time: `2026-06-20 10:48:29 +08:00`
+- Temporary env used: `RUN_BACKUP_DRILL_ON_START=true`, `BACKUP_DRILL_RUN_ID=handoff-20260620-1038`
+- Log marker: `[BackupDrill] completed`
+- `backupDir`: `/data/backups/handoff-2026-06-20T02-50-12-179Z`
+- `manifestSha256`: `988486aafc477cb22b0d0fb905064b191ec6f8eb9500056dafecf5dddb3b56cd`
+- `dataDbSha256`: `d17f8c4102515f4fc08269b7fd347b93e011f386a1d16fb3d8cbe68e20c3de2a`
+- `dataDbSize`: `13545472`
+- `usageQueueCopied`: true
+- `usageDeadLetterCopied`: false, because no dead-letter file existed at drill time
+- `verification.integrity`: `ok`
+- Core counts: `tables=13`, `users=153`, `userApiKeys=8`, `channels=5`, `modelPrices=30`, `usageLogs=104`, `quotaReservations=0`, `alertLogs=3`
+- Volume listing confirmed:
+  - `/backups/handoff-2026-06-20T02-50-12-179Z/data.db`, size `13545472`
+  - `/backups/handoff-2026-06-20T02-50-12-179Z/manifest.json`, size `984`
+  - `/backups/handoff-2026-06-20T02-50-12-179Z/usage-queue.jsonl`, size `0`
+- `manifest.json` was downloaded, parsed for the sanitized summary above, and then deleted locally.
+
+Drill cleanup:
+
+- `RUN_BACKUP_DRILL_ON_START` deleted.
+- `BACKUP_DRILL_RUN_ID` deleted.
+- Stable deployment after cleanup: `d96ff72c-f4a1-45ec-ae18-bf4168faf442`
+- Runtime env check after cleanup: `[null,null]` for `[RUN_BACKUP_DRILL_ON_START,BACKUP_DRILL_RUN_ID]`
+- Stable deployment logs contain no new `[BackupDrill] completed` entry.
+- Stable deployment health: `GET /api/health` with internal Bearer returned 200, `status=ok`.
+- Last 15 minutes 5xx HTTP logs after stable deployment: none returned by Railway CLI.
+
+Conclusion after drill: production in-volume backup generation and SQLite integrity verification are signed off. External backup download to company-controlled storage and full temporary-environment restore rehearsal are still not signed off.
 
 ## 8. Remaining Sign-Off Evidence
 
@@ -168,4 +201,4 @@ Local route smoke evidence:
 - 验证 usage 入库、费用、额度扣减、阈值通知
 - 余额同步和余额低提醒真实群/个人通知
 - 排行榜测试发送
-- 生产备份下载、恢复演练和回滚演练
+- 生产备份下载到公司受控存储、临时环境恢复演练和回滚演练
