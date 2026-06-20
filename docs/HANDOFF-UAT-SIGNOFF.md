@@ -31,6 +31,7 @@
 | T-06 | `git diff --check` | 无空白错误 | 命令输出 |  |
 | T-07 | `https://ai.seapllo.com/health` | HTTP 200，`status=ok` | 响应摘要 |  |
 | T-08 | `https://ai.seapllo.com/api/health` | HTTP 200，`status=ok` | 响应摘要 |  |
+| T-09 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `ok=true`，危险内部接口公网不可访问 | 命令输出 |  |
 
 ## 3. 登录与权限
 
@@ -53,6 +54,7 @@
 | K-04 | 删除 Key | 可删除，但至少保留一个有效 Key 或要求先新建替代 Key | 截图 |  |
 | K-05 | 普通兼容客户端 | Base URL 使用 `https://ai.seapllo.com/v1`，Key 使用本系统员工 Key | 成功调用记录 |  |
 | K-06 | Claude Code | Base URL 使用 `https://ai.seapllo.com/anthropic`，Key 使用本系统员工 Key | 成功调用记录 |  |
+| K-07 | 员工 Key 冒烟 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `/v1/models` 通过，输出不包含明文 Key |  |
 
 ## 5. 模型调用与计费
 
@@ -67,6 +69,8 @@
 | B-07 | 个人阈值通知 | 修改个人阈值后按新阈值触发，不固定 80% | 飞书通知 |  |
 | B-08 | 超额阻断 | 达到 100% 后才拒绝请求 | 请求记录 |  |
 | B-09 | 费用核对 | 系统计费与上游余额变化在可解释误差范围内 | 对账表 |  |
+| B-10 | 小额计费冒烟 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --chat-model <model>` | 请求成功，usage 入库；只用接收方认可的小额模型 |  |
+| B-11 | 小额流式冒烟 | 在 B-10 命令后追加 `--include-stream` | SSE 返回成功，结束后 usage 入库 |  |
 
 ## 6. 渠道、余额和价格
 

@@ -8,6 +8,7 @@
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm test
 pnpm --filter web build
 pnpm --filter proxy build
 pnpm --filter web lint
@@ -19,6 +20,7 @@ pnpm --filter web lint
 - Web 能构建。
 - Proxy 能构建。
 - TypeScript 无错误。
+- handoff gate 通过，关键权限/内部接口/密钥扫描规则未被破坏。
 
 ## 2. 环境变量检查
 
@@ -158,6 +160,7 @@ pnpm --filter web lint
 ## 13. 运维检查
 
 - `/health` 返回 ok。
+- `pnpm smoke:production` 返回 `ok=true`。
 - 内部 Web `/api/health` 详细检查 ok。
 - Proxy `/health` 详细检查 ok。
 - Railway Volume 可写。
@@ -200,6 +203,9 @@ pnpm --filter web lint
 - 甲方管理员能登录并看到全局概览。
 - 真实员工能登录并新建 API Key。
 - Claude Code 或 OpenAI 兼容客户端能使用员工 Key。
+- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com` 返回 `/v1/models` 通过，输出不包含明文 Key。
+- 如需验证真实计费，使用 `--allow-billable --chat-model <model>`，只选接收方认可的小额模型。
+- 如需验证流式调用，在计费 smoke 命令后追加 `--include-stream`。
 - 管理员能查看该员工产生的用量和费用。
 - 渠道余额、模型价格、额度百分比展示符合预期。
 - 飞书提醒能送达指定管理员或测试群。

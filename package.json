@@ -14,7 +14,8 @@
     "build:proxy": "pnpm --filter proxy build",
     "build:web": "pnpm --filter web build",
     "test": "node scripts/handoff-gate.mjs",
-    "db:migrate": "pnpm --filter shared db:migrate"
+    "db:migrate": "pnpm --filter shared db:migrate",
+    "smoke:production": "node scripts/production-smoke.mjs --base https://ai.seapllo.com"
   },
   "dependencies": {
     "sql.js": "^1.14.1"

@@ -23,6 +23,7 @@
 - directory-level admin/setup/internal route auth scan
 - tracked env concrete secret scan
 - backup verification helper smoke test: `scripts/verify-sqlite-backup.mjs`
+- production public smoke helper: `scripts/production-smoke.mjs`
 - formal UAT/sign-off checklist: `docs/HANDOFF-UAT-SIGNOFF.md`
 - `git diff --check`
 
@@ -117,6 +118,31 @@ Detailed health checks with internal Bearer:
 - Last 20 minutes 5xx HTTP logs: none returned by Railway CLI
 - Last 20 minutes >=400 HTTP logs: only intentional `/api/internal/admin/reset-billing` and `/api/internal/admin/backup` 404 checks were observed
 
+Production smoke helper result:
+
+- Command: `node scripts/production-smoke.mjs --base https://ai.seapllo.com`
+- Time: `2026-06-20 17:25:20 +08:00`
+- Result: `ok=true`
+- Confirmed public health:
+  - `/health`: 200, `service=ai-token-proxy`
+  - `/api/health`: 200, `service=sparkloom-web`
+- Confirmed public blocking:
+  - `POST /api/internal/admin/backup`: 404
+  - `GET /api/internal/admin/reset-billing`: 404
+  - `GET /api/auth/dev-login`: 404
+  - `POST /api/setup/seed`: 403
+- Internal detailed health was skipped in this public run because no `INTERNAL_API_KEY` was provided to the local shell.
+- Employee `/v1/models` and billable chat were skipped because no employee `sk-emp-...` key was provided to the local shell.
+
+Production smoke with Railway environment:
+
+- Command: `railway run node scripts/production-smoke.mjs --base https://ai.seapllo.com`
+- Time: `2026-06-20 17:26:23 +08:00`
+- Result: `ok=true`
+- Internal detailed health: 200, DB readable true, DB writable true, secret decryption sample ok, checked 15, failures 0.
+- User counts in detailed health: active 152, disabled 1.
+- Employee `/v1/models` and billable chat were intentionally skipped because no employee `sk-emp-...` key was provided.
+
 ## 7. Backup / Restore Evidence
 
 Railway volume check:
@@ -202,6 +228,7 @@ Conclusion after drill: production in-volume backup generation and SQLite integr
 - 员工新建一次性明文 API Key 并保存客户端配置
 - 使用真实员工 `sk-emp-...` 调用 `/v1/models`
 - 使用真实员工 `sk-emp-...` 小额调用 `/v1/chat/completions` 或 `/anthropic`
+- 使用 `scripts/production-smoke.mjs` 结合真实员工 Key 归档 `/v1/models` 和小额计费 smoke 输出
 - 验证 usage 入库、费用、额度扣减、阈值通知
 - 余额同步和余额低提醒真实群/个人通知
 - 排行榜测试发送

@@ -187,6 +187,7 @@ const apiDocs = read("docs/API.md");
 assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must document the internal backup route");
 assert(exists("docs/HANDOFF-UAT-SIGNOFF.md"), "handoff UAT sign-off document must exist");
 assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification script must exist");
+assert(exists("scripts/production-smoke.mjs"), "production smoke script must exist");
 const uatSignoff = read("docs/HANDOFF-UAT-SIGNOFF.md");
 for (const token of [
   "登录与权限",
@@ -200,6 +201,19 @@ for (const token of [
 const backupVerifier = read("scripts/verify-sqlite-backup.mjs");
 for (const token of ["PRAGMA integrity_check", "missingTables", "sha256", "process.exitCode"]) {
   assert(backupVerifier.includes(token), `backup verifier must keep ${token}`);
+}
+const productionSmoke = read("scripts/production-smoke.mjs");
+for (const token of [
+  "/health",
+  "/api/health",
+  "/api/internal/admin/backup",
+  "/api/setup/seed",
+  "SPARKLOOM_EMPLOYEE_API_KEY",
+  "--allow-billable",
+  "--include-stream",
+  "process.exitCode",
+]) {
+  assert(productionSmoke.includes(token), `production smoke must keep ${token}`);
 }
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
@@ -215,6 +229,10 @@ const rootPkg = JSON.parse(read("package.json"));
 const sharedPkg = JSON.parse(read("shared/package.json"));
 const dbGenerateScript = "db:" + "generate";
 assert(!rootPkg.scripts?.[dbGenerateScript], "root package must not expose a non-source-of-truth db generate script");
+assert(
+  rootPkg.scripts?.["smoke:production"] === "node scripts/production-smoke.mjs --base https://ai.seapllo.com",
+  "root package must expose the production smoke command"
+);
 assert(!sharedPkg.scripts?.[dbGenerateScript], "shared package must not expose a non-source-of-truth db generate script");
 assert(sharedPkg.scripts?.["db:migrate"] === "node run-migrate.mjs", "shared db:migrate must use the checked-in migration runner");
 assert(Boolean(sharedPkg.devDependencies?.esbuild), "shared package must include esbuild for the migration runner");

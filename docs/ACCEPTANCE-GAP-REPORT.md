@@ -22,6 +22,7 @@
 - tracked env 文件 Secret 扫描：`SECRET`、`TOKEN`、`PASSWORD`、`API_KEY`、`APP_SECRET` 类变量不允许出现具体值，只允许空值或占位符
 - `node --check railway/start.mjs`
 - Railway 生产入口负向测试：弱 JWT、重复 `cli_` 前缀飞书 App ID、危险开关开启均被拒绝启动
+- `pnpm smoke:production`：线上非计费 smoke 通过，public health 正常，危险内部接口公网屏蔽正常
 
 ## 2. 已完成的代码级整改
 
@@ -125,13 +126,18 @@
 - 本地构建和门禁通过。
 - health 已能检查必填 env、DB 表、DB 可写、DB 文件目录可写、web/proxy usage queue 和 dead-letter 目录可写、encrypted secret 抽样解密。
 - 2026-06-20 已完成 Railway production 部署和线上 health 取证。
+- 非计费线上 smoke 已通过：`pnpm smoke:production` 返回 `ok=true`，覆盖 `/health`、`/api/health`、`/api/internal/admin/backup`、`/api/internal/admin/reset-billing`、`/api/auth/dev-login`、`/api/setup/seed`。
 - 仍缺少真实登录、真实员工 API 调用、usage 入库、余额同步、飞书通知的业务 UAT 记录。
 
 签收要求：
 
 - 线上 `/api/health` 详细输出，敏感值必须脱敏：已记录。
 - 线上 `/health` 输出：已记录。
+- 非计费公开 smoke：已记录。
 - 登录、`/v1/models`、小额 chat、usage 入库、余额同步、飞书通知的 smoke 记录：待业务 UAT。
+- 员工 Key 技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com`。
+- 小额计费技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --chat-model <model>`。
+- 小额流式技术命令：在小额计费命令后追加 `--include-stream`。
 
 ### 4.5 远端 CI 和最终发布证据
 
@@ -219,6 +225,7 @@
 
 - `docs/HANDOFF-UAT-SIGNOFF.md`：覆盖登录权限、员工 Key、模型调用计费、渠道余额价格、飞书同步通知、灾备恢复、资产交割和签字结论。
 - `scripts/verify-sqlite-backup.mjs`：接收方下载 `data.db` 后可执行只读 SQLite 校验，输出 `integrity`、SHA-256、文件大小、缺失表和核心表计数。
-- `scripts/handoff-gate.mjs` 已纳入签收表和备份校验脚本存在性检查。
+- `scripts/production-smoke.mjs`：接收方可执行线上非计费 smoke；如提供员工 Key，可继续验证 `/v1/models` 和授权的小额 chat。
+- `scripts/handoff-gate.mjs` 已纳入签收表、备份校验脚本和生产 smoke 脚本存在性检查。
 
-接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>` 的输出归档到公司受控存储或变更单。
+接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、员工 Key smoke 的输出归档到公司受控存储或变更单。

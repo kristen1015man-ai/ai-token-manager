@@ -1,6 +1,6 @@
 ﻿# Sparkloom 交接文档
 
-最后更新：2026-06-18
+最后更新：2026-06-20
 线上地址：https://ai.seapllo.com
 当前部署方式：Railway 单服务镜像，容器内同时运行 Next.js Web 和 Hono Proxy 两个进程。
 文档定位：这是后续开发、Bug 修复、日常运维和用户支持的总交接入口。完整交接不能只依赖一个文档，后续团队应以 `docs/README.md` 中列出的文档套件为准。
@@ -672,6 +672,7 @@ railway up
 部署前本地门禁：
 
 ```powershell
+pnpm test
 pnpm install --frozen-lockfile
 pnpm --filter web exec tsc --noEmit --pretty false
 pnpm --filter web build
@@ -682,6 +683,7 @@ node --check railway/start.mjs
 部署后检查：
 
 ```powershell
+pnpm smoke:production
 curl.exe -i https://ai.seapllo.com/api/health
 curl.exe -i https://ai.seapllo.com/health
 curl.exe -i -X POST https://ai.seapllo.com/api/internal/admin/reset-billing
@@ -912,6 +914,7 @@ git diff --check
 
 线上 smoke test：
 
+- `pnpm smoke:production` 返回 `ok=true`。
 - 登录页可打开。
 - 飞书登录可进入后台。
 - `/api/health` 返回 200。
@@ -920,9 +923,9 @@ git diff --check
 - 管理员能打开全局概览、渠道管理、模型价格。
 - 普通用户无法访问 `/dashboard/admin/*`。
 - 员工能新建 Key，复制一次明文后刷新只显示脱敏。
-- 使用员工 Key 调 `/v1/models`。
-- 使用员工 Key 发一次非流式 `/v1/chat/completions`。
-- 使用员工 Key 发一次流式请求并确认 usage 记录。
+- 使用员工 Key 调 `/v1/models`：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com`。
+- 使用员工 Key 发一次非流式 `/v1/chat/completions`：显式加 `--allow-billable --chat-model <model>`，仅使用接收方认可的小额模型。
+- 使用员工 Key 发一次流式请求：在上一条命令后追加 `--include-stream`，并确认 usage 记录。
 - 余额同步不会提示禁用渠道。
 - 价格同步不会覆盖手动价格。
 - 飞书测试通知和排行榜测试可发送。

@@ -1,6 +1,6 @@
 ﻿# Sparkloom 文档索引
 
-最后更新：2026-06-18
+最后更新：2026-06-20
 
 这组文档用于项目交接、二次开发、Bug 修复、日常维护和用户支持。当前线上已经运行，后续团队应优先阅读本文档索引，再按角色进入对应专项文档。
 
@@ -27,6 +27,15 @@
 | 客服/管理员 | `USER-GUIDE.md`, `SUPPORT-RUNBOOK.md`, `TROUBLESHOOTING.md` | 指导员工使用和排查常见问题 |
 | 发布负责人 | `RELEASE-CHECKLIST.md`, `ACCEPTANCE-GAP-REPORT.md` | 每次上线前回归验收和交接退回项跟踪 |
 | 接收方/验收方 | `HANDOFF-UAT-SIGNOFF.md`, `HANDOFF-EVIDENCE-2026-06-20.md` | 正式 UAT、灾备、资产交割和签收证据 |
+
+## 交接命令
+
+```bash
+pnpm test
+pnpm smoke:production
+```
+
+`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。
 
 ## 文档职责
 
