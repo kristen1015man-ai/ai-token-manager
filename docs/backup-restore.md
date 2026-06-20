@@ -59,6 +59,30 @@ curl -X POST \
 - 该接口只在 Railway Volume 内生成备份，不能替代下载到公司受控存储的灾备。
 - 返回内容不得包含明文 Secret、员工 Key 或供应商 Key。
 
+Railway SSH 不可用时，可使用一次性启动演练开关：
+
+```env
+RUN_BACKUP_DRILL_ON_START=true
+BACKUP_DRILL_RUN_ID=20260620-operator
+```
+
+部署后在日志中查找：
+
+```text
+[BackupDrill] completed ...
+```
+
+日志摘要应包含：
+
+- `backupDir`
+- `manifestSha256`
+- `dataDbSha256`
+- `dataDbSize`
+- `verification.integrity=ok`
+- `users`、`channels`、`modelPrices`、`usageLogs` 等核心表数量
+
+完成取证后必须删除 `RUN_BACKUP_DRILL_ON_START` 或改回 `false` 并重新部署，避免后续每次新部署都生成备份。
+
 如果需要人工复制文件，执行以下步骤：
 
 1. 进入 Railway shell 或使用平台文件下载能力。

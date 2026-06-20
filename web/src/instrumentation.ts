@@ -14,6 +14,9 @@ export async function register() {
     const { backfillApiKeyHash } = await import("./lib/backfill-api-key-hash");
     await backfillApiKeyHash();
 
+    const { runStartupBackupDrillIfEnabled } = await import("./lib/verified-backup");
+    await runStartupBackupDrillIfEnabled();
+
     const { startAutoSync } = await import("./lib/auto-sync");
     startAutoSync();
 

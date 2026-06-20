@@ -303,6 +303,17 @@ curl -X POST \
 
 执行后检查返回的 `verification.integrity` 必须为 `ok`，并把 `backupDir`、`manifest.sha256`、核心表数量记录到变更单。该备份仍位于 Railway Volume 内，正式灾备还需要下载到公司受控存储并做恢复演练。
 
+如果 Railway SSH 不可用，可使用一次性启动演练：
+
+1. 设置 `RUN_BACKUP_DRILL_ON_START=true`。
+2. 设置唯一的 `BACKUP_DRILL_RUN_ID`，建议使用 `YYYYMMDD-HHMM-operator`。
+3. 部署一次。
+4. 在 deployment logs 中查找 `[BackupDrill] completed ...`。
+5. 记录 `backupDir`、`manifestSha256`、`dataDbSha256`、`dataDbSize`、`verification.integrity` 和核心表数量。
+6. 立刻删除 `RUN_BACKUP_DRILL_ON_START` 或改回 `false` 并重新部署。
+
+该方式只在应用启动时生成并校验备份，不开放公网下载数据库；仍不能替代把备份下载到公司受控存储后的恢复演练。
+
 ## 8. 数据文件
 
 数据库路径优先级：

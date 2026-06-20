@@ -66,6 +66,21 @@ for (const suffix of [
   assert(autoSync.includes(suffix), `auto-sync must call ${suffix}`);
 }
 
+const instrumentation = read("web/src/instrumentation.ts");
+assert(
+  instrumentation.includes("runStartupBackupDrillIfEnabled"),
+  "web instrumentation must keep the default-disabled startup backup drill hook"
+);
+const verifiedBackup = read("web/src/lib/verified-backup.ts");
+for (const token of [
+  "RUN_BACKUP_DRILL_ON_START",
+  "BACKUP_DRILL_RUN_ID",
+  "PRAGMA integrity_check",
+  "[BackupDrill] completed",
+]) {
+  assert(verifiedBackup.includes(token), `verified backup helper must keep ${token}`);
+}
+
 const railwayStart = read("railway/start.mjs");
 for (const token of [
   "PRODUCTION_DISABLED_FLAGS",
