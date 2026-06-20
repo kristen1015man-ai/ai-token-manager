@@ -675,6 +675,7 @@ railway up
 pnpm test
 pnpm handoff:status
 pnpm handoff:uat
+pnpm handoff:readiness
 pnpm install --frozen-lockfile
 pnpm --filter web exec tsc --noEmit --pretty false
 pnpm --filter web build
@@ -919,6 +920,7 @@ git diff --check
 - `pnpm smoke:production` 返回 `ok=true`。
 - `pnpm handoff:status` 返回 `ok=true`，确认 handoff tag 指向当前提交且工作区干净。
 - `pnpm handoff:uat` 输出脱敏 JSON；提供员工 Key 时可用 `--out <受控目录>` 归档业务 UAT 证据。
+- `pnpm handoff:readiness` 输出 `formalSignoffReady` 和剩余签收缺口。
 - 登录页可打开。
 - 飞书登录可进入后台。
 - `/api/health` 返回 200。

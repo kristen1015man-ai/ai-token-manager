@@ -74,6 +74,7 @@ function git(args) {
 const generatedAt = new Date().toISOString();
 const evidence = {
   ok: false,
+  formalBusinessUatComplete: false,
   generatedAt,
   baseUrl,
   tagName,
@@ -120,6 +121,13 @@ try {
   }
 
   evidence.ok = Object.values(evidence.checks).every((check) => check?.ok === true);
+  evidence.formalBusinessUatComplete = Boolean(
+    employeeKeyProvided &&
+      allowBillable &&
+      chatModel &&
+      evidence.checks.employeeModels?.ok === true &&
+      evidence.checks.billableSmoke?.ok === true
+  );
 } catch (error) {
   evidence.error = redactText(error instanceof Error ? error.message : String(error));
 }

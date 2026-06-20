@@ -18,6 +18,7 @@
 - `pnpm test`
 - `pnpm handoff:status`
 - `pnpm handoff:uat`
+- `pnpm handoff:readiness`
 - `pnpm --filter web lint`
 - `pnpm --filter web build`
 - `pnpm --filter proxy build`
@@ -31,6 +32,7 @@
 - production public smoke helper: `scripts/production-smoke.mjs`
 - handoff status helper: `scripts/handoff-status.mjs`
 - handoff UAT evidence helper: `scripts/handoff-uat-evidence.mjs`
+- handoff readiness report helper: `scripts/handoff-readiness-report.mjs`
 - formal UAT/sign-off checklist: `docs/HANDOFF-UAT-SIGNOFF.md`
 - `git diff --check`
 

@@ -35,6 +35,7 @@
 | T-09 | `https://ai.seapllo.com/api/health` | HTTP 200，`status=ok` | 响应摘要 |  |
 | T-10 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `ok=true`，危险内部接口公网不可访问 | 命令输出 |  |
 | T-11 | `pnpm handoff:uat -- --out <受控目录>` | 生成脱敏 JSON 证据，不包含明文 Key/Secret | 证据文件 |  |
+| T-12 | `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset-file>` | `formalSignoffReady=true` | 命令输出 |  |
 
 ## 3. 登录与权限
 

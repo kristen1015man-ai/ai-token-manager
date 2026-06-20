@@ -11,6 +11,7 @@ pnpm install --frozen-lockfile
 pnpm test
 pnpm handoff:status
 pnpm handoff:uat
+pnpm handoff:readiness
 pnpm --filter web build
 pnpm --filter proxy build
 pnpm --filter web lint
@@ -25,6 +26,7 @@ pnpm --filter web lint
 - handoff gate 通过，关键权限/内部接口/密钥扫描规则未被破坏。
 - handoff tag 指向当前提交，工作区干净。
 - UAT 证据脚本可生成脱敏 JSON，不输出明文 Key/Secret。
+- readiness report 能明确输出 `formalSignoffReady=false/true` 和剩余外部证据缺口。
 
 ## 2. 环境变量检查
 

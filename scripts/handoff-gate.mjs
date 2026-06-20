@@ -194,6 +194,7 @@ assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification s
 assert(exists("scripts/production-smoke.mjs"), "production smoke script must exist");
 assert(exists("scripts/handoff-status.mjs"), "handoff status script must exist");
 assert(exists("scripts/handoff-uat-evidence.mjs"), "handoff UAT evidence script must exist");
+assert(exists("scripts/handoff-readiness-report.mjs"), "handoff readiness report script must exist");
 const uatSignoff = read("docs/HANDOFF-UAT-SIGNOFF.md");
 for (const token of [
   "登录与权限",
@@ -237,6 +238,19 @@ for (const token of [
 ]) {
   assert(handoffUatEvidence.includes(token), `handoff UAT evidence must keep ${token}`);
 }
+const handoffReadiness = read("scripts/handoff-readiness-report.mjs");
+for (const token of [
+  "formalSignoffReady",
+  "codeHandoffReady",
+  "business-uat",
+  "backup-restore",
+  "asset-handoff",
+  "--uat-evidence",
+  "--backup-verification",
+  "--asset-signoff",
+]) {
+  assert(handoffReadiness.includes(token), `handoff readiness report must keep ${token}`);
+}
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
     line.includes("`/api/admin/") ||
@@ -262,6 +276,10 @@ assert(
 assert(
   rootPkg.scripts?.["handoff:uat"] === "node scripts/handoff-uat-evidence.mjs --base https://ai.seapllo.com",
   "root package must expose the handoff UAT evidence command"
+);
+assert(
+  rootPkg.scripts?.["handoff:readiness"] === "node scripts/handoff-readiness-report.mjs",
+  "root package must expose the handoff readiness report command"
 );
 assert(!sharedPkg.scripts?.[dbGenerateScript], "shared package must not expose a non-source-of-truth db generate script");
 assert(sharedPkg.scripts?.["db:migrate"] === "node run-migrate.mjs", "shared db:migrate must use the checked-in migration runner");
