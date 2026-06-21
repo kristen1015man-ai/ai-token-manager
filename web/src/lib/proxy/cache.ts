@@ -27,7 +27,7 @@ async function loadPriceTable(): Promise<Map<string, { input: number; output: nu
 
   try {
     const { db } = await getDb();
-    const rows = await db.select().from(modelPrices);
+    const rows = await db.select().from(modelPrices).where(eq(modelPrices.deprecated, false));
     const map = new Map<string, { input: number; output: number; cache: number; currency: "CNY" | "USD" }>();
     for (const row of rows) {
       const key = `${row.channelId ?? ""}:${row.model}`;

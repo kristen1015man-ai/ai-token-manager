@@ -172,12 +172,9 @@ export async function ensureAllTables() {
     "SELECT value FROM system_flags WHERE key = 'user_api_keys_explicit_creation_reset_v1'"
   );
   if (!explicitKeyResetFlag[0]?.values?.length) {
-    const existingKeyCount = dbRaw.exec("SELECT COUNT(*) FROM user_api_keys");
-    const keysToRemove = Number(existingKeyCount[0]?.values?.[0]?.[0] ?? 0);
-    if (keysToRemove > 0) {
-      dbRaw.exec("DELETE FROM user_api_keys");
-      console.log(`[ensureTables] cleared existing user_api_keys for explicit first creation: ${keysToRemove}`);
-    }
+    // The reset marker is retained for migration bookkeeping only.
+    // Never delete the whole user_api_keys table on startup: restored production
+    // backups may legitimately contain employee-created keys.
     dbRaw.exec(
       "INSERT INTO system_flags (key, value, updated_at) VALUES ('user_api_keys_explicit_creation_reset_v1', 'done', unixepoch())"
     );

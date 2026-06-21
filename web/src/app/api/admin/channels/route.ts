@@ -18,7 +18,7 @@ function normalizeSecretInput(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   const str = String(value).trim();
   if (!str || isMaskedSecret(str)) return null;
-  if (str.startsWith("enc:v1:")) {
+  if (isEncrypted(str)) {
     throw new Error("Secret must be plaintext, not encrypted storage value");
   }
   return str;

@@ -82,6 +82,20 @@ function nonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function validCompletionMetadata(signoff, schemaErrors) {
+  if (!nonEmptyString(signoff?.completedBy)) {
+    schemaErrors.push("completedBy is required");
+  }
+  if (!nonEmptyString(signoff?.completedAt)) {
+    schemaErrors.push("completedAt is required");
+    return;
+  }
+  const parsed = Date.parse(signoff.completedAt);
+  if (!Number.isFinite(parsed)) {
+    schemaErrors.push("completedAt must be an ISO-like timestamp");
+  }
+}
+
 function validateAssetSignoff(signoff, readResult) {
   if (readResult?.error) {
     return {
@@ -108,6 +122,7 @@ function validateAssetSignoff(signoff, readResult) {
   if (!Array.isArray(signoff.assets)) {
     schemaErrors.push("assets must be an array");
   }
+  validCompletionMetadata(signoff, schemaErrors);
   const assets = Array.isArray(signoff.assets) ? signoff.assets : [];
   const byId = new Map(assets.map((asset) => [asset?.id, asset]));
   const missingAssetIds = requiredAssetIds.filter((id) => !byId.has(id));
@@ -168,6 +183,7 @@ function validateBackupRestoreSignoff(signoff, readResult) {
   }
 
   const schemaErrors = [];
+  validCompletionMetadata(signoff, schemaErrors);
   const sqlite = signoff.sqliteVerification || signoff;
   const sqliteVerificationOk = Boolean(
     sqlite?.ok === true &&

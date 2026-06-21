@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, gte } from "drizzle-orm";
-import { randomBytes } from "crypto";
 import { alertLogs, alertSettings, users } from "../../../../../../shared/schema";
 import { getDb, scheduleSave, getRawExec } from "../../../../lib/db";
 import { beijingRemainingDaysInMonth, beijingStartOfDayUnix } from "../../../../lib/beijing-time";
@@ -85,14 +84,6 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      await db.insert(alertLogs).values({
-        id: randomBytes(8).toString("hex"),
-        type: alert.type,
-        targetId: alert.targetId,
-        message: `${alert.type}: ${alert.used.toFixed(2)}/${alert.limit.toFixed(2)} (${alert.percent}%)`,
-        sentAt: new Date(),
-      });
-
       if (!feishuEnabled || !feishuNotifyTypes.has(alert.type)) {
         skipped++;
         continue;
@@ -120,13 +111,14 @@ export async function POST(request: NextRequest) {
             remainingDays,
           });
 
-          await notifyAlert({
+          const result = await notifyAlert({
             type: alert.type,
             targetId: alert.targetId,
             message,
             recipientFeishuId: String(feishuId),
           });
-          sent++;
+          sent += result.sent;
+          skipped += result.skipped;
         } else {
           const scopeLabel = alert.type === "dept_80" ? "部门" : "公司";
           const message = formatQuotaAlert({
@@ -139,7 +131,7 @@ export async function POST(request: NextRequest) {
             remainingDays,
           });
 
-          await notifyAlert({
+          const result = await notifyAlert({
             type: alert.type,
             targetId: alert.targetId,
             message,
@@ -149,7 +141,8 @@ export async function POST(request: NextRequest) {
               elements: [message],
             },
           });
-          sent++;
+          sent += result.sent;
+          skipped += result.skipped;
         }
       } catch (notifyErr) {
         console.error(`[quota-alert] Failed to send notification for ${alert.type}:`, safeErrorSummary(notifyErr));

@@ -48,6 +48,5 @@ npm-debug.log*
 *.tsbuildinfo
 cookies.txt
 
-# Do not upload one-off scripts or backups to remote builders
-send-leaderboard.js
+# Do not upload local backups to remote builders
 backups/

@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
 
   const priceRows = await db
     .select({ channelId: modelPrices.channelId, model: modelPrices.model })
-    .from(modelPrices);
+    .from(modelPrices)
+    .where(eq(modelPrices.deprecated, false));
   const pricedKeys = new Set(priceRows.map((p) => `${p.channelId ?? ""}:${p.model}`));
   const hasPrice = (channelId: string, modelName: string) =>
     pricedKeys.has(`${channelId}:${modelName}`) || pricedKeys.has(`:${modelName}`);

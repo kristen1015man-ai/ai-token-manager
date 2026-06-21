@@ -197,8 +197,10 @@ export async function notifyAlert(params: NotifyParams): Promise<{ sent: number;
     }
   }
 
-  // 6. 记日志
-  await logAlert(type, targetId, message);
+  // 6. 只在至少一个接收人发送成功后记日志，避免失败通知被当天去重吞掉。
+  if (sent > 0) {
+    await logAlert(type, targetId, message);
+  }
 
   console.log(`[NotificationRouter] Sent ${sent}/${recipients.length} for type=${type}`);
   return { sent, skipped: recipients.length - sent };

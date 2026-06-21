@@ -30,7 +30,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - WEB_URL=${WEB_URL:-http://web:3000}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
       - UPSTREAM_ALLOWED_HOSTS=${UPSTREAM_ALLOWED_HOSTS:-api.deepseek.com,api.siliconflow.cn,open.bigmodel.cn,api.openai.com,api.anthropic.com}
       - USAGE_QUEUE_FILE=/proxy-data/usage-queue.jsonl
       # Proxy 只持久化 usage 队列，不直接读写 data.db
@@ -59,7 +59,7 @@ services:
       - FEISHU_REDIRECT_URI=${FEISHU_REDIRECT_URI:?FEISHU_REDIRECT_URI is required}
       - NEXT_PUBLIC_FEISHU_APP_ID=${FEISHU_APP_ID:?FEISHU_APP_ID is required}
       - NEXT_PUBLIC_FEISHU_REDIRECT_URI=${FEISHU_REDIRECT_URI:?FEISHU_REDIRECT_URI is required}
-      - PUBLIC_PROXY_BASE_URL=${PUBLIC_PROXY_BASE_URL:-}
+      - PUBLIC_PROXY_BASE_URL=${PUBLIC_PROXY_BASE_URL:?PUBLIC_PROXY_BASE_URL is required}
       # ENV-02: JWT_SECRET 不提供默认值，强制用户在 .env 中设置
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}

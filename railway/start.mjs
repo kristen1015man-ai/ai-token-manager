@@ -157,6 +157,28 @@ function assertUpstreamAllowlist() {
   }
 }
 
+function assertAdminIds() {
+  const ids = envValue("ADMIN_IDS")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (ids.length === 0) {
+    failProductionConfig("ADMIN_IDS must contain at least one Feishu open_id");
+  }
+  for (const id of ids) {
+    const normalized = id.toLowerCase();
+    if (
+      isPlaceholderValue(id) ||
+      normalized === "ou_xxx" ||
+      normalized === "ou_yyy" ||
+      normalized.includes("placeholder") ||
+      !/^ou_[a-z0-9_-]{8,}$/i.test(id)
+    ) {
+      failProductionConfig(`ADMIN_IDS contains invalid or placeholder Feishu open_id: ${id}`);
+    }
+  }
+}
+
 function assertProductionConfig() {
   if (!isProductionRuntime()) return;
 
@@ -193,6 +215,7 @@ function assertProductionConfig() {
   assertHttpsUrl("PUBLIC_PROXY_BASE_URL");
   assertCorsOrigins();
   assertUpstreamAllowlist();
+  assertAdminIds();
 
   const databasePath = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes(":")
     ? process.env.DATABASE_URL

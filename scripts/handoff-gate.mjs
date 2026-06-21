@@ -73,6 +73,7 @@ for (const rel of [
   "web/data.db",
   "web/.next/standalone/web/data.db",
   "backups",
+  "send-leaderboard.js",
 ]) {
   assert(!existsLocal(rel), `local sensitive artifact must be moved out of the handoff workspace: ${rel}`);
 }
@@ -183,6 +184,7 @@ for (const token of [
   "isProductionRuntime",
   "assertStrongSecret",
   "assertFeishuConfig",
+  "assertAdminIds",
   "BAD_FEISHU_APP_PREFIX",
   "assertCorsOrigins",
   "assertUpstreamAllowlist",
@@ -194,11 +196,17 @@ for (const token of [
 const channelRoute = read("web/src/app/api/admin/channels/route.ts");
 for (const token of [
   "assertSafeUpstreamBaseUrl",
+  "isEncrypted(str)",
   "status must be active or disabled",
   "balanceSyncMode must be auto, manual, or empty",
 ]) {
   assert(channelRoute.includes(token), `channel admin route must keep validation: ${token}`);
 }
+const providerSecrets = read("web/src/lib/provider-secrets.ts");
+assert(providerSecrets.includes("isEncrypted(key)"), "provider secret validation must reject all encrypted storage values");
+
+const healthRoute = read("web/src/app/api/health/route.ts");
+assert(healthRoute.includes("LIKE 'enc:%'"), "health secret decryption check must sample all encrypted secret versions");
 
 const notificationRouter = read("web/src/lib/notification-router.ts");
 const fuzzyAdminToken = "%" + "admin" + "%";
@@ -212,6 +220,9 @@ assert(productionEnv.includes("WEB_PORT_INTERNAL=3000"), ".env.production.exampl
 assert(productionEnv.includes("railway/start.mjs"), ".env.production.example must describe Railway port variable ownership");
 assert(productionEnv.includes("ENABLE_INTERNAL_BILLING_RESET=false"), ".env.production.example must keep billing reset disabled by default");
 assert(productionEnv.includes("ENABLE_PROXY_USAGE_QUEUE_CLEAR=false"), ".env.production.example must keep proxy queue clear disabled by default");
+const dockerCompose = read("docker-compose.yml");
+assert(dockerCompose.includes("CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?"), "docker-compose.yml must require explicit CORS_ALLOWED_ORIGINS");
+assert(dockerCompose.includes("PUBLIC_PROXY_BASE_URL=${PUBLIC_PROXY_BASE_URL:?"), "docker-compose.yml must require explicit PUBLIC_PROXY_BASE_URL");
 
 const sharedCrypto = read("shared/crypto.ts");
 for (const token of [
@@ -229,6 +240,23 @@ for (const token of [
 const authenticateRoute = read("web/src/app/api/internal/proxy/authenticate/route.ts");
 for (const token of ["searchableHashes", "findStoredApiKeyByHashes", "UPDATE user_api_keys SET key_hash"]) {
   assert(authenticateRoute.includes(token), `proxy authenticate must keep legacy/new API key hash compatibility: ${token}`);
+}
+const ensureTables = read("web/src/lib/ensure-tables.ts");
+assert(
+  !ensureTables.includes("DELETE FROM user_api_keys"),
+  "startup table migration must not delete all employee API keys"
+);
+assert(
+  ensureTables.includes("Never delete the whole user_api_keys table on startup"),
+  "startup table migration must document why employee API keys are preserved"
+);
+const proxyCache = read("web/src/lib/proxy/cache.ts");
+assert(proxyCache.includes("where(eq(modelPrices.deprecated, false))"), "pricing cache must exclude deprecated model prices");
+const internalProxyChannels = read("web/src/app/api/internal/proxy/channels/route.ts");
+assert(internalProxyChannels.includes("where(eq(modelPrices.deprecated, false))"), "proxy channel model list must exclude deprecated prices");
+const readinessReport = read("scripts/handoff-readiness-report.mjs");
+for (const token of ["completedBy is required", "completedAt is required", "completedAt must be an ISO-like timestamp"]) {
+  assert(readinessReport.includes(token), `handoff readiness must require sign-off metadata: ${token}`);
 }
 
 const apiDocs = read("docs/API.md");
@@ -451,6 +479,7 @@ for (const rel of trackedFiles) {
   if (secretScanAllowlist.has(rel)) continue;
   if (rel.endsWith(".png") || rel.endsWith(".jpg") || rel.endsWith(".jpeg") || rel.endsWith(".ico") || rel.endsWith(".db")) continue;
   const abs = path.join(root, rel);
+  if (!fs.existsSync(abs)) continue;
   const stat = fs.statSync(abs);
   if (stat.size > 1024 * 1024) continue;
   const source = fs.readFileSync(abs, "utf8");

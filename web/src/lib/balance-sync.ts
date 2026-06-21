@@ -23,6 +23,17 @@ import {
 export type { ChannelAlert, SyncResult };
 export { getBalanceOverview } from "./balance-sync-overview";
 
+async function markBalanceUnknown(ch: ChannelRow): Promise<void> {
+  const { db } = await getDb();
+  await db.update(channels).set({
+    balance: null,
+    balanceCurrency: null,
+    balanceSyncedAt: null,
+  }).where(eq(channels.id, ch.id));
+  ch.balance = null;
+  ch.balanceCurrency = null;
+}
+
 export async function syncChannelBalances(singleChannelId?: string): Promise<SyncResult> {
   const { db } = await getDb();
   const channelList = singleChannelId
@@ -56,6 +67,7 @@ export async function syncChannelBalances(singleChannelId?: string): Promise<Syn
       const message = "API Key 无法解密，请在渠道管理中重新录入";
       console.error(`[BalanceSync] ${ch.name} (${provider}) ${message}`);
       errors.push({ channelId: ch.id, channelName: ch.name, message });
+      await markBalanceUnknown(ch);
       continue;
     }
 
@@ -65,6 +77,7 @@ export async function syncChannelBalances(singleChannelId?: string): Promise<Syn
       const message = `${keyWarning}。请在渠道管理中重新录入完整供应商 API Key。`;
       console.error(`[BalanceSync] ${ch.name} (${provider}) ${message}`);
       errors.push({ channelId: ch.id, channelName: ch.name, message });
+      await markBalanceUnknown(ch);
       continue;
     }
 
@@ -73,6 +86,7 @@ export async function syncChannelBalances(singleChannelId?: string): Promise<Syn
       failed++;
       console.error(`[BalanceSync] ${ch.name} (${provider}) ${result.message}`);
       errors.push({ channelId: ch.id, channelName: ch.name, message: result.message });
+      await markBalanceUnknown(ch);
       continue;
     }
 

@@ -1,3 +1,5 @@
+import { isEncrypted } from "./crypto";
+
 export type ProviderKeyStatus = "ok" | "invalid" | "unreadable" | "not_configured";
 
 const MASK_RE = /(\*{3,}|•{3,}|●{3,}|﹡{3,}|＊{3,})/;
@@ -13,7 +15,7 @@ export function validateProviderApiKey(provider: string | null | undefined, apiK
 
   if (!key) return "API Key 不能为空";
   if (isMaskedSecret(key)) return "API Key 看起来是脱敏值，请重新录入完整明文密钥";
-  if (key.startsWith("enc:v1:")) return "API Key 不能提交加密后的存储值，请录入明文密钥";
+  if (isEncrypted(key)) return "API Key 不能提交加密后的存储值，请录入明文密钥";
   if (/\s/.test(key)) return "API Key 不能包含空格或换行";
   if (PLACEHOLDER_RE.test(key)) return "API Key 看起来是示例值，请录入供应商控制台生成的真实密钥";
 
