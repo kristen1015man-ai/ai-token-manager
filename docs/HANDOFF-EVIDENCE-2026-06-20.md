@@ -6,11 +6,11 @@
 
 - Branch: `codex/production-readiness-snapshot`
 - Handoff repository commit: 以 `pnpm handoff:status` 或 `git rev-list -n 1 handoff-2026-06-20` 输出为准
-- Runtime deployment commit: `6f7bccb fix: add startup backup drill`
+- Runtime deployment commit: `2de9dff test: tighten formal handoff gates`
 - Tag: `handoff-2026-06-20`
 - Workspace: clean after commit
 
-说明：`handoff-2026-06-20` 是 annotated tag，核对提交时必须使用 `git rev-list -n 1 handoff-2026-06-20`，不要用 `git rev-parse handoff-2026-06-20` 直接当作提交 SHA。当前 handoff tag 只新增交接 smoke/status 脚本和文档证据，不改变线上运行时代码；当前线上稳定 deployment 仍为 `d96ff72c-f4a1-45ec-ae18-bf4168faf442`。
+说明：`handoff-2026-06-20` 是 annotated tag，核对提交时必须使用 `git rev-list -n 1 handoff-2026-06-20`，不要用 `git rev-parse handoff-2026-06-20` 直接当作提交 SHA。当前线上稳定 deployment 为 `11e4cccf-88fc-483e-90e2-ded4f5919813`，运行代码来自 `2de9dff test: tighten formal handoff gates`。
 
 本地已通过：
 
@@ -45,9 +45,9 @@
 - Service: `web`
 - URL: `https://ai.seapllo.com`
 - Volume: `web-volume-4jgN` mounted at `/data`
-- Deployment ID: `d96ff72c-f4a1-45ec-ae18-bf4168faf442`
+- Deployment ID: `11e4cccf-88fc-483e-90e2-ded4f5919813`
 - Deployment status: `SUCCESS`
-- Deployment time: `2026-06-20 10:51:42 +08:00`
+- Deployment time: `2026-06-21 10:56 +08:00`
 
 部署前已补齐非敏感生产变量：
 
@@ -119,7 +119,7 @@ Detailed health checks with internal Bearer:
 - active users: 152
 - disabled users: 1
 - Public `POST https://ai.seapllo.com/api/internal/admin/backup` -> 404
-- Deployment runtime logs show edge, web, and proxy started successfully after `d96ff72c-f4a1-45ec-ae18-bf4168faf442`
+- Deployment runtime logs show edge, web, and proxy started successfully after `11e4cccf-88fc-483e-90e2-ded4f5919813`
 - Last 10 minutes 5xx HTTP logs after deployment: none returned by Railway CLI
 
 ## 6. Public Exposure Checks

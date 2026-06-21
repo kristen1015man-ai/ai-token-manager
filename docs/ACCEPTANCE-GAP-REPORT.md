@@ -158,7 +158,7 @@
 - CI workflow 已加入。
 - 本地绿色不能替代远端 CI 和生产 deployment 记录。
 - 当前仓库本地未配置 `origin` remote，无法从本机直接触发远端 CI。
-- 当前 Railway production deployment `d96ff72c-f4a1-45ec-ae18-bf4168faf442` 已成功且在线，详见 `docs/HANDOFF-EVIDENCE-2026-06-20.md`。
+- 当前 Railway production deployment `11e4cccf-88fc-483e-90e2-ded4f5919813` 已成功且在线，详见 `docs/HANDOFF-EVIDENCE-2026-06-20.md`。
 
 签收要求：
 

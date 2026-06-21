@@ -16,7 +16,7 @@
 | 乙方交接人 |  |
 | 接收方技术负责人 |  |
 | Railway 项目/环境 | `heartfelt-education` / `production` |
-| 当前稳定 deployment | `d96ff72c-f4a1-45ec-ae18-bf4168faf442` |
+| 当前稳定 deployment | `11e4cccf-88fc-483e-90e2-ded4f5919813` |
 | 当前 handoff tag | `handoff-2026-06-20` |
 | 当前 handoff commit | 以 `pnpm handoff:status` 输出的 `tagCommit` 为准 |
 
