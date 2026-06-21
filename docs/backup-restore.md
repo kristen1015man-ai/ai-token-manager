@@ -140,6 +140,13 @@ node scripts/verify-sqlite-backup.mjs /path/to/data.db
 
 - `POST /api/internal/admin/reset-billing`
 
+额外保护：
+
+- Web 侧必须临时设置 `ENABLE_INTERNAL_BILLING_RESET=true`。
+- Proxy 侧必须临时设置 `ENABLE_PROXY_USAGE_QUEUE_CLEAR=true`，否则 Web 不会清空 Proxy 内存 usage queue。
+- 请求必须带 `x-sparkloom-maintenance-confirm: reset-billing-usage`。
+- 执行完成后必须立刻把两个维护开关恢复为 `false` 或删除。
+
 使用场景：
 
 - 测试期清空模拟计费。

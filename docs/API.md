@@ -217,7 +217,7 @@ Authorization: Bearer ${INTERNAL_API_KEY}
 | POST | `/api/internal/proxy/quota/release` | Proxy | 上游失败时释放预占 |
 | POST | `/api/internal/usage` | Proxy | usage 批量落库 |
 | POST | `/api/internal/quota-alert` | Web/internal | 额度预警 |
-| POST | `/api/internal/admin/reset-billing` | internal | 重置计费数据 |
+| POST | `/api/internal/admin/reset-billing` | internal + maintenance | 重置计费数据；除 `INTERNAL_API_KEY` 外，还要求 `ENABLE_INTERNAL_BILLING_RESET=true` 和 `x-sparkloom-maintenance-confirm: reset-billing-usage` |
 | POST | `/api/internal/admin/flush-db` | internal | 强制 DB 落盘 |
 | POST | `/api/internal/admin/backup` | internal | 生成非破坏性备份并校验 SQLite integrity |
 | GET/POST | `/api/internal/admin/sync-feishu` | Web auto-sync | 飞书通讯录同步 |
@@ -233,7 +233,7 @@ Proxy 内部管理接口：
 
 | 方法 | 路径 | 调用方 | 说明 |
 | --- | --- | --- | --- |
-| POST | `/internal/admin/usage-queue/clear` | Web/internal | 清空 Proxy 内存 usage queue，并重写空持久队列文件 |
+| POST | `/internal/admin/usage-queue/clear` | Web/internal + maintenance | 清空 Proxy 内存 usage queue，并重写空持久队列文件；要求 `ENABLE_PROXY_USAGE_QUEUE_CLEAR=true` 和 `x-sparkloom-maintenance-confirm: reset-billing-usage` |
 
 ## 8. 已禁用旧代理 API
 

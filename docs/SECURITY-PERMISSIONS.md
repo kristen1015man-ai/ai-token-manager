@@ -109,6 +109,8 @@
 - 不得把内部接口暴露到公网。
 - 不得用用户 cookie 访问内部接口。
 - `INTERNAL_API_KEY` 必须高熵、独立于 `JWT_SECRET` 和 `ENCRYPTION_KEY`。
+- 破坏性内部操作不能只依赖 `INTERNAL_API_KEY`。`/api/internal/admin/reset-billing` 还要求 `ENABLE_INTERNAL_BILLING_RESET=true` 和 `x-sparkloom-maintenance-confirm: reset-billing-usage`；Proxy 的 `/internal/admin/usage-queue/clear` 还要求 `ENABLE_PROXY_USAGE_QUEUE_CLEAR=true` 和同一确认头。
+- 上述维护开关只能在批准窗口临时开启，执行后必须关闭并记录审计证据。
 
 ## 6. CSRF 和浏览器安全头
 

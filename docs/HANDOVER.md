@@ -31,6 +31,7 @@
 | `docs/backup-restore.md` | 备份、恢复和计费重置 |
 | `docs/monitoring.md` | 健康检查、日志、指标和告警 |
 | `docs/reverse-proxy.md` | Railway 入口层和未来反代规则 |
+| `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` | 结构化备份恢复签收模板，实际签收文件不要提交 Git |
 | `docs/HANDOFF-ASSET-SIGNOFF.template.json` | 结构化资产交割签收模板，实际签收文件不要提交 Git |
 
 ---
@@ -109,7 +110,7 @@ Sparkloom 是公司内部 AI API 网关和用量管理后台：
 | 生产密钥库 | `JWT_SECRET`、`INTERNAL_API_KEY`、`ENCRYPTION_KEY`、`FEISHU_APP_SECRET` 的受控存放和轮换责任 |
 | 数据资产 | `/data/data.db`、usage queue、dead-letter 的备份位置和恢复演练记录 |
 
-不得在交接文档中记录明文 secret。只记录 Owner、备份 Owner、权限级别、找回方式和交接状态。资产交割必须复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到公司受控目录并填写，`pnpm handoff:readiness -- --asset-signoff <file>` 只有在八项资产都 `complete=true` 且有 `owner`、`permission`、`evidenceRef` 时才会认可。
+不得在交接文档中记录明文 secret。只记录 Owner、备份 Owner、权限级别、找回方式和交接状态。灾备签收必须复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 到公司受控目录并填写，证明 SQLite 校验、外部受控存储、临时环境恢复演练、回滚演练都完成。资产交割必须复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到公司受控目录并填写，`pnpm handoff:final -- --uat-evidence <uat-file> --backup-verification <backup-file> --asset-signoff <asset-file>` 只有在外部 UAT、灾备、资产三类证据都完整时才会通过。
 
 重要入口文件：
 
@@ -636,7 +637,7 @@ https://ai.seapllo.com/api/auth/feishu/callback
 | `/api/internal/quota-alert` | 额度预警通知 |
 | `/api/internal/admin/flush-db` | 内部 flush DB |
 | `/api/internal/admin/backup` | 内部非破坏性备份和 SQLite integrity 校验 |
-| `/api/internal/admin/reset-billing` | 内部计费重置；公网入口被 `railway/start.mjs` 屏蔽 |
+| `/api/internal/admin/reset-billing` | 内部计费重置；公网入口被 `railway/start.mjs` 屏蔽；还要求 `ENABLE_INTERNAL_BILLING_RESET=true` 和确认头 |
 | `/api/internal/admin/sync-feishu` | 内部飞书通讯录同步 |
 | `/api/internal/admin/prices/sync` | 内部官方价格同步 |
 | `/api/internal/admin/channels/balance-sync` | 内部渠道余额同步 |
@@ -686,10 +687,10 @@ pnpm --filter proxy build
 node --check railway/start.mjs
 ```
 
-正式签收时不要只跑裸 `pnpm handoff:readiness`。应提供 UAT、备份恢复、资产交割三类证据：
+正式签收时不要只跑裸 `pnpm handoff:readiness`。`handoff:readiness` 是报告工具，缺证据时也会输出 JSON。最终签收应使用 `handoff:final` 并提供 UAT、备份恢复、资产交割三类证据：
 
 ```powershell
-pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <handoff-asset-signoff.json>
+pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <handoff-backup-restore-signoff.json> --asset-signoff <handoff-asset-signoff.json>
 ```
 
 部署后检查：
@@ -769,7 +770,7 @@ node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
 计费测试重置：
 
 - 可通过内部维护接口清理 `usage_logs`、`quota_reservations`、usage queue。
-- 公网默认不可调 `/api/internal/admin/reset-billing`，需要内部执行或临时受控放行后立刻收回。
+- 公网默认不可调 `/api/internal/admin/reset-billing`；内部执行也需要 `ENABLE_INTERNAL_BILLING_RESET=true`、Proxy 侧 `ENABLE_PROXY_USAGE_QUEUE_CLEAR=true`、请求头 `x-sparkloom-maintenance-confirm: reset-billing-usage`，执行后立刻关闭维护开关。
 - 重置前必须备份 DB。
 - 重置不会删除员工、渠道、模型价格、个人限额、API Key、飞书配置。
 
@@ -929,7 +930,9 @@ git diff --check
 - `pnpm smoke:production` 返回 `ok=true`。
 - `pnpm handoff:status` 返回 `ok=true`，确认 handoff tag 指向当前提交且工作区干净。
 - `pnpm handoff:uat` 输出脱敏 JSON；提供员工 Key 时可用 `--out <受控目录>` 归档业务 UAT 证据。
-- `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 输出 `formalSignoffReady` 和剩余签收缺口。
+- `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 输出 `formalSignoffReady` 和剩余签收缺口；这是报告工具。
+- `pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 用于正式签收，缺任一证据时退出非 0。
+- `backup.json` 必须来自 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`，单独的 SQLite 校验 JSON 不足以通过灾备签收。
 - `asset.json` 必须来自 `docs/HANDOFF-ASSET-SIGNOFF.template.json`，八项资产均确认后才算通过；不得包含明文 Key/Secret。
 - 登录页可打开。
 - 飞书登录可进入后台。

@@ -26,7 +26,7 @@
 | 安全/审计 | `SECURITY-PERMISSIONS.md`, `INCIDENT-RUNBOOK.md`, `API.md`, `DATABASE-SCHEMA.md` | 权限、密钥、资金安全审查 |
 | 客服/管理员 | `USER-GUIDE.md`, `SUPPORT-RUNBOOK.md`, `TROUBLESHOOTING.md` | 指导员工使用和排查常见问题 |
 | 发布负责人 | `RELEASE-CHECKLIST.md`, `ACCEPTANCE-GAP-REPORT.md` | 每次上线前回归验收和交接退回项跟踪 |
-| 接收方/验收方 | `HANDOFF-UAT-SIGNOFF.md`, `HANDOFF-ASSET-SIGNOFF.template.json`, `HANDOFF-EVIDENCE-2026-06-20.md` | 正式 UAT、灾备、资产交割和签收证据 |
+| 接收方/验收方 | `HANDOFF-UAT-SIGNOFF.md`, `HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`, `HANDOFF-ASSET-SIGNOFF.template.json`, `HANDOFF-EVIDENCE-2026-06-20.md` | 正式 UAT、灾备、资产交割和签收证据 |
 
 ## 交接命令
 
@@ -38,7 +38,7 @@ pnpm handoff:uat
 pnpm handoff:readiness
 ```
 
-`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用。`pnpm handoff:uat` 输出可归档的脱敏 JSON 证据。`pnpm handoff:readiness` 输出正式签收缺口，只有外部 UAT、灾备和资产交割证据齐全时才会显示 `formalSignoffReady=true`。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。
+`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用。`pnpm handoff:uat` 输出可归档的脱敏 JSON 证据。`pnpm handoff:readiness` 输出正式签收缺口，只有外部 UAT、灾备和资产交割证据齐全时才会显示 `formalSignoffReady=true`。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。正式业务 UAT 证据必须带 `--allow-billable --chat-model <model> --include-stream`，同时覆盖非流式和流式调用。
 
 资产交割必须复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录，填成 `handoff-asset-signoff.json` 后再执行：
 
@@ -47,6 +47,14 @@ pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backu
 ```
 
 `asset-handoff` 只有在代码仓库、Railway、DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储八项都 `complete=true`，且每项都有 `owner`、`permission`、`evidenceRef` 时才算通过。签收 JSON 禁止写入明文 Key、Secret、cookie 或 token。
+
+灾备签收必须复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 到受控目录，填成 `handoff-backup-restore-signoff.json` 后作为 `--backup-verification` 输入。该文件必须包含 SQLite 校验、外部受控存储、临时环境恢复演练、回滚演练四部分；单独的 `verify-sqlite-backup.mjs` 输出不足以让 `backup-restore` 通过。
+
+正式交接最终命令使用：
+
+```bash
+pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <handoff-backup-restore-signoff.json> --asset-signoff <handoff-asset-signoff.json>
+```
 
 ## 文档职责
 
@@ -69,6 +77,7 @@ pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backu
 | `balance-sync.md` | 余额同步、阈值、提醒、供应商差异 |
 | `backup-restore.md` | 数据备份、恢复、计费重置、灾备演练 |
 | `HANDOFF-UAT-SIGNOFF.md` | 交接 UAT 与签收表 |
+| `HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` | 结构化备份恢复签收模板；实际签收文件不要提交 Git |
 | `HANDOFF-ASSET-SIGNOFF.template.json` | 结构化资产交割签收模板；实际签收文件不要提交 Git |
 | `HANDOFF-EVIDENCE-2026-06-20.md` | 2026-06-20 线上交接证据 |
 | `monitoring.md` | 健康检查、日志、告警、关键指标 |

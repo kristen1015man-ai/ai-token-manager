@@ -48,6 +48,7 @@
 - `proxy/src/services/usage.ts` 已删除历史死代码块。
 - 新增 CI 工作流与 handoff gate。
 - 新增 checked-in DB migration runner。
+- `reset-billing` 和 Proxy usage queue 清理已增加维护开关和确认头，不再只依赖 `INTERNAL_API_KEY`。
 
 ## 3. 当前签收结论
 
@@ -112,7 +113,7 @@
 
 签收要求：
 
-- `reset-billing` 必须有演练记录、前置备份、操作审批和回滚步骤。
+- `reset-billing` 必须有演练记录、前置备份、操作审批和回滚步骤；执行时需要临时开启 `ENABLE_INTERNAL_BILLING_RESET=true`、`ENABLE_PROXY_USAGE_QUEUE_CLEAR=true`，并发送 `x-sparkloom-maintenance-confirm: reset-billing-usage`，执行后立刻关闭。
 - cleanup 如果后续确需生产使用，应改为一次性脚本或短期签名 token，不应恢复为常驻公网 API。
 
 ### 4.4 线上健康检查和 smoke 证据
@@ -141,8 +142,9 @@
 - 员工 Key 技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com`。
 - 小额计费技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --chat-model <model>`。
 - 小额流式技术命令：在小额计费命令后追加 `--include-stream`。
-- 脱敏证据包命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>`。
-- 最终签收缺口命令：`pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset-file>`。
+- 脱敏证据包命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>`，正式签收要求 `formalBusinessUatComplete=true`。
+- 最终签收缺口报告命令：`pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset-file>`。
+- 最终签收强制门禁命令：`pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <handoff-backup-restore-signoff.json> --asset-signoff <handoff-asset-signoff.json>`。
 
 ### 4.5 远端 CI 和最终发布证据
 
@@ -184,6 +186,28 @@
 - 每项资产必须 `complete=true`，否则 readiness report 保持 `formalSignoffReady=false`。
 - 签收文件不得包含明文 Key、Secret、cookie、token 或供应商真实密钥。
 - 资产签收文件应作为受控证据归档，不提交 Git。
+
+### 4.7 结构化备份恢复证据
+
+证据文件：
+
+- `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`
+- `scripts/verify-sqlite-backup.mjs`
+- `scripts/handoff-readiness-report.mjs`
+
+现状：
+
+- 已新增备份恢复 JSON 模板。
+- `pnpm handoff:readiness` 已改为要求结构化灾备签收；单独的 `verify-sqlite-backup.mjs` 输出不能再让 `backup-restore` 通过。
+- `backup-restore` 需要以下四项都通过：SQLite 校验、外部公司受控存储、临时环境恢复演练、回滚演练。
+
+签收要求：
+
+- 接收方复制模板到公司受控目录，填写 `sqliteVerification`、`externalStorage`、`restoreDrill`、`rollbackDrill`。
+- SQLite 校验必须包含 `ok=true`、`integrity=ok`、`missingTables=[]`、`sha256`、`size`、`evidenceRef`。
+- 外部存储必须包含 owner、locationRef、evidenceRef、retentionPolicy。
+- 恢复演练必须包含 executor、executedAt、environment、evidenceRef、healthCheckRef。
+- 签收文件不得包含明文 Key、Secret、cookie、token 或生产数据库明文路径中不应公开的敏感信息。
 
 ## 5. P2 建议整理
 
@@ -256,7 +280,9 @@
 - `scripts/production-smoke.mjs`：接收方可执行线上非计费 smoke；如提供员工 Key，可继续验证 `/v1/models` 和授权的小额 chat。
 - `scripts/handoff-uat-evidence.mjs`：接收方可生成脱敏 JSON 证据包，默认不调用模型；显式传入员工 Key 和计费参数后才执行小额调用。
 - `docs/HANDOFF-ASSET-SIGNOFF.template.json`：接收方可复制后填写结构化资产交割证据；实际签收文件不要提交 Git。
-- `scripts/handoff-readiness-report.mjs`：接收方可把 UAT、备份校验和资产交割证据输入脚本，输出 `formalSignoffReady` 和剩余缺口；坏 JSON 或路径错误会在 `readError` 中显示。
+- `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`：接收方可复制后填写结构化备份恢复证据；实际签收文件不要提交 Git。
+- `scripts/handoff-readiness-report.mjs`：接收方可把 UAT、备份恢复签收和资产交割证据输入脚本，输出 `formalSignoffReady` 和剩余缺口；坏 JSON 或路径错误会在 `readError` 中显示。
+- `scripts/handoff-final-check.mjs`：接收方可执行正式签收强制门禁，缺任一证据时退出非 0。
 - `scripts/handoff-gate.mjs` 已纳入签收表、备份校验脚本和生产 smoke 脚本存在性检查。
 
-接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、`pnpm handoff:uat`、员工 Key smoke、`handoff-asset-signoff.json` 的输出或文件归档到公司受控存储或变更单。
+接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、`pnpm handoff:uat`、员工 Key smoke、`handoff-backup-restore-signoff.json`、`handoff-asset-signoff.json` 的输出或文件归档到公司受控存储或变更单。

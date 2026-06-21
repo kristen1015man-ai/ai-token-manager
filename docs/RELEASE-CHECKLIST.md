@@ -27,7 +27,7 @@ pnpm --filter web lint
 - handoff tag 指向当前提交，工作区干净。
 - UAT 证据脚本可生成脱敏 JSON，不输出明文 Key/Secret。
 - readiness report 能明确输出 `formalSignoffReady=false/true` 和剩余外部证据缺口。
-- 正式交接或重大资金敏感发布时，必须使用 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 填写资产签收 JSON，并通过 `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 校验。
+- 正式交接或重大资金敏感发布时，必须使用 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 填写备份恢复签收 JSON，使用 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 填写资产签收 JSON，并通过 `pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 校验。
 
 ## 2. 环境变量检查
 
@@ -45,6 +45,7 @@ pnpm --filter web lint
 - `PUBLIC_PROXY_BASE_URL=https://ai.seapllo.com/v1`。
 - `UPSTREAM_ALLOWED_HOSTS` 只包含已批准供应商域名。
 - 所有 `ALLOW_*`、`ENABLE_*` 高危开关在生产均未开启。
+- `ENABLE_INTERNAL_BILLING_RESET=false`，`ENABLE_PROXY_USAGE_QUEUE_CLEAR=false`，除批准维护窗口外不得开启。
 - 数据库使用持久卷。
 
 ## 3. 安全检查
@@ -198,6 +199,7 @@ pnpm --filter web lint
 - 是否涉及资金、密钥、权限、飞书或 DB。
 - 发布前备份文件位置。
 - 如涉及交接，资产签收文件位置；签收文件不得包含明文 Key/Secret。
+- 如涉及交接，备份恢复签收文件位置；签收文件不得包含明文 Key/Secret。
 - 回滚方案。
 - 甲方验收人。
 - 乙方发布人。
@@ -214,7 +216,7 @@ pnpm --filter web lint
 - `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com` 返回 `/v1/models` 通过，输出不包含明文 Key。
 - `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --out <受控目录>` 生成可归档证据。
 - 如需验证真实计费，使用 `--allow-billable --chat-model <model>`，只选接收方认可的小额模型。
-- 如需验证流式调用，在计费 smoke 命令后追加 `--include-stream`。
+- 正式交接或资金敏感发布必须验证流式调用，在计费 smoke 命令后追加 `--include-stream`，并确认 `formalBusinessUatComplete=true`。
 - 管理员能查看该员工产生的用量和费用。
 - 渠道余额、模型价格、额度百分比展示符合预期。
 - 飞书提醒能送达指定管理员或测试群。
@@ -245,6 +247,7 @@ pnpm --filter web lint
 - `/health` 和内部 `/api/health` 结果。
 - 发布前后 Git commit。
 - 发布前备份位置。
+- 备份恢复签收 JSON 或变更单附件位置。
 - 资产签收 JSON 或变更单附件位置。
 - 发布后 30 分钟观察结论。
 

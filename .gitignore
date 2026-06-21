@@ -25,3 +25,5 @@ handoff-evidence/
 handoff-uat-evidence-*.json
 handoff-asset-signoff.json
 handoff-asset-signoff-*.json
+handoff-backup-restore-signoff.json
+handoff-backup-restore-signoff-*.json

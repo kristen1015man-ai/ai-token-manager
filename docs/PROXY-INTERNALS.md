@@ -171,7 +171,9 @@ Proxy 不直接写 DB，而是向 Web 上报。
 内部维护：
 
 - `POST /internal/admin/usage-queue/clear` 可由 Web 使用 `INTERNAL_API_KEY` 调用。
+- 该入口还要求 `ENABLE_PROXY_USAGE_QUEUE_CLEAR=true` 和请求头 `x-sparkloom-maintenance-confirm: reset-billing-usage`。
 - `reset-billing` 会先清 Proxy 内存 queue；如果清理失败，会中止重置，避免旧 usage 在重置后写回。
+- 维护完成后必须关闭 `ENABLE_PROXY_USAGE_QUEUE_CLEAR`。
 - dead-letter 不是自动重试队列，人工确认和补账前不得直接回灌。
 
 ## 8. 费用计算边界

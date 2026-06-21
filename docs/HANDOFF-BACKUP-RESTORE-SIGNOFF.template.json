@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "project": "Sparkloom",
+  "handoffTag": "handoff-2026-06-20",
+  "completedAt": "",
+  "completedBy": "",
+  "sqliteVerification": {
+    "ok": false,
+    "integrity": "",
+    "missingTables": [],
+    "sha256": "",
+    "size": 0,
+    "evidenceRef": "",
+    "notes": "把 node scripts/verify-sqlite-backup.mjs <data.db> 的脱敏结果填入本节。不要记录明文密钥。"
+  },
+  "externalStorage": {
+    "complete": false,
+    "owner": "",
+    "locationRef": "",
+    "evidenceRef": "",
+    "retentionPolicy": "",
+    "notes": "确认 data.db、usage-queue、usage-dead-letter 或缺失说明已进入公司受控存储。locationRef 不应包含临时个人电脑路径。"
+  },
+  "restoreDrill": {
+    "complete": false,
+    "executor": "",
+    "executedAt": "",
+    "environment": "",
+    "evidenceRef": "",
+    "healthCheckRef": "",
+    "notes": "确认临时环境已用该备份恢复，并验证登录、渠道、价格、usage、余额、通知配置可读。"
+  },
+  "rollbackDrill": {
+    "complete": false,
+    "owner": "",
+    "evidenceRef": "",
+    "notes": "确认 deployment 回滚入口、DB 回滚前置备份、执行审批和恢复责任人。"
+  }
+}

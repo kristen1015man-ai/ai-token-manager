@@ -71,6 +71,11 @@ function git(args) {
   return execFileSync("git", args, { cwd: process.cwd(), encoding: "utf8" }).trim();
 }
 
+function smokeCheckOk(smokeResult, name) {
+  if (!Array.isArray(smokeResult?.checks)) return false;
+  return smokeResult.checks.some((check) => check?.name === name && check?.ok === true);
+}
+
 const generatedAt = new Date().toISOString();
 const evidence = {
   ok: false,
@@ -124,9 +129,12 @@ try {
   evidence.formalBusinessUatComplete = Boolean(
     employeeKeyProvided &&
       allowBillable &&
+      includeStream &&
       chatModel &&
       evidence.checks.employeeModels?.ok === true &&
-      evidence.checks.billableSmoke?.ok === true
+      evidence.checks.billableSmoke?.ok === true &&
+      smokeCheckOk(evidence.checks.billableSmoke, "employee billable chat") &&
+      smokeCheckOk(evidence.checks.billableSmoke, "employee billable stream chat")
   );
 } catch (error) {
   evidence.error = redactText(error instanceof Error ? error.message : String(error));

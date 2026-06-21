@@ -34,6 +34,7 @@
 - handoff UAT evidence helper: `scripts/handoff-uat-evidence.mjs`
 - handoff readiness report helper: `scripts/handoff-readiness-report.mjs`
 - formal UAT/sign-off checklist: `docs/HANDOFF-UAT-SIGNOFF.md`
+- structured backup/restore handoff template: `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`
 - structured asset handoff template: `docs/HANDOFF-ASSET-SIGNOFF.template.json`
 - `git diff --check`
 
@@ -256,6 +257,7 @@ Conclusion after retry: Railway volume listing and manifest download are availab
 - 余额同步和余额低提醒真实群/个人通知
 - 排行榜测试发送
 - 生产备份下载到公司受控存储、临时环境恢复演练和回滚演练
+- 结构化备份恢复签收：复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 到受控目录，填写 SQLite 校验、外部存储、恢复演练、回滚演练，并作为 `--backup-verification` 输入 `pnpm handoff:readiness` 或 `pnpm handoff:final`
 - 结构化资产交割签收：复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录，填写代码仓库、Railway、DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储八项资产，并作为 `--asset-signoff` 输入 `pnpm handoff:readiness`
 
 ## 9. Additional Handoff Gate Tightening
@@ -264,5 +266,10 @@ Conclusion after retry: Railway volume listing and manifest download are availab
 
 - `pnpm handoff:readiness` 不再只接受“存在一个资产交割文件”作为通过条件。
 - `asset-handoff` 现在要求八项资产都 `complete=true`，且每项都有非空 `owner`、`permission`、`evidenceRef`。
+- `backup-restore` 现在要求 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 结构：SQLite 校验、外部受控存储、临时环境恢复演练、回滚演练都完成；单独 DB 校验 JSON 不再足够。
+- `pnpm handoff:final` 用于正式签收强制门禁，缺任一证据时退出非 0。
+- 本地交接工作区中的 `.env`、`backups/`、`web/data.db`、`web/.next/standalone/web/data.db` 已移动到仓库外隔离目录，防止打包交接目录时泄露密钥或历史员工 Key 材料。
+- `pnpm test` 现在会检查上述本地敏感物是否回到交接工作区。
+- `reset-billing` 和 Proxy usage queue 清理已增加维护开关和确认头，避免单个 `INTERNAL_API_KEY` 泄露后直接执行破坏性操作。
 - 签收 JSON 格式错误或路径错误会在 readiness report 的 `readError` 中显示，脚本不会直接崩溃。
 - 实际签收文件建议命名为 `handoff-asset-signoff.json` 并放入公司受控存储；仓库 `.gitignore` 已禁止提交该类签收证据文件。

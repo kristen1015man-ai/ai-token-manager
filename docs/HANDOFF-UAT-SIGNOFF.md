@@ -35,8 +35,9 @@
 | T-09 | `https://ai.seapllo.com/api/health` | HTTP 200，`status=ok` | 响应摘要 |  |
 | T-10 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `ok=true`，危险内部接口公网不可访问 | 命令输出 |  |
 | T-11 | `pnpm handoff:uat -- --out <受控目录>` | 生成脱敏 JSON 证据，不包含明文 Key/Secret | 证据文件 |  |
-| T-12 | 复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录并填写 | 八项资产均 `complete=true`，且每项都有 owner、permission、evidenceRef | `handoff-asset-signoff.json` |  |
-| T-13 | `pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset-file>` | `formalSignoffReady=true` | 命令输出 |  |
+| T-12 | 复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 到受控目录并填写 | SQLite 校验、外部存储、恢复演练、回滚演练均完成 | `handoff-backup-restore-signoff.json` |  |
+| T-13 | 复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录并填写 | 八项资产均 `complete=true`，且每项都有 owner、permission、evidenceRef | `handoff-asset-signoff.json` |  |
+| T-14 | `pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <backup-file> --asset-signoff <asset-file>` | `ok=true`，`formalSignoffReady=true` | 命令输出 |  |
 
 ## 3. 登录与权限
 
@@ -77,7 +78,7 @@
 | B-09 | 费用核对 | 系统计费与上游余额变化在可解释误差范围内 | 对账表 |  |
 | B-10 | 小额计费冒烟 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --chat-model <model>` | 请求成功，usage 入库；只用接收方认可的小额模型 |  |
 | B-11 | 小额流式冒烟 | 在 B-10 命令后追加 `--include-stream` | SSE 返回成功，结束后 usage 入库 |  |
-| B-12 | 小额计费证据包 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>` | 证据 JSON 中 billable 相关检查通过，后台 usage 可核对 |  |
+| B-12 | 小额计费证据包 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>` | `formalBusinessUatComplete=true`，非流式和流式检查均通过，后台 usage 可核对 |  |
 
 ## 6. 渠道、余额和价格
 
@@ -105,6 +106,8 @@
 
 ## 8. 灾备与恢复
 
+正式灾备签收必须使用 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`。`node scripts/verify-sqlite-backup.mjs <data.db>` 只证明 SQLite 文件可读和核心表存在，不证明备份已经进入公司受控存储，也不证明临时环境恢复和回滚演练完成。
+
 | 编号 | 操作 | 期望结果 | 证据 | 结果 |
 | --- | --- | --- | --- | --- |
 | D-01 | 生产卷内备份校验 | 已有 `/data/backups/handoff-2026-06-20T02-50-12-179Z`，`integrity=ok` | `HANDOFF-EVIDENCE` | 通过 |
@@ -113,6 +116,7 @@
 | D-04 | 临时环境恢复 | 临时环境启动成功，health ok | 截图/日志 |  |
 | D-05 | 恢复后业务校验 | 登录、渠道、价格、usage、余额、通知配置可读 | 截图 |  |
 | D-06 | 回滚演练 | 明确回滚 deployment 和 DB 的步骤 | 变更单 |  |
+| D-07 | 灾备签收 JSON | `sqliteVerification`、`externalStorage`、`restoreDrill`、`rollbackDrill` 均完成 | `handoff-backup-restore-signoff.json` |  |
 
 ## 9. 资产交割
 

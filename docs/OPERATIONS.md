@@ -187,7 +187,13 @@ curl http://localhost:3001/health
 
 ## 4.2 本地测试数据
 
-当前仓库没有正式自动化测试脚本，也没有纳入 package script 的标准 seed 命令。
+当前仓库已有交接门禁和线上 smoke 脚本：
+
+- `pnpm test`：执行 `scripts/handoff-gate.mjs`，覆盖权限、内部接口、密钥扫描、交接脚本和文档约束。
+- `pnpm smoke:production`：执行线上非计费 smoke，检查 health、危险内部接口公网屏蔽、seed/dev-login 拦截。
+- `pnpm handoff:uat`：生成脱敏 UAT 证据；正式业务签收必须提供真实员工 Key，并带 `--allow-billable --chat-model <model> --include-stream`。
+
+但当前仍没有纳入 package script 的标准业务 seed 命令。`/api/setup/seed` 只能作为本地受控入口，不是新人默认测试数据路径。
 
 可用但受限的入口：
 
@@ -301,7 +307,7 @@ curl -X POST \
   http://127.0.0.1:3000/api/internal/admin/backup
 ```
 
-执行后检查返回的 `verification.integrity` 必须为 `ok`，并把 `backupDir`、`manifest.sha256`、核心表数量记录到变更单。该备份仍位于 Railway Volume 内，正式灾备还需要下载到公司受控存储并做恢复演练。
+执行后检查返回的 `verification.integrity` 必须为 `ok`，并把 `backupDir`、`manifest.sha256`、核心表数量记录到变更单。该备份仍位于 Railway Volume 内，正式灾备还需要下载到公司受控存储并做恢复演练；交接签收时应复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`，填写 `handoff-backup-restore-signoff.json` 并归档。
 
 如果 Railway SSH 不可用，可使用一次性启动演练：
 

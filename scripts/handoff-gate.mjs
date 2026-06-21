@@ -28,6 +28,10 @@ function assert(condition, message) {
   if (!condition) failures.push(message);
 }
 
+function existsLocal(rel) {
+  return fs.existsSync(path.join(root, rel));
+}
+
 function gitTrackedFiles() {
   return execSync("git ls-files", { cwd: root, encoding: "utf8" })
     .split(/\r?\n/)
@@ -61,6 +65,18 @@ const publicAdminRoutes = [
   "web/src/app/api/setup/sync-feishu/route.ts",
 ];
 
+for (const rel of [
+  ".env",
+  ".env.local",
+  ".env.production",
+  "data.db",
+  "web/data.db",
+  "web/.next/standalone/web/data.db",
+  "backups",
+]) {
+  assert(!existsLocal(rel), `local sensitive artifact must be moved out of the handoff workspace: ${rel}`);
+}
+
 for (const rel of publicAdminRoutes) {
   const source = read(rel);
   assert(!source.includes("INTERNAL_API_KEY"), `${rel} must not read INTERNAL_API_KEY`);
@@ -92,6 +108,16 @@ for (const token of ["NODE_ENV", "production", "ENABLE_SEED_ENDPOINT", "isLocalR
 const cleanupExecuteRoute = read("web/src/app/api/admin/cleanup-execute/route.ts");
 assert(cleanupExecuteRoute.includes("process.env.NODE_ENV !== \"production\""), "cleanup execute must stay disabled in production");
 assert(cleanupExecuteRoute.includes("ENABLE_CLEANUP_ENDPOINT"), "cleanup execute must require explicit non-production flag");
+
+const resetBillingRoute = read("web/src/app/api/internal/admin/reset-billing/route.ts");
+for (const token of ["ENABLE_INTERNAL_BILLING_RESET", "x-sparkloom-maintenance-confirm", "reset-billing-usage"]) {
+  assert(resetBillingRoute.includes(token), `reset billing route must keep destructive maintenance guard: ${token}`);
+}
+
+const proxyIndex = read("proxy/src/index.ts");
+for (const token of ["ENABLE_PROXY_USAGE_QUEUE_CLEAR", "x-sparkloom-maintenance-confirm", "reset-billing-usage"]) {
+  assert(proxyIndex.includes(token), `proxy usage queue clear must keep destructive maintenance guard: ${token}`);
+}
 
 const debugRoute = read("web/src/app/api/admin/debug/route.ts");
 assert(debugRoute.includes("process.env.NODE_ENV === \"production\""), "debug route must stay disabled in production");
@@ -182,20 +208,33 @@ assert(notificationRouter.includes("parseRoles"), "notification router must use 
 const productionEnv = read(".env.production.example");
 const deprecatedAdminEmailsToken = "ADMIN_" + "EMAILS";
 assert(!productionEnv.includes(deprecatedAdminEmailsToken), ".env.production.example must not expose deprecated admin email variable");
+assert(productionEnv.includes("WEB_PORT_INTERNAL=3000"), ".env.production.example must document WEB_PORT_INTERNAL for Railway single-image routing");
+assert(productionEnv.includes("railway/start.mjs"), ".env.production.example must describe Railway port variable ownership");
+assert(productionEnv.includes("ENABLE_INTERNAL_BILLING_RESET=false"), ".env.production.example must keep billing reset disabled by default");
+assert(productionEnv.includes("ENABLE_PROXY_USAGE_QUEUE_CLEAR=false"), ".env.production.example must keep proxy queue clear disabled by default");
 
 const apiDocs = read("docs/API.md");
 assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must document the internal backup route");
 const gitignore = read(".gitignore");
-for (const token of ["handoff-evidence/", "handoff-uat-evidence-*.json", "handoff-asset-signoff.json", "handoff-asset-signoff-*.json"]) {
+for (const token of [
+  "handoff-evidence/",
+  "handoff-uat-evidence-*.json",
+  "handoff-asset-signoff.json",
+  "handoff-asset-signoff-*.json",
+  "handoff-backup-restore-signoff.json",
+  "handoff-backup-restore-signoff-*.json",
+]) {
   assert(gitignore.includes(token), `.gitignore must keep ${token}`);
 }
 assert(exists("docs/HANDOFF-UAT-SIGNOFF.md"), "handoff UAT sign-off document must exist");
 assert(exists("docs/HANDOFF-ASSET-SIGNOFF.template.json"), "handoff asset sign-off template must exist");
+assert(exists("docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json"), "handoff backup/restore sign-off template must exist");
 assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification script must exist");
 assert(exists("scripts/production-smoke.mjs"), "production smoke script must exist");
 assert(exists("scripts/handoff-status.mjs"), "handoff status script must exist");
 assert(exists("scripts/handoff-uat-evidence.mjs"), "handoff UAT evidence script must exist");
 assert(exists("scripts/handoff-readiness-report.mjs"), "handoff readiness report script must exist");
+assert(exists("scripts/handoff-final-check.mjs"), "handoff final check script must exist");
 const uatSignoff = read("docs/HANDOFF-UAT-SIGNOFF.md");
 for (const token of [
   "登录与权限",
@@ -232,6 +271,9 @@ for (const token of [
   "SPARKLOOM_EMPLOYEE_API_KEY",
   "--allow-billable",
   "--include-stream",
+  "formalBusinessUatComplete",
+  "smokeCheckOk",
+  "employee billable stream chat",
   "redactText",
   "handoff-status.mjs",
   "production-smoke.mjs",
@@ -243,6 +285,15 @@ const handoffReadiness = read("scripts/handoff-readiness-report.mjs");
 for (const token of [
   "formalSignoffReady",
   "codeHandoffReady",
+  "formalBusinessUatComplete",
+  "includeStream",
+  "handoffStatus",
+  "publicSmoke",
+  "validateBackupRestoreSignoff",
+  "externalStorageOk",
+  "restoreDrillOk",
+  "rollbackDrillOk",
+  "--require-formal",
   "validateAssetSignoff",
   "readJsonEvidence",
   "readError",
@@ -271,6 +322,10 @@ for (const id of [
 ]) {
   assert(templateAssetIds.has(id), `handoff asset template must include ${id}`);
 }
+const backupRestoreTemplate = JSON.parse(read("docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json"));
+for (const token of ["sqliteVerification", "externalStorage", "restoreDrill", "rollbackDrill"]) {
+  assert(Object.hasOwn(backupRestoreTemplate, token), `handoff backup/restore template must include ${token}`);
+}
 for (const rel of [
   "docs/README.md",
   "docs/HANDOFF-UAT-SIGNOFF.md",
@@ -281,6 +336,7 @@ for (const rel of [
 ]) {
   const source = read(rel);
   assert(source.includes("HANDOFF-ASSET-SIGNOFF.template.json"), `${rel} must document the asset sign-off template`);
+  assert(source.includes("HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json"), `${rel} must document the backup/restore sign-off template`);
 }
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
@@ -311,6 +367,10 @@ assert(
 assert(
   rootPkg.scripts?.["handoff:readiness"] === "node scripts/handoff-readiness-report.mjs",
   "root package must expose the handoff readiness report command"
+);
+assert(
+  rootPkg.scripts?.["handoff:final"] === "node scripts/handoff-final-check.mjs",
+  "root package must expose the handoff final check command"
 );
 assert(!sharedPkg.scripts?.[dbGenerateScript], "shared package must not expose a non-source-of-truth db generate script");
 assert(sharedPkg.scripts?.["db:migrate"] === "node run-migrate.mjs", "shared db:migrate must use the checked-in migration runner");

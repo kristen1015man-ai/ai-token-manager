@@ -7,6 +7,9 @@ import { requireInternalRequest } from "../../../../../lib/internal-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const RESET_CONFIRM_HEADER = "x-sparkloom-maintenance-confirm";
+const RESET_CONFIRM_VALUE = "reset-billing-usage";
+
 function resolveDbPath(): string {
   if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes(":")) {
     return path.resolve(process.env.DATABASE_URL);
@@ -71,7 +74,10 @@ async function clearProxyMemoryQueue(): Promise<{ ok: boolean; detail: unknown }
   try {
     const resp = await fetch(`${proxyUrl}/internal/admin/usage-queue/clear`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${internalKey}` },
+      headers: {
+        Authorization: `Bearer ${internalKey}`,
+        [RESET_CONFIRM_HEADER]: RESET_CONFIRM_VALUE,
+      },
       signal: AbortSignal.timeout(5000),
     });
     const text = await resp.text();
@@ -88,6 +94,16 @@ async function clearProxyMemoryQueue(): Promise<{ ok: boolean; detail: unknown }
 export async function POST(request: NextRequest) {
   const authError = requireInternalRequest(request);
   if (authError) return authError;
+  if (process.env.ENABLE_INTERNAL_BILLING_RESET !== "true") {
+    return NextResponse.json({
+      error: "Billing reset is disabled. Set ENABLE_INTERNAL_BILLING_RESET=true only during an approved maintenance window.",
+    }, { status: 403 });
+  }
+  if (request.headers.get(RESET_CONFIRM_HEADER) !== RESET_CONFIRM_VALUE) {
+    return NextResponse.json({
+      error: `Missing ${RESET_CONFIRM_HEADER}: ${RESET_CONFIRM_VALUE}`,
+    }, { status: 400 });
+  }
 
   const { sqlite } = await getDb();
   const db = getRawExec(sqlite);

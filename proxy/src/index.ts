@@ -18,6 +18,8 @@ const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const RESET_CONFIRM_HEADER = "x-sparkloom-maintenance-confirm";
+const RESET_CONFIRM_VALUE = "reset-billing-usage";
 
 function hasInternalAuth(authHeader?: string): boolean {
   const internalKey = process.env.INTERNAL_API_KEY;
@@ -77,6 +79,14 @@ app.get("/health", async (c) => {
 app.post("/internal/admin/usage-queue/clear", async (c) => {
   if (!hasInternalAuth(c.req.header("authorization"))) {
     return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (process.env.ENABLE_PROXY_USAGE_QUEUE_CLEAR !== "true") {
+    return c.json({
+      error: "Proxy usage queue clear is disabled. Set ENABLE_PROXY_USAGE_QUEUE_CLEAR=true only during an approved maintenance window.",
+    }, 403);
+  }
+  if (c.req.header(RESET_CONFIRM_HEADER) !== RESET_CONFIRM_VALUE) {
+    return c.json({ error: `Missing ${RESET_CONFIRM_HEADER}: ${RESET_CONFIRM_VALUE}` }, 400);
   }
   const result = clearUsageQueue();
   return c.json({ success: true, ...result });

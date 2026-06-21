@@ -10,6 +10,10 @@ function argValue(name, fallback = "") {
   return args[index + 1] ?? fallback;
 }
 
+function hasFlag(name) {
+  return args.includes(name);
+}
+
 function runJson(command, commandArgs) {
   const result = spawnSync(command, commandArgs, {
     cwd: process.cwd(),
@@ -133,6 +137,91 @@ function validateAssetSignoff(signoff, readResult) {
   };
 }
 
+function smokeCheckOk(smokeResult, name) {
+  if (!Array.isArray(smokeResult?.checks)) return false;
+  return smokeResult.checks.some((check) => check?.name === name && check?.ok === true);
+}
+
+function validateBackupRestoreSignoff(signoff, readResult) {
+  if (readResult?.error) {
+    return {
+      provided: true,
+      complete: false,
+      readError: readResult.error,
+      schemaErrors: [],
+      sqliteVerificationOk: false,
+      externalStorageOk: false,
+      restoreDrillOk: false,
+      rollbackDrillOk: false,
+    };
+  }
+  if (!signoff) {
+    return {
+      provided: readResult?.provided === true,
+      complete: false,
+      schemaErrors: [],
+      sqliteVerificationOk: false,
+      externalStorageOk: false,
+      restoreDrillOk: false,
+      rollbackDrillOk: false,
+    };
+  }
+
+  const schemaErrors = [];
+  const sqlite = signoff.sqliteVerification || signoff;
+  const sqliteVerificationOk = Boolean(
+    sqlite?.ok === true &&
+      sqlite?.integrity === "ok" &&
+      Array.isArray(sqlite?.missingTables) &&
+      sqlite.missingTables.length === 0 &&
+      nonEmptyString(sqlite?.sha256) &&
+      Number.isFinite(Number(sqlite?.size)) &&
+      Number(sqlite.size) > 0
+  );
+
+  if (!signoff.sqliteVerification) {
+    schemaErrors.push("sqliteVerification section is required; raw verify-sqlite-backup output alone is not enough");
+  } else if (!nonEmptyString(signoff.sqliteVerification.evidenceRef)) {
+    schemaErrors.push("sqliteVerification.evidenceRef is required");
+  }
+
+  const externalStorageOk = Boolean(
+    signoff.externalStorage?.complete === true &&
+      nonEmptyString(signoff.externalStorage.owner) &&
+      nonEmptyString(signoff.externalStorage.locationRef) &&
+      nonEmptyString(signoff.externalStorage.evidenceRef) &&
+      nonEmptyString(signoff.externalStorage.retentionPolicy)
+  );
+  const restoreDrillOk = Boolean(
+    signoff.restoreDrill?.complete === true &&
+      nonEmptyString(signoff.restoreDrill.executor) &&
+      nonEmptyString(signoff.restoreDrill.executedAt) &&
+      nonEmptyString(signoff.restoreDrill.environment) &&
+      nonEmptyString(signoff.restoreDrill.evidenceRef) &&
+      nonEmptyString(signoff.restoreDrill.healthCheckRef)
+  );
+  const rollbackDrillOk = Boolean(
+    signoff.rollbackDrill?.complete === true &&
+      nonEmptyString(signoff.rollbackDrill.owner) &&
+      nonEmptyString(signoff.rollbackDrill.evidenceRef)
+  );
+
+  return {
+    provided: true,
+    complete:
+      schemaErrors.length === 0 &&
+      sqliteVerificationOk &&
+      externalStorageOk &&
+      restoreDrillOk &&
+      rollbackDrillOk,
+    schemaErrors,
+    sqliteVerificationOk,
+    externalStorageOk,
+    restoreDrillOk,
+    rollbackDrillOk,
+  };
+}
+
 const handoffStatus = runJson(process.execPath, ["scripts/handoff-status.mjs", "handoff-2026-06-20"]);
 const uatEvidenceRead = readJsonEvidence(uatEvidencePath);
 const backupVerificationRead = readJsonEvidence(backupVerificationPath);
@@ -141,20 +230,23 @@ const uatEvidence = uatEvidenceRead.value;
 const backupVerification = backupVerificationRead.value;
 const assetSignoff = assetSignoffRead.value;
 const assetSignoffValidation = validateAssetSignoff(assetSignoff, assetSignoffRead);
+const backupRestoreValidation = validateBackupRestoreSignoff(backupVerification, backupVerificationRead);
 
 const businessUatComplete = Boolean(
-  uatEvidence?.environment?.employeeKeyProvided &&
+  uatEvidence?.formalBusinessUatComplete === true &&
+    uatEvidence?.environment?.employeeKeyProvided &&
     uatEvidence?.environment?.allowBillable &&
+    uatEvidence?.environment?.includeStream &&
+    uatEvidence?.checks?.handoffStatus?.ok === true &&
+    uatEvidence?.checks?.publicSmoke?.ok === true &&
     uatEvidence?.checks?.employeeModels?.ok === true &&
-    uatEvidence?.checks?.billableSmoke?.ok === true
+    uatEvidence?.checks?.billableSmoke?.ok === true &&
+    smokeCheckOk(uatEvidence?.checks?.employeeModels, "employee /v1/models") &&
+    smokeCheckOk(uatEvidence?.checks?.billableSmoke, "employee billable chat") &&
+    smokeCheckOk(uatEvidence?.checks?.billableSmoke, "employee billable stream chat")
 );
 
-const backupRestoreComplete = Boolean(
-  backupVerification?.ok === true &&
-    backupVerification?.integrity === "ok" &&
-    Array.isArray(backupVerification?.missingTables) &&
-    backupVerification.missingTables.length === 0
-);
+const backupRestoreComplete = backupRestoreValidation.complete;
 
 const requiredExternalEvidence = [
   {
@@ -170,6 +262,7 @@ const requiredExternalEvidence = [
     complete: backupRestoreComplete,
     evidence: backupVerificationPath || null,
     readError: backupVerificationRead.error,
+    validation: backupRestoreValidation,
   },
   {
     id: "asset-handoff",
@@ -196,4 +289,4 @@ const report = {
 };
 
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = 0;
+process.exitCode = hasFlag("--require-formal") && !report.formalSignoffReady ? 1 : 0;

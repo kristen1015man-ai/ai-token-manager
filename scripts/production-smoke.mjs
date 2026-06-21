@@ -134,7 +134,7 @@ if (employeeKey && allowBillable && chatModel) {
       }),
       timeoutMs: 60_000,
     });
-    record("employee billable chat", result.status === 200 && Boolean(result.body?.choices?.[0]), {
+    record("employee billable chat", result.status === 200 && Boolean(result.body?.choices?.[0]) && Boolean(result.body?.usage), {
       status: result.status,
       model: chatModel,
       usagePresent: Boolean(result.body?.usage),
@@ -166,11 +166,13 @@ if (employeeKey && allowBillable && chatModel && includeStream) {
       timeoutMs: 60_000,
     });
     const streamText = typeof result.body === "string" ? result.body : "";
-    record("employee billable stream chat", result.status === 200 && streamText.includes("data:"), {
+    const sawDone = streamText.includes("[DONE]");
+    const sawUsage = streamText.includes('"usage"');
+    record("employee billable stream chat", result.status === 200 && streamText.includes("data:") && sawDone && sawUsage, {
       status: result.status,
       model: chatModel,
-      sawDone: streamText.includes("[DONE]"),
-      sawUsage: streamText.includes('"usage"'),
+      sawDone,
+      sawUsage,
     });
   } catch (error) {
     record("employee billable stream chat", false, { error: error instanceof Error ? error.message : String(error) });
