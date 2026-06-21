@@ -6,21 +6,22 @@
 
 - Branch: `codex/production-readiness-snapshot`
 - Handoff repository commit: 以 `pnpm handoff:status` 或 `git rev-list -n 1 handoff-2026-06-20` 输出为准
-- Runtime deployment commit: `185cc25 security: separate encryption and hash keys`
+- Runtime deployment commit: `d1abbf2 fix: harden handoff readiness checks`
 - Tag: `handoff-2026-06-20`
 - Workspace: clean after commit
 
-Current production snapshot, updated 2026-06-21 11:19 +08:00:
+Current production snapshot, updated 2026-06-21 16:35 +08:00:
 
-- Runtime commit: `185cc25057100b40677cb752187ae2cfcd1cb008`
-- Railway deployment ID: `ad570d77-f57e-45ce-b35b-5ea49c23a8e2`
+- Runtime commit: `d1abbf2b7733b8fb98211f02f3c266cfb72206b1`
+- Railway deployment ID: `6dc8dfa0-0bb1-4ab0-95ac-52149f1fcbea`
 - Railway status: `Online`
 - URL: `https://ai.seapllo.com`
 - Local pre-deploy checks passed: `pnpm test`, `pnpm --filter web build`, `pnpm --filter proxy build`
 - Production public smoke passed: `pnpm smoke:production`
+- Production internal smoke with Railway environment passed: detailed health returned DB readable/writable and secret decryption sample `ok=true`, checked `28`, failures `[]`.
 - Employee billable smoke remains pending because no employee `sk-emp-*` test key was provided to the local shell.
 
-说明：`handoff-2026-06-20` 是 annotated tag，核对提交时必须使用 `git rev-list -n 1 handoff-2026-06-20`，不要用 `git rev-parse handoff-2026-06-20` 直接当作提交 SHA。当前线上稳定 deployment 为 `ad570d77-f57e-45ce-b35b-5ea49c23a8e2`，运行代码来自 `185cc25 security: separate encryption and hash keys`。
+说明：`handoff-2026-06-20` 是 annotated tag，核对提交时必须使用 `git rev-list -n 1 handoff-2026-06-20`，不要用 `git rev-parse handoff-2026-06-20` 直接当作提交 SHA。当前线上稳定 deployment 为 `6dc8dfa0-0bb1-4ab0-95ac-52149f1fcbea`，运行代码来自 `d1abbf2 fix: harden handoff readiness checks`。
 
 本地已通过：
 
@@ -55,9 +56,9 @@ Current production snapshot, updated 2026-06-21 11:19 +08:00:
 - Service: `web`
 - URL: `https://ai.seapllo.com`
 - Volume: `web-volume-4jgN` mounted at `/data`
-- Deployment ID: `ad570d77-f57e-45ce-b35b-5ea49c23a8e2`
+- Deployment ID: `6dc8dfa0-0bb1-4ab0-95ac-52149f1fcbea`
 - Deployment status: `SUCCESS`
-- Deployment time: `2026-06-21 11:19 +08:00`
+- Deployment time: `2026-06-21 16:35 +08:00`
 
 部署前已补齐非敏感生产变量：
 
@@ -142,7 +143,7 @@ Detailed health checks with internal Bearer:
 Production smoke helper result:
 
 - Command: `node scripts/production-smoke.mjs --base https://ai.seapllo.com`
-- Time: `2026-06-21 11:18 +08:00`
+- Time: `2026-06-21 16:35 +08:00`
 - Result: `ok=true`
 - Confirmed public health:
   - `/health`: 200, `service=ai-token-proxy`
@@ -158,9 +159,9 @@ Production smoke helper result:
 Production smoke with Railway environment:
 
 - Command: `railway run node scripts/production-smoke.mjs --base https://ai.seapllo.com`
-- Time: `2026-06-20 17:26:23 +08:00`
+- Time: `2026-06-21 16:35:16 +08:00`
 - Result: `ok=true`
-- Internal detailed health: 200, DB readable true, DB writable true, secret decryption sample ok, checked 15, failures 0.
+- Internal detailed health: 200, DB readable true, DB writable true, secret decryption sample ok, checked 28, failures 0.
 - User counts in detailed health: active 152, disabled 1.
 - Employee `/v1/models` and billable chat were intentionally skipped because no employee `sk-emp-...` key was provided.
 
