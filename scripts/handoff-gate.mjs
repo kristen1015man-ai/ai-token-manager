@@ -213,6 +213,24 @@ assert(productionEnv.includes("railway/start.mjs"), ".env.production.example mus
 assert(productionEnv.includes("ENABLE_INTERNAL_BILLING_RESET=false"), ".env.production.example must keep billing reset disabled by default");
 assert(productionEnv.includes("ENABLE_PROXY_USAGE_QUEUE_CLEAR=false"), ".env.production.example must keep proxy queue clear disabled by default");
 
+const sharedCrypto = read("shared/crypto.ts");
+for (const token of [
+  "hkdfSync",
+  "derivePurposeKey",
+  "enc:v2:",
+  "h2:",
+  "legacySearchableHash",
+  "searchableHashes",
+  "encryption:aes-256-gcm",
+  "searchable-hmac:sha256",
+]) {
+  assert(sharedCrypto.includes(token), `shared crypto must keep separated v2 key derivation support: ${token}`);
+}
+const authenticateRoute = read("web/src/app/api/internal/proxy/authenticate/route.ts");
+for (const token of ["searchableHashes", "findStoredApiKeyByHashes", "UPDATE user_api_keys SET key_hash"]) {
+  assert(authenticateRoute.includes(token), `proxy authenticate must keep legacy/new API key hash compatibility: ${token}`);
+}
+
 const apiDocs = read("docs/API.md");
 assert(apiDocs.includes("`/api/internal/admin/backup`"), "docs/API.md must document the internal backup route");
 const gitignore = read(".gitignore");

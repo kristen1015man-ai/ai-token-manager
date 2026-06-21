@@ -278,7 +278,7 @@ flowchart LR
 - `users.api_key`
 - `user_api_keys.key_encrypted`
 
-这些字段使用 `ENCRYPTION_KEY` 进行 AES-256-GCM 加密。认证用 `searchableHash()` 生成 hash，避免全表解密。
+这些字段使用 `ENCRYPTION_KEY` 派生出的 AES-256-GCM key 加密。新写入密文使用 `enc:v2:`；历史 `enc:v1:` 仍可读取。认证用 `searchableHash()` 生成 `h2:` 前缀 hash，内部通过 HKDF 从同一 master key 派生独立 HMAC key，避免加密用途和可搜索 hash 用途共用同一子密钥。历史无前缀 hex hash 继续兼容认证，并在员工 Key 成功认证时逐步升级为 `h2:`。
 
 重要限制：
 

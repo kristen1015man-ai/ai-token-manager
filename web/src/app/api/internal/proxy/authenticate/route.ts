@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { users } from "../../../../../../../shared/schema";
 import { getDb, getRawExec, scheduleSave } from "../../../../../lib/db";
-import { ensureDecrypted, safeEqual, searchableHash } from "../../../../../lib/crypto";
+import { ensureDecrypted, safeEqual, searchableHash, searchableHashes } from "../../../../../lib/crypto";
 import { requireInternalRequest } from "../../../../../lib/internal-auth";
-import { findStoredApiKeyByHash, markUserApiKeyUsed } from "../../../../../lib/user-api-keys";
+import { findStoredApiKeyByHashes, markUserApiKeyUsed } from "../../../../../lib/user-api-keys";
 
 export async function POST(request: NextRequest) {
   const authError = requireInternalRequest(request);
@@ -24,9 +24,10 @@ export async function POST(request: NextRequest) {
 
   const { db, sqlite } = await getDb();
   const raw = getRawExec(sqlite);
-  const hash = searchableHash(apiKey);
+  const primaryHash = searchableHash(apiKey);
+  const hashes = searchableHashes(apiKey);
 
-  const storedKey = findStoredApiKeyByHash(raw, hash);
+  const storedKey = findStoredApiKeyByHashes(raw, hashes);
   if (storedKey) {
     const decryptedStoredKey = ensureDecrypted(storedKey.keyEncrypted);
     if (!safeEqual(decryptedStoredKey, apiKey)) {
@@ -37,6 +38,19 @@ export async function POST(request: NextRequest) {
     const owner = ownerRows[0];
     if (!owner || owner.status === "disabled") {
       return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+    }
+
+    if (storedKey.keyHash !== primaryHash) {
+      try {
+        raw.run("UPDATE user_api_keys SET key_hash = ? WHERE id = ?", [primaryHash, storedKey.id]);
+        raw.run("UPDATE users SET api_key_hash = ? WHERE id = ? AND api_key_hash = ?", [
+          primaryHash,
+          storedKey.userId,
+          storedKey.keyHash,
+        ]);
+      } catch (error) {
+        console.error("[auth] failed to upgrade API key hash:", error);
+      }
     }
 
     markUserApiKeyUsed(raw, storedKey.id);

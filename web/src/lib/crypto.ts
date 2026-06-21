@@ -10,4 +10,6 @@ export {
   ensureDecrypted,
   safeEqual,
   searchableHash,
+  legacySearchableHash,
+  searchableHashes,
 } from "../../../shared/crypto";

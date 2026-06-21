@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { pinyin } from "pinyin-pro";
 import { users } from "../../../shared/schema";
 import { getDb, saveDb } from "./db";
-import { ensureEncrypted, ensureDecrypted, safeEqual, searchableHash } from "./crypto";
+import { ensureEncrypted, ensureDecrypted, safeEqual, searchableHash, searchableHashes } from "./crypto";
 
 /**
  * 中文名 → 拼音标识（无音调、小写、去空格）
@@ -159,12 +159,15 @@ export async function findOrCreateUser(feishuUserInfo: {
  */
 export async function findUserByApiKey(apiKey: string) {
   const { db } = await getDb();
-  const hash = searchableHash(apiKey);
-  const candidates = await db
-    .select()
-    .from(users)
-    .where(eq(users.apiKeyHash, hash))
-    .limit(1);
+  let candidates: (typeof users.$inferSelect)[] = [];
+  for (const hash of searchableHashes(apiKey)) {
+    candidates = await db
+      .select()
+      .from(users)
+      .where(eq(users.apiKeyHash, hash))
+      .limit(1);
+    if (candidates.length > 0) break;
+  }
 
   if (candidates.length === 0) return null;
 

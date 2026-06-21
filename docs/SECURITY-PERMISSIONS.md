@@ -53,7 +53,7 @@
 
 - 明文只在创建成功响应中返回一次。
 - GET 列表只返回 `maskedKey`，不能返回明文。
-- 认证使用 `searchableHash()` 做 SQL 精确查询。
+- 认证使用 `searchableHash()` 做 SQL 精确查询。新 hash 带 `h2:` 前缀，HMAC key 通过 HKDF 从 `ENCRYPTION_KEY` 派生，和 AES 加密子密钥分离；历史无前缀 hex hash 继续兼容读取，并在成功认证时逐步升级。
 - 查到候选后再用解密明文做 timing-safe 二次校验。
 - 删除 Key 时至少保留一个。
 - 忘记 Key 只能新建，不能找回。
@@ -71,7 +71,7 @@
 
 安全契约：
 
-- 写入前必须调用 `ensureEncrypted()`。
+- 写入前必须调用 `ensureEncrypted()`。新密文使用 `enc:v2:`，AES key 通过 HKDF 从 `ENCRYPTION_KEY` 派生；历史 `enc:v1:` 仍可读取。
 - 展示时只显示脱敏片段。
 - 管理后台保存接口拒绝 `****`、`enc:v1:`、示例值、含空格换行的 Key。
 - Proxy 内部读取渠道时由 Web 解密后返回给 Proxy，Proxy 不直接读 DB。

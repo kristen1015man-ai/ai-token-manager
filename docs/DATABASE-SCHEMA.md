@@ -59,8 +59,8 @@ Sparkloom 使用 sql.js SQLite。Schema 定义在 `shared/schema.ts`，运行时
 | --- | --- |
 | `id` | Key ID |
 | `user_id` | 归属用户 |
-| `key_hash` | HMAC-SHA256 可搜索 hash |
-| `key_encrypted` | AES-GCM 加密后的 Key |
+| `key_hash` | HMAC-SHA256 可搜索 hash；新写入为 `h2:` 前缀，历史无前缀 hash 兼容读取 |
+| `key_encrypted` | AES-GCM 加密后的 Key；新写入为 `enc:v2:`，历史 `enc:v1:` 兼容读取 |
 | `masked_key` | 展示用脱敏值 |
 | `name` | Key 名称 |
 | `created_at` | 创建时间 |

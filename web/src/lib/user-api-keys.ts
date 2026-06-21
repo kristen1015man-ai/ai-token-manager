@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { ensureDecrypted, ensureEncrypted, searchableHash } from "./crypto";
+import { ensureDecrypted, ensureEncrypted, isEncrypted, searchableHash } from "./crypto";
 import { type SqliteExec } from "./db";
 
 export interface UserApiKeyListItem {
@@ -71,7 +71,7 @@ export function backfillUserApiKeys(db: SqliteExec, userId?: string): number {
     if (!plainKey || !plainKey.startsWith("sk-emp-")) continue;
 
     const keyHash = existingHash || searchableHash(plainKey);
-    const keyEncrypted = encryptedValue.startsWith("enc:v1:") ? encryptedValue : ensureEncrypted(plainKey);
+    const keyEncrypted = isEncrypted(encryptedValue) ? encryptedValue : ensureEncrypted(plainKey);
     db.run(
       `INSERT OR IGNORE INTO user_api_keys
         (id, user_id, key_hash, key_encrypted, masked_key, name, created_at)
@@ -281,6 +281,14 @@ export function findStoredApiKeyByHash(db: SqliteExec, keyHash: string): StoredU
     name: String(row[5] || "API Key"),
     createdAt: Number(row[6] || 0),
   };
+}
+
+export function findStoredApiKeyByHashes(db: SqliteExec, keyHashes: string[]): StoredUserApiKey | null {
+  for (const keyHash of keyHashes) {
+    const stored = findStoredApiKeyByHash(db, keyHash);
+    if (stored) return stored;
+  }
+  return null;
 }
 
 export function markUserApiKeyUsed(db: SqliteExec, keyId: string, now = Math.floor(Date.now() / 1000)): void {

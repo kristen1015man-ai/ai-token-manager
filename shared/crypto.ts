@@ -2,27 +2,32 @@
  * AES-256-GCM 加密模块（shared）
  * 用于加密存储敏感字段：channels.apiKey, channels.accessKeySecret, users.apiKey
  *
- * 加密格式：enc:v1:base64(iv:ciphertext:authTag)，16字节IV + 密文 + 16字节Tag
+ * 加密格式：
+ * - enc:v1:base64(iv:ciphertext:authTag)，历史格式，直接使用 master key
+ * - enc:v2:base64(iv:ciphertext:authTag)，当前格式，通过 HKDF 派生 encryption key
  * 密钥来源：环境变量 ENCRYPTION_KEY（32字节 hex 字符串 或 密码字符串）
+ * 搜索 hash：新写入使用 h2:<hex>，通过 HKDF 派生 HMAC key；旧 hex hash 继续兼容读取。
  *
  * 位于 shared/ 以便 proxy 和 web 共同使用
  */
 
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
 // 加密前缀，用于区分已加密和明文数据
-const ENCRYPTED_PREFIX = "enc:v1:";
+const ENCRYPTED_PREFIX_V1 = "enc:v1:";
+const ENCRYPTED_PREFIX_V2 = "enc:v2:";
+const SEARCHABLE_HASH_PREFIX_V2 = "h2:";
 
 /**
  * 从环境变量获取加密密钥
  * ENCRYPTION_KEY 可以是 32 字节 hex（64字符）或任意密码字符串
  * 生产环境必须配置，开发环境允许未配置（不加密）
  */
-function getEncryptionKey(): Buffer | null {
+function getMasterKey(): Buffer | null {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw) return null;
 
@@ -35,12 +40,26 @@ function getEncryptionKey(): Buffer | null {
   return scryptSync(raw, "ai-token-manager-salt-v1", 32);
 }
 
+function derivePurposeKey(masterKey: Buffer, purpose: string): Buffer {
+  return Buffer.from(hkdfSync("sha256", masterKey, "sparkloom-key-derivation-v2", purpose, 32));
+}
+
+function getEncryptionKeyV2(): Buffer | null {
+  const masterKey = getMasterKey();
+  return masterKey ? derivePurposeKey(masterKey, "encryption:aes-256-gcm") : null;
+}
+
+function getSearchableHashKeyV2(): Buffer | null {
+  const masterKey = getMasterKey();
+  return masterKey ? derivePurposeKey(masterKey, "searchable-hmac:sha256") : null;
+}
+
 function allowPlaintextSecretsForDev(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.ALLOW_PLAINTEXT_SECRETS_FOR_DEV === "true";
 }
 
 function requireEncryptionKey(operation: string): Buffer {
-  const key = getEncryptionKey();
+  const key = getMasterKey();
   if (!key) {
     throw new Error(
       `[crypto] ENCRYPTION_KEY is required for ${operation}. ` +
@@ -54,7 +73,7 @@ function requireEncryptionKey(operation: string): Buffer {
  * 判断值是否已加密
  */
 export function isEncrypted(value: string): boolean {
-  return value.startsWith(ENCRYPTED_PREFIX);
+  return value.startsWith(ENCRYPTED_PREFIX_V1) || value.startsWith(ENCRYPTED_PREFIX_V2);
 }
 
 /**
@@ -64,10 +83,10 @@ export function isEncrypted(value: string): boolean {
 export function encrypt(plaintext: string): string {
   if (!plaintext) return plaintext;
 
-  let key = getEncryptionKey();
+  let key = getEncryptionKeyV2();
   if (!key) {
     if (allowPlaintextSecretsForDev()) return plaintext;
-    key = requireEncryptionKey("encrypting secrets");
+    key = derivePurposeKey(requireEncryptionKey("encrypting secrets"), "encryption:aes-256-gcm");
   }
 
   const iv = randomBytes(IV_LENGTH);
@@ -81,7 +100,7 @@ export function encrypt(plaintext: string): string {
 
   // iv + encrypted + authTag 拼接后 base64
   const combined = Buffer.concat([iv, encrypted, authTag]);
-  return `${ENCRYPTED_PREFIX}${combined.toString("base64")}`;
+  return `${ENCRYPTED_PREFIX_V2}${combined.toString("base64")}`;
 }
 
 /**
@@ -91,13 +110,16 @@ export function encrypt(plaintext: string): string {
 export function decrypt(ciphertext: string): string {
   if (!ciphertext || !isEncrypted(ciphertext)) return ciphertext;
 
-  const key = getEncryptionKey();
-  if (!key) {
+  const masterKey = getMasterKey();
+  if (!masterKey) {
     throw new Error("[crypto] ENCRYPTION_KEY is required to decrypt stored secrets");
   }
 
   try {
-    const combined = Buffer.from(ciphertext.slice(ENCRYPTED_PREFIX.length), "base64");
+    const isV2 = ciphertext.startsWith(ENCRYPTED_PREFIX_V2);
+    const prefix = isV2 ? ENCRYPTED_PREFIX_V2 : ENCRYPTED_PREFIX_V1;
+    const key = isV2 ? derivePurposeKey(masterKey, "encryption:aes-256-gcm") : masterKey;
+    const combined = Buffer.from(ciphertext.slice(prefix.length), "base64");
 
     const iv = combined.subarray(0, IV_LENGTH);
     const authTag = combined.subarray(combined.length - TAG_LENGTH);
@@ -161,11 +183,31 @@ export function safeEqual(a: string, b: string): boolean {
  * 原始凭据仍然用 AES-256-GCM 加密存储，hash 仅作为查找索引。
  */
 export function searchableHash(plaintext: string): string {
-  const key = getEncryptionKey();
+  const key = getSearchableHashKeyV2();
+  const hmacKey = key || (
+    allowPlaintextSecretsForDev()
+      ? derivePurposeKey(scryptSync("dev-only-searchable-hash", "searchable-hash-salt-v1", 32), "searchable-hmac:sha256")
+      : derivePurposeKey(requireEncryptionKey("searchableHash"), "searchable-hmac:sha256")
+  );
+  return `${SEARCHABLE_HASH_PREFIX_V2}${createHmac("sha256", hmacKey).update(plaintext, "utf8").digest("hex")}`;
+}
+
+/**
+ * v1 兼容哈希：历史数据直接用 ENCRYPTION_KEY/master key 做 HMAC。
+ * 只用于读取旧记录和渐进迁移，不用于新写入。
+ */
+export function legacySearchableHash(plaintext: string): string {
+  const key = getMasterKey();
   const hmacKey = key || (
     allowPlaintextSecretsForDev()
       ? scryptSync("dev-only-searchable-hash", "searchable-hash-salt-v1", 32)
-      : requireEncryptionKey("searchableHash")
+      : requireEncryptionKey("legacy searchableHash")
   );
   return createHmac("sha256", hmacKey).update(plaintext, "utf8").digest("hex");
+}
+
+export function searchableHashes(plaintext: string): string[] {
+  const next = searchableHash(plaintext);
+  const legacy = legacySearchableHash(plaintext);
+  return next === legacy ? [next] : [next, legacy];
 }
