@@ -103,6 +103,7 @@ curl -X POST \
 
 ```bash
 node scripts/verify-sqlite-backup.mjs /path/to/data.db
+node scripts/verify-sqlite-backup.mjs /path/to/backup-dir
 ```
 
 输出必须满足：
@@ -111,26 +112,114 @@ node scripts/verify-sqlite-backup.mjs /path/to/data.db
 - `integrity=ok`
 - `missingTables=[]`
 - `users`、`channels`、`model_prices`、`usage_logs` 等核心表计数符合预期
+- 目录级校验时 `inputType=backup-directory`
+- 目录级校验时 `backupSet.dataDb`、`backupSet.manifest`、`backupSet.usageQueue`、`backupSet.usageDeadLetter` 均 present
+- 目录级校验时 `manifestMatches=true`，确认 manifest 中记录的文件哈希和实际文件一致
 
-该脚本只读打开 SQLite 文件，不会修改备份内容，也不会输出密钥明文。
+该脚本只读打开 SQLite 文件，不会修改备份内容，也不会输出密钥明文。正式灾备签收应优先校验完整备份目录；单独 `data.db` 只能证明 DB 文件可读，不能证明 usage queue/dead-letter 与 DB 是同一恢复点。
 
 注意：2026-06-20 交接演练中，Railway CLI 可以列出备份目录并下载 `manifest.json`，但下载约 13.5 MB 的 `data.db` 多次因 `Timeout` 失败，目录下载并降低 concurrency 也未解决。因此正式灾备不能只依赖本机 Railway CLI 大文件下载；接收方应使用 Railway 可用的文件下载通道、对象存储备份任务，或公司认可的运维通道，把完整备份搬运到受控存储后再执行 `verify-sqlite-backup.mjs` 和恢复演练。
 
 ## 5. 恢复步骤
 
-1. 停止线上服务或切维护窗口。
-2. 备份当前 `/data/data.db`，不要直接覆盖。
-3. 上传目标备份文件到 `/data/data.db`。
-4. 确认文件权限可读写。
-5. 重启服务。
-6. 调用健康检查。
-7. 登录后台核对：
+恢复必须走维护窗口，目标是让 DB 和 usage queue/dead-letter 按同一时间点成套恢复。
+
+### 5.1 恢复前停写
+
+1. 在飞书或运维群公告维护窗口，暂停员工客户端调用。
+2. Railway 将生产服务临时停写或停止服务；如果使用 Railway CLI，先确认当前 project/environment：
+
+```powershell
+railway status
+railway service
+```
+
+3. 恢复前先生成当前生产卷的二次备份，不要直接覆盖：
+
+```powershell
+railway run node -e "fetch('http://127.0.0.1:3000/api/internal/admin/backup',{method:'POST',headers:{Authorization:'Bearer '+process.env.INTERNAL_API_KEY}}).then(r=>r.text()).then(console.log)"
+```
+
+如果服务已经无法启动，则直接通过 Railway Volume 文件功能复制当前 `/data/data.db`、`usage-queue.jsonl`、`usage-dead-letter.jsonl` 到带时间戳的保全目录。
+
+### 5.2 校验待恢复备份
+
+在公司受控存储下载完整备份目录后，先本地只读校验：
+
+```powershell
+node scripts/verify-sqlite-backup.mjs <downloaded-backup-dir>
+```
+
+必须满足：
+
+- `ok=true`
+- `inputType=backup-directory`
+- `integrity=ok`
+- `missingTables=[]`
+- `backupSet.dataDb.present=true`
+- `backupSet.manifest.present=true`
+- `backupSet.usageQueue.present=true`
+- `backupSet.usageDeadLetter.present=true`
+- `manifestMatches=true`
+
+如果只有单个 `data.db` 文件，最多只能证明 DB 文件可读，不能作为正式灾备恢复签收。
+
+### 5.3 上传恢复文件
+
+Railway Volume 上传命令随 CLI 版本变化，执行前先查看本机可用语法：
+
+```powershell
+railway volume files --help
+railway volume files upload --help
+```
+
+恢复时需要把同一备份目录中的文件上传到生产挂载目录：
+
+```powershell
+railway volume files upload <downloaded-backup-dir>\data.db /data/data.db
+railway volume files upload <downloaded-backup-dir>\usage-queue.jsonl /data/usage-queue.jsonl
+railway volume files upload <downloaded-backup-dir>\usage-dead-letter.jsonl /data/usage-dead-letter.jsonl
+```
+
+上传后列目录确认大小和文件存在：
+
+```powershell
+railway volume files list /data --json
+```
+
+### 5.4 重启和验证
+
+1. 重启生产服务。
+2. 调用健康检查：
+
+```powershell
+curl https://ai.seapllo.com/health
+curl https://ai.seapllo.com/api/health
+```
+
+3. 使用内部详细健康检查确认 DB 可读写、密钥解密正常、usage queue 可写：
+
+```powershell
+curl -H "Authorization: Bearer $env:INTERNAL_API_KEY" https://ai.seapllo.com/api/health
+```
+
+4. 登录后台核对：
    - 用户数。
    - 渠道数。
    - 模型价格数。
    - 本月 usage。
    - 余额。
-8. 小流量测试 `/v1/models` 和一次 chat 调用。
+   - 通知接收人配置。
+5. 用测试员工 Key 小流量验证 `/v1/models` 和一次 chat 调用。正式签收时还要执行 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 的业务 UAT 签收。
+
+### 5.5 临时环境恢复演练
+
+临时环境恢复时必须关闭真实通知和自动同步，避免恢复演练误发飞书消息或改写生产数据。最低要求：
+
+- 使用独立 Railway 环境或本地临时环境。
+- 不使用生产 `FEISHU_APP_SECRET` 发送真实通知。
+- 不开启自动余额同步、排行榜发送和飞书通讯录写操作。
+- 验证完成后销毁临时 DB 副本。
 
 ## 6. 计费重置
 

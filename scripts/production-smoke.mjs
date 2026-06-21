@@ -16,6 +16,9 @@ const employeeKey = process.env.SPARKLOOM_EMPLOYEE_API_KEY || "";
 const internalKey = process.env.INTERNAL_API_KEY || "";
 const allowBillable = hasFlag("--allow-billable");
 const includeStream = hasFlag("--include-stream");
+const requireEmployee = hasFlag("--require-employee") || allowBillable || includeStream;
+const requireBillable = hasFlag("--require-billable") || allowBillable;
+const requireStream = hasFlag("--require-stream") || includeStream;
 const chatModel = argValue("--chat-model", "");
 
 const checks = [];
@@ -115,7 +118,10 @@ if (employeeKey) {
     record("employee /v1/models", false, { error: error instanceof Error ? error.message : String(error) });
   }
 } else {
-  record("employee /v1/models", true, { skipped: "SPARKLOOM_EMPLOYEE_API_KEY not provided" });
+  record("employee /v1/models", !requireEmployee, {
+    skipped: "SPARKLOOM_EMPLOYEE_API_KEY not provided",
+    required: requireEmployee,
+  });
 }
 
 if (employeeKey && allowBillable && chatModel) {
@@ -143,8 +149,9 @@ if (employeeKey && allowBillable && chatModel) {
     record("employee billable chat", false, { error: error instanceof Error ? error.message : String(error) });
   }
 } else {
-  record("employee billable chat", true, {
+  record("employee billable chat", !requireBillable, {
     skipped: "requires SPARKLOOM_EMPLOYEE_API_KEY plus --allow-billable --chat-model <model>",
+    required: requireBillable,
   });
 }
 
@@ -178,16 +185,21 @@ if (employeeKey && allowBillable && chatModel && includeStream) {
     record("employee billable stream chat", false, { error: error instanceof Error ? error.message : String(error) });
   }
 } else {
-  record("employee billable stream chat", true, {
+  record("employee billable stream chat", !requireStream, {
     skipped: "requires SPARKLOOM_EMPLOYEE_API_KEY plus --allow-billable --chat-model <model> --include-stream",
+    required: requireStream,
   });
 }
 
 const ok = checks.every((check) => check.ok);
+const skippedChecks = checks.filter((check) => check.detail?.skipped).map((check) => check.name);
+const complete = skippedChecks.length === 0;
 console.log(JSON.stringify({
   ok,
+  complete,
   baseUrl,
   checkedAt: new Date().toISOString(),
+  skippedChecks,
   checks,
 }, null, 2));
 

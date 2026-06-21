@@ -265,6 +265,8 @@ const gitignore = read(".gitignore");
 for (const token of [
   "handoff-evidence/",
   "handoff-uat-evidence-*.json",
+  "handoff-business-uat-signoff.json",
+  "handoff-business-uat-signoff-*.json",
   "handoff-asset-signoff.json",
   "handoff-asset-signoff-*.json",
   "handoff-backup-restore-signoff.json",
@@ -273,6 +275,7 @@ for (const token of [
   assert(gitignore.includes(token), `.gitignore must keep ${token}`);
 }
 assert(exists("docs/HANDOFF-UAT-SIGNOFF.md"), "handoff UAT sign-off document must exist");
+assert(exists("docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json"), "handoff business UAT sign-off template must exist");
 assert(exists("docs/HANDOFF-ASSET-SIGNOFF.template.json"), "handoff asset sign-off template must exist");
 assert(exists("docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json"), "handoff backup/restore sign-off template must exist");
 assert(exists("scripts/verify-sqlite-backup.mjs"), "SQLite backup verification script must exist");
@@ -292,7 +295,7 @@ for (const token of [
   assert(uatSignoff.includes(token), `handoff UAT sign-off must cover ${token}`);
 }
 const backupVerifier = read("scripts/verify-sqlite-backup.mjs");
-for (const token of ["PRAGMA integrity_check", "missingTables", "sha256", "process.exitCode"]) {
+for (const token of ["PRAGMA integrity_check", "missingTables", "sha256", "backup-directory", "usage-dead-letter.jsonl", "manifestMatches", "process.exitCode"]) {
   assert(backupVerifier.includes(token), `backup verifier must keep ${token}`);
 }
 const productionSmoke = read("scripts/production-smoke.mjs");
@@ -304,6 +307,11 @@ for (const token of [
   "SPARKLOOM_EMPLOYEE_API_KEY",
   "--allow-billable",
   "--include-stream",
+  "--require-employee",
+  "--require-billable",
+  "--require-stream",
+  "skippedChecks",
+  "complete",
   "process.exitCode",
 ]) {
   assert(productionSmoke.includes(token), `production smoke must keep ${token}`);
@@ -332,7 +340,13 @@ for (const token of [
   "formalSignoffReady",
   "codeHandoffReady",
   "formalBusinessUatComplete",
-  "includeStream",
+  "validateBusinessUatSignoff",
+  "automatedEvidenceOk",
+  "usageAuditOk",
+  "securityReviewOk",
+  "costReconciled",
+  "billableStreamOk",
+  "validHttpsBaseUrl",
   "handoffStatus",
   "publicSmoke",
   "validateBackupRestoreSignoff",
@@ -354,6 +368,13 @@ for (const token of [
 ]) {
   assert(handoffReadiness.includes(token), `handoff readiness report must keep ${token}`);
 }
+const businessUatTemplate = JSON.parse(read("docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json"));
+for (const token of ["automatedEvidence", "usageAudit", "securityReview"]) {
+  assert(Object.hasOwn(businessUatTemplate, token), `handoff business UAT template must include ${token}`);
+}
+for (const token of ["nonStreamUsageRecorded", "streamUsageRecorded", "costReconciled"]) {
+  assert(Object.hasOwn(businessUatTemplate.usageAudit || {}, token), `handoff business UAT usage audit must include ${token}`);
+}
 const assetTemplate = JSON.parse(read("docs/HANDOFF-ASSET-SIGNOFF.template.json"));
 const templateAssetIds = new Set((assetTemplate.assets || []).map((asset) => asset.id));
 for (const id of [
@@ -372,6 +393,10 @@ const backupRestoreTemplate = JSON.parse(read("docs/HANDOFF-BACKUP-RESTORE-SIGNO
 for (const token of ["sqliteVerification", "externalStorage", "restoreDrill", "rollbackDrill"]) {
   assert(Object.hasOwn(backupRestoreTemplate, token), `handoff backup/restore template must include ${token}`);
 }
+const nginxConf = read("nginx/nginx.conf");
+for (const token of ["location /v1/", "location /anthropic/", "proxy_buffering off", "proxy_read_timeout 600s"]) {
+  assert(nginxConf.includes(token), `nginx reverse proxy must keep ${token}`);
+}
 for (const rel of [
   "docs/README.md",
   "docs/HANDOFF-UAT-SIGNOFF.md",
@@ -381,6 +406,7 @@ for (const rel of [
   "docs/RELEASE-CHECKLIST.md",
 ]) {
   const source = read(rel);
+  assert(source.includes("HANDOFF-BUSINESS-UAT-SIGNOFF.template.json"), `${rel} must document the business UAT sign-off template`);
   assert(source.includes("HANDOFF-ASSET-SIGNOFF.template.json"), `${rel} must document the asset sign-off template`);
   assert(source.includes("HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json"), `${rel} must document the backup/restore sign-off template`);
 }

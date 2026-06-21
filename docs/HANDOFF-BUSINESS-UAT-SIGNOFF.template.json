@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "project": "Sparkloom",
+  "handoffTag": "handoff-2026-06-20",
+  "completedAt": "",
+  "completedBy": "",
+  "automatedEvidence": {
+    "complete": false,
+    "formalBusinessUatComplete": false,
+    "baseUrl": "https://ai.seapllo.com",
+    "generatedAt": "",
+    "evidenceRef": "",
+    "redactedOutputRef": "",
+    "checks": {
+      "handoffStatusOk": false,
+      "publicSmokeOk": false,
+      "employeeModelsOk": false,
+      "billableChatOk": false,
+      "billableStreamOk": false
+    },
+    "notes": "Fill this section from pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <controlled-dir>. Do not paste employee keys or provider secrets."
+  },
+  "usageAudit": {
+    "complete": false,
+    "auditor": "",
+    "auditedAt": "",
+    "model": "",
+    "requestRef": "",
+    "adminUsageRef": "",
+    "nonStreamUsageRecorded": false,
+    "streamUsageRecorded": false,
+    "costReconciled": false,
+    "costEvidenceRef": "",
+    "notes": "Confirm the non-stream and stream requests are visible in Sparkloom usage records and the calculated cost is reconciled against provider-side balance or usage evidence within an explainable tolerance."
+  },
+  "securityReview": {
+    "complete": false,
+    "reviewer": "",
+    "reviewedAt": "",
+    "evidenceRef": "",
+    "noSecretsInEvidence": false,
+    "notes": "Confirm archived UAT evidence is redacted and contains no employee key, provider key, Feishu secret, cookie, token, or raw Authorization header."
+  }
+}

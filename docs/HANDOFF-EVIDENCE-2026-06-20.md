@@ -45,6 +45,7 @@ Current production snapshot, updated 2026-06-21 16:35 +08:00:
 - handoff UAT evidence helper: `scripts/handoff-uat-evidence.mjs`
 - handoff readiness report helper: `scripts/handoff-readiness-report.mjs`
 - formal UAT/sign-off checklist: `docs/HANDOFF-UAT-SIGNOFF.md`
+- structured business UAT handoff template: `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json`
 - structured backup/restore handoff template: `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`
 - structured asset handoff template: `docs/HANDOFF-ASSET-SIGNOFF.template.json`
 - `git diff --check`
@@ -268,6 +269,7 @@ Conclusion after retry: Railway volume listing and manifest download are availab
 - 余额同步和余额低提醒真实群/个人通知
 - 排行榜测试发送
 - 生产备份下载到公司受控存储、临时环境恢复演练和回滚演练
+- 结构化业务 UAT 签收：复制 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 到受控目录，填写自动 smoke、usage 入库、费用核对和脱敏审查，并作为 `--uat-evidence` 输入 `pnpm handoff:readiness` 或 `pnpm handoff:final`
 - 结构化备份恢复签收：复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 到受控目录，填写 SQLite 校验、外部存储、恢复演练、回滚演练，并作为 `--backup-verification` 输入 `pnpm handoff:readiness` 或 `pnpm handoff:final`
 - 结构化资产交割签收：复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录，填写代码仓库、Railway、DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储八项资产，并作为 `--asset-signoff` 输入 `pnpm handoff:readiness`
 
@@ -276,6 +278,7 @@ Conclusion after retry: Railway volume listing and manifest download are availab
 2026-06-20 追加：
 
 - `pnpm handoff:readiness` 不再只接受“存在一个资产交割文件”作为通过条件。
+- `business-uat` 现在要求 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 结构：自动 smoke、usage 入库核对、费用核对和脱敏审查都完成；单独 `pnpm handoff:uat` 输出不再足够。
 - `asset-handoff` 现在要求八项资产都 `complete=true`，且每项都有非空 `owner`、`permission`、`evidenceRef`。
 - `backup-restore` 现在要求 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 结构：SQLite 校验、外部受控存储、临时环境恢复演练、回滚演练都完成；单独 DB 校验 JSON 不再足够。
 - `pnpm handoff:final` 用于正式签收强制门禁，缺任一证据时退出非 0。

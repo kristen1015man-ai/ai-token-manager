@@ -54,7 +54,7 @@
 
 当前代码层面的 P0/P1 阻断已处理到可进入真实数据 UAT 的状态。
 
-正式交接签字前，接收方仍需要拿到生产平台证据、备份恢复证据、线上 smoke/UAT 证据和资产交割记录。这些不是本地代码能单方面证明的内容。
+正式交接签字前，接收方仍需要拿到生产平台证据、结构化业务 UAT 签收、备份恢复证据和资产交割记录。这些不是本地代码能单方面证明的内容。
 
 ## 4. 仍需补齐的签收证据
 
@@ -142,9 +142,10 @@
 - 员工 Key 技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com`。
 - 小额计费技术命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --chat-model <model>`。
 - 小额流式技术命令：在小额计费命令后追加 `--include-stream`。
-- 脱敏证据包命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>`，正式签收要求 `formalBusinessUatComplete=true`。
-- 最终签收缺口报告命令：`pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset-file>`。
-- 最终签收强制门禁命令：`pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <handoff-backup-restore-signoff.json> --asset-signoff <handoff-asset-signoff.json>`。
+- 脱敏自动证据包命令：`SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>`，自动证据要求 `formalBusinessUatComplete=true`。
+- 业务 UAT 结构化签收：复制 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 到受控目录，填写自动证据、usage 入库核对、费用核对和脱敏审查。
+- 最终签收缺口报告命令：`pnpm handoff:readiness -- --uat-evidence <handoff-business-uat-signoff.json> --backup-verification <backup.json> --asset-signoff <asset-file>`。
+- 最终签收强制门禁命令：`pnpm handoff:final -- --uat-evidence <handoff-business-uat-signoff.json> --backup-verification <handoff-backup-restore-signoff.json> --asset-signoff <handoff-asset-signoff.json>`。
 
 ### 4.5 远端 CI 和最终发布证据
 
@@ -171,6 +172,7 @@
 
 证据文件：
 
+- `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json`
 - `docs/HANDOFF-ASSET-SIGNOFF.template.json`
 - `scripts/handoff-readiness-report.mjs`
 
@@ -221,7 +223,7 @@
 2. Railway 生产环境证明只有单写实例。
 3. 自动备份和恢复演练完成并归档。
 4. 高危操作有审批、审计、备份和回滚记录。
-5. 线上 smoke/UAT 全部通过。
+5. 线上 smoke/UAT 全部通过，并通过 `HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 结构化签收 usage 入库、费用核对和脱敏审查。
 6. 代码仓库、Railway、DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储的 owner 和权限交割完成，并通过 `HANDOFF-ASSET-SIGNOFF.template.json` 结构化签收。
 
 以上任一项失败，不建议视为完成正式交接。
@@ -279,10 +281,11 @@
 - `scripts/verify-sqlite-backup.mjs`：接收方下载 `data.db` 后可执行只读 SQLite 校验，输出 `integrity`、SHA-256、文件大小、缺失表和核心表计数。
 - `scripts/production-smoke.mjs`：接收方可执行线上非计费 smoke；如提供员工 Key，可继续验证 `/v1/models` 和授权的小额 chat。
 - `scripts/handoff-uat-evidence.mjs`：接收方可生成脱敏 JSON 证据包，默认不调用模型；显式传入员工 Key 和计费参数后才执行小额调用。
+- `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json`：接收方可复制后填写结构化业务 UAT 签收；实际签收文件不要提交 Git。
 - `docs/HANDOFF-ASSET-SIGNOFF.template.json`：接收方可复制后填写结构化资产交割证据；实际签收文件不要提交 Git。
 - `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`：接收方可复制后填写结构化备份恢复证据；实际签收文件不要提交 Git。
 - `scripts/handoff-readiness-report.mjs`：接收方可把 UAT、备份恢复签收和资产交割证据输入脚本，输出 `formalSignoffReady` 和剩余缺口；坏 JSON 或路径错误会在 `readError` 中显示。
 - `scripts/handoff-final-check.mjs`：接收方可执行正式签收强制门禁，缺任一证据时退出非 0。
 - `scripts/handoff-gate.mjs` 已纳入签收表、备份校验脚本和生产 smoke 脚本存在性检查。
 
-接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-data.db>`、`pnpm smoke:production`、`pnpm handoff:uat`、员工 Key smoke、`handoff-backup-restore-signoff.json`、`handoff-asset-signoff.json` 的输出或文件归档到公司受控存储或变更单。
+接收方正式签收前应把 `HANDOFF-UAT-SIGNOFF.md` 填完整，并把 `scripts/verify-sqlite-backup.mjs <downloaded-backup-dir>`、`pnpm smoke:production`、`pnpm handoff:uat`、员工 Key smoke、`handoff-business-uat-signoff.json`、`handoff-backup-restore-signoff.json`、`handoff-asset-signoff.json` 的输出或文件归档到公司受控存储或变更单。

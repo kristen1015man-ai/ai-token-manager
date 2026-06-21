@@ -157,6 +157,103 @@ function smokeCheckOk(smokeResult, name) {
   return smokeResult.checks.some((check) => check?.name === name && check?.ok === true);
 }
 
+function parseTimestamp(value) {
+  if (!nonEmptyString(value)) return false;
+  return Number.isFinite(Date.parse(value));
+}
+
+function validHttpsBaseUrl(value) {
+  if (!nonEmptyString(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && !["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function validateBusinessUatSignoff(signoff, readResult) {
+  if (readResult?.error) {
+    return {
+      provided: true,
+      complete: false,
+      readError: readResult.error,
+      schemaErrors: [],
+      automatedEvidenceOk: false,
+      usageAuditOk: false,
+      securityReviewOk: false,
+    };
+  }
+  if (!signoff) {
+    return {
+      provided: readResult?.provided === true,
+      complete: false,
+      schemaErrors: [],
+      automatedEvidenceOk: false,
+      usageAuditOk: false,
+      securityReviewOk: false,
+    };
+  }
+
+  const schemaErrors = [];
+  validCompletionMetadata(signoff, schemaErrors);
+
+  if (!signoff.automatedEvidence) {
+    schemaErrors.push("automatedEvidence section is required; raw handoff-uat evidence alone is not enough");
+  }
+  if (!signoff.usageAudit) {
+    schemaErrors.push("usageAudit section is required");
+  }
+  if (!signoff.securityReview) {
+    schemaErrors.push("securityReview section is required");
+  }
+
+  const checks = signoff.automatedEvidence?.checks || {};
+  const automatedEvidenceOk = Boolean(
+    signoff.automatedEvidence?.complete === true &&
+      signoff.automatedEvidence?.formalBusinessUatComplete === true &&
+      validHttpsBaseUrl(signoff.automatedEvidence?.baseUrl) &&
+      parseTimestamp(signoff.automatedEvidence?.generatedAt) &&
+      nonEmptyString(signoff.automatedEvidence?.evidenceRef) &&
+      nonEmptyString(signoff.automatedEvidence?.redactedOutputRef) &&
+      checks.handoffStatusOk === true &&
+      checks.publicSmokeOk === true &&
+      checks.employeeModelsOk === true &&
+      checks.billableChatOk === true &&
+      checks.billableStreamOk === true
+  );
+
+  const usageAuditOk = Boolean(
+    signoff.usageAudit?.complete === true &&
+      nonEmptyString(signoff.usageAudit?.auditor) &&
+      parseTimestamp(signoff.usageAudit?.auditedAt) &&
+      nonEmptyString(signoff.usageAudit?.model) &&
+      nonEmptyString(signoff.usageAudit?.requestRef) &&
+      nonEmptyString(signoff.usageAudit?.adminUsageRef) &&
+      signoff.usageAudit?.nonStreamUsageRecorded === true &&
+      signoff.usageAudit?.streamUsageRecorded === true &&
+      signoff.usageAudit?.costReconciled === true &&
+      nonEmptyString(signoff.usageAudit?.costEvidenceRef)
+  );
+
+  const securityReviewOk = Boolean(
+    signoff.securityReview?.complete === true &&
+      nonEmptyString(signoff.securityReview?.reviewer) &&
+      parseTimestamp(signoff.securityReview?.reviewedAt) &&
+      nonEmptyString(signoff.securityReview?.evidenceRef) &&
+      signoff.securityReview?.noSecretsInEvidence === true
+  );
+
+  return {
+    provided: true,
+    complete: schemaErrors.length === 0 && automatedEvidenceOk && usageAuditOk && securityReviewOk,
+    schemaErrors,
+    automatedEvidenceOk,
+    usageAuditOk,
+    securityReviewOk,
+  };
+}
+
 function validateBackupRestoreSignoff(signoff, readResult) {
   if (readResult?.error) {
     return {
@@ -245,23 +342,11 @@ const assetSignoffRead = readJsonEvidence(assetSignoffPath);
 const uatEvidence = uatEvidenceRead.value;
 const backupVerification = backupVerificationRead.value;
 const assetSignoff = assetSignoffRead.value;
+const businessUatValidation = validateBusinessUatSignoff(uatEvidence, uatEvidenceRead);
 const assetSignoffValidation = validateAssetSignoff(assetSignoff, assetSignoffRead);
 const backupRestoreValidation = validateBackupRestoreSignoff(backupVerification, backupVerificationRead);
 
-const businessUatComplete = Boolean(
-  uatEvidence?.formalBusinessUatComplete === true &&
-    uatEvidence?.environment?.employeeKeyProvided &&
-    uatEvidence?.environment?.allowBillable &&
-    uatEvidence?.environment?.includeStream &&
-    uatEvidence?.checks?.handoffStatus?.ok === true &&
-    uatEvidence?.checks?.publicSmoke?.ok === true &&
-    uatEvidence?.checks?.employeeModels?.ok === true &&
-    uatEvidence?.checks?.billableSmoke?.ok === true &&
-    smokeCheckOk(uatEvidence?.checks?.employeeModels, "employee /v1/models") &&
-    smokeCheckOk(uatEvidence?.checks?.billableSmoke, "employee billable chat") &&
-    smokeCheckOk(uatEvidence?.checks?.billableSmoke, "employee billable stream chat")
-);
-
+const businessUatComplete = businessUatValidation.complete;
 const backupRestoreComplete = backupRestoreValidation.complete;
 
 const requiredExternalEvidence = [
@@ -271,6 +356,7 @@ const requiredExternalEvidence = [
     complete: businessUatComplete,
     evidence: uatEvidencePath || null,
     readError: uatEvidenceRead.error,
+    validation: businessUatValidation,
   },
   {
     id: "backup-restore",

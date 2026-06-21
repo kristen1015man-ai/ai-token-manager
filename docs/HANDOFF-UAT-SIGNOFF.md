@@ -33,11 +33,12 @@
 | T-07 | `git diff --check` | 无空白错误 | 命令输出 |  |
 | T-08 | `https://ai.seapllo.com/health` | HTTP 200，`status=ok` | 响应摘要 |  |
 | T-09 | `https://ai.seapllo.com/api/health` | HTTP 200，`status=ok` | 响应摘要 |  |
-| T-10 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `ok=true`，危险内部接口公网不可访问 | 命令输出 |  |
-| T-11 | `pnpm handoff:uat -- --out <受控目录>` | 生成脱敏 JSON 证据，不包含明文 Key/Secret | 证据文件 |  |
-| T-12 | 复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 到受控目录并填写 | SQLite 校验、外部存储、恢复演练、回滚演练均完成 | `handoff-backup-restore-signoff.json` |  |
-| T-13 | 复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录并填写 | 八项资产均 `complete=true`，且每项都有 owner、permission、evidenceRef | `handoff-asset-signoff.json` |  |
-| T-14 | `pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <backup-file> --asset-signoff <asset-file>` | `ok=true`，`formalSignoffReady=true` | 命令输出 |  |
+| T-10 | `node scripts/production-smoke.mjs --base https://ai.seapllo.com` | 公网安全 smoke 通过；缺员工 Key 时 `complete=false` 属正常，不代表业务 UAT 完成 | 命令输出 |  |
+| T-11 | `pnpm handoff:uat -- --out <受控目录>` | 生成脱敏自动证据，不包含明文 Key/Secret | 证据文件 |  |
+| T-12 | 复制 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 到受控目录并填写 | 自动证据、usage 入库核对、费用核对、脱敏审查均完成 | `handoff-business-uat-signoff.json` |  |
+| T-13 | 复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 到受控目录并填写 | SQLite 校验、外部存储、恢复演练、回滚演练均完成 | `handoff-backup-restore-signoff.json` |  |
+| T-14 | 复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录并填写 | 八项资产均 `complete=true`，且每项都有 owner、permission、evidenceRef | `handoff-asset-signoff.json` |  |
+| T-15 | `pnpm handoff:final -- --uat-evidence <uat-file> --backup-verification <backup-file> --asset-signoff <asset-file>` | `ok=true`，`formalSignoffReady=true` | 命令输出 |  |
 
 ## 3. 登录与权限
 
@@ -60,7 +61,7 @@
 | K-04 | 删除 Key | 可删除，但至少保留一个有效 Key 或要求先新建替代 Key | 截图 |  |
 | K-05 | 普通兼容客户端 | Base URL 使用 `https://ai.seapllo.com/v1`，Key 使用本系统员工 Key | 成功调用记录 |  |
 | K-06 | Claude Code | Base URL 使用 `https://ai.seapllo.com/anthropic`，Key 使用本系统员工 Key | 成功调用记录 |  |
-| K-07 | 员工 Key 冒烟 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com` | `/v1/models` 通过，输出不包含明文 Key |  |
+| K-07 | 员工 Key 冒烟 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --require-employee` | `/v1/models` 通过，输出不包含明文 Key |  |
 | K-08 | 员工 Key 证据包 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --out <受控目录>` | 证据 JSON 中 `employeeModels.ok=true`，不包含明文 Key |  |
 
 ## 5. 模型调用与计费
@@ -76,9 +77,10 @@
 | B-07 | 个人阈值通知 | 修改个人阈值后按新阈值触发，不固定 80% | 飞书通知 |  |
 | B-08 | 超额阻断 | 达到 100% 后才拒绝请求 | 请求记录 |  |
 | B-09 | 费用核对 | 系统计费与上游余额变化在可解释误差范围内 | 对账表 |  |
-| B-10 | 小额计费冒烟 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --chat-model <model>` | 请求成功，usage 入库；只用接收方认可的小额模型 |  |
-| B-11 | 小额流式冒烟 | 在 B-10 命令后追加 `--include-stream` | SSE 返回成功，结束后 usage 入库 |  |
-| B-12 | 小额计费证据包 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>` | `formalBusinessUatComplete=true`，非流式和流式检查均通过，后台 usage 可核对 |  |
+| B-10 | 小额计费冒烟 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --allow-billable --require-billable --chat-model <model>` | 请求成功，usage 入库；只用接收方认可的小额模型 |  |
+| B-11 | 小额流式冒烟 | 在 B-10 命令后追加 `--include-stream --require-stream` | SSE 返回成功，结束后 usage 入库 |  |
+| B-12 | 小额计费自动证据包 | `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --allow-billable --chat-model <model> --include-stream --out <受控目录>` | `formalBusinessUatComplete=true`，非流式和流式检查均通过 |  |
+| B-13 | 业务 UAT 结构化签收 | 复制 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 到受控目录并填写 | `automatedEvidence`、`usageAudit`、`securityReview` 均完成，费用核对证据归档 |  |
 
 ## 6. 渠道、余额和价格
 
@@ -106,13 +108,13 @@
 
 ## 8. 灾备与恢复
 
-正式灾备签收必须使用 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`。`node scripts/verify-sqlite-backup.mjs <data.db>` 只证明 SQLite 文件可读和核心表存在，不证明备份已经进入公司受控存储，也不证明临时环境恢复和回滚演练完成。
+正式灾备签收必须使用 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`。`node scripts/verify-sqlite-backup.mjs <data.db>` 只证明 SQLite 文件可读和核心表存在；正式灾备应优先执行 `node scripts/verify-sqlite-backup.mjs <backup-dir>`，确认 `data.db`、`manifest.json`、`usage-queue.jsonl`、`usage-dead-letter.jsonl` 成套存在，但这仍不替代外部受控存储、临时环境恢复和回滚演练签收。
 
 | 编号 | 操作 | 期望结果 | 证据 | 结果 |
 | --- | --- | --- | --- | --- |
 | D-01 | 生产卷内备份校验 | 已有 `/data/backups/handoff-2026-06-20T02-50-12-179Z`，`integrity=ok` | `HANDOFF-EVIDENCE` | 通过 |
 | D-02 | 下载备份到公司受控存储 | `data.db`、`manifest.json`、queue 文件归档 | 存储路径/权限截图 |  |
-| D-03 | 校验下载后的 DB | `node scripts/verify-sqlite-backup.mjs <data.db>` 返回 `ok=true` | 命令输出 |  |
+| D-03 | 校验下载后的完整备份目录 | `node scripts/verify-sqlite-backup.mjs <backup-dir>` 返回 `ok=true`、`inputType=backup-directory`、`manifestMatches=true` | 命令输出 |  |
 | D-04 | 临时环境恢复 | 临时环境启动成功，health ok | 截图/日志 |  |
 | D-05 | 恢复后业务校验 | 登录、渠道、价格、usage、余额、通知配置可读 | 截图 |  |
 | D-06 | 回滚演练 | 明确回滚 deployment 和 DB 的步骤 | 变更单 |  |

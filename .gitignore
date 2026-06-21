@@ -23,6 +23,8 @@ cookies.txt
 *.log
 handoff-evidence/
 handoff-uat-evidence-*.json
+handoff-business-uat-signoff.json
+handoff-business-uat-signoff-*.json
 handoff-asset-signoff.json
 handoff-asset-signoff-*.json
 handoff-backup-restore-signoff.json

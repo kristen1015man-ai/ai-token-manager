@@ -26,7 +26,7 @@
 | 安全/审计 | `SECURITY-PERMISSIONS.md`, `INCIDENT-RUNBOOK.md`, `API.md`, `DATABASE-SCHEMA.md` | 权限、密钥、资金安全审查 |
 | 客服/管理员 | `USER-GUIDE.md`, `SUPPORT-RUNBOOK.md`, `TROUBLESHOOTING.md` | 指导员工使用和排查常见问题 |
 | 发布负责人 | `RELEASE-CHECKLIST.md`, `ACCEPTANCE-GAP-REPORT.md` | 每次上线前回归验收和交接退回项跟踪 |
-| 接收方/验收方 | `HANDOFF-UAT-SIGNOFF.md`, `HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`, `HANDOFF-ASSET-SIGNOFF.template.json`, `HANDOFF-EVIDENCE-2026-06-20.md` | 正式 UAT、灾备、资产交割和签收证据 |
+| 接收方/验收方 | `HANDOFF-UAT-SIGNOFF.md`, `HANDOFF-BUSINESS-UAT-SIGNOFF.template.json`, `HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`, `HANDOFF-ASSET-SIGNOFF.template.json`, `HANDOFF-EVIDENCE-2026-06-20.md` | 正式 UAT、灾备、资产交割和签收证据 |
 
 ## 交接命令
 
@@ -38,12 +38,14 @@ pnpm handoff:uat
 pnpm handoff:readiness
 ```
 
-`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用。`pnpm handoff:uat` 输出可归档的脱敏 JSON 证据。`pnpm handoff:readiness` 输出正式签收缺口，只有外部 UAT、灾备和资产交割证据齐全时才会显示 `formalSignoffReady=true`。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。正式业务 UAT 证据必须带 `--allow-billable --chat-model <model> --include-stream`，同时覆盖非流式和流式调用。
+`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用；缺员工 Key 时输出会包含 skipped checks 和 `complete=false`，不能当作业务 UAT 完成。`pnpm handoff:uat` 输出可归档的脱敏 JSON 自动证据。`pnpm handoff:readiness` 输出正式签收缺口，只有业务 UAT、灾备和资产交割证据齐全时才会显示 `formalSignoffReady=true`。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。正式业务 UAT 证据必须带 `--allow-billable --chat-model <model> --include-stream`，同时覆盖非流式和流式调用。
+
+业务 UAT 必须复制 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 到受控目录，填成 `handoff-business-uat-signoff.json`。该文件必须同时记录 `pnpm handoff:uat` 自动证据、后台 usage 入库核对、费用核对和脱敏审查结果；单独的自动 smoke JSON 不足以让 `business-uat` 通过。
 
 资产交割必须复制 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 到受控目录，填成 `handoff-asset-signoff.json` 后再执行：
 
 ```bash
-pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <handoff-asset-signoff.json>
+pnpm handoff:readiness -- --uat-evidence <handoff-business-uat-signoff.json> --backup-verification <backup.json> --asset-signoff <handoff-asset-signoff.json>
 ```
 
 `asset-handoff` 只有在代码仓库、Railway、DNS、飞书应用、供应商账号、通知群、生产密钥库、备份存储八项都 `complete=true`，且每项都有 `owner`、`permission`、`evidenceRef` 时才算通过。签收 JSON 禁止写入明文 Key、Secret、cookie 或 token。
@@ -53,7 +55,7 @@ pnpm handoff:readiness -- --uat-evidence <uat.json> --backup-verification <backu
 正式交接最终命令使用：
 
 ```bash
-pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <handoff-backup-restore-signoff.json> --asset-signoff <handoff-asset-signoff.json>
+pnpm handoff:final -- --uat-evidence <handoff-business-uat-signoff.json> --backup-verification <handoff-backup-restore-signoff.json> --asset-signoff <handoff-asset-signoff.json>
 ```
 
 ## 文档职责
@@ -69,6 +71,7 @@ pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <handoff-b
 | `SECURITY-PERMISSIONS.md` | RBAC、密钥、CSRF、SSRF、内部 API 和审计要求 |
 | `INCIDENT-RUNBOOK.md` | 生产事故分级、止血、回滚、密钥泄露和费用异常处理 |
 | `ACCEPTANCE-GAP-REPORT.md` | 接收方多岗位审查后的 P0/P1/P2 退回清单 |
+| `HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` | 结构化业务 UAT 签收模板；实际签收文件不要提交 Git |
 | `USER-GUIDE.md` | 管理员、员工、财务、部门负责人使用说明 |
 | `SUPPORT-RUNBOOK.md` | 一线管理员/客服 SOP、话术和升级标准 |
 | `OPERATIONS.md` | 环境变量、部署、重启、日常任务、应急操作 |

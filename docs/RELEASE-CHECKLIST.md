@@ -27,7 +27,7 @@ pnpm --filter web lint
 - handoff tag 指向当前提交，工作区干净。
 - UAT 证据脚本可生成脱敏 JSON，不输出明文 Key/Secret。
 - readiness report 能明确输出 `formalSignoffReady=false/true` 和剩余外部证据缺口。
-- 正式交接或重大资金敏感发布时，必须使用 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 填写备份恢复签收 JSON，使用 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 填写资产签收 JSON，并通过 `pnpm handoff:final -- --uat-evidence <uat.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 校验。
+- 正式交接或重大资金敏感发布时，必须使用 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 填写业务 UAT 签收 JSON，使用 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json` 填写备份恢复签收 JSON，使用 `docs/HANDOFF-ASSET-SIGNOFF.template.json` 填写资产签收 JSON，并通过 `pnpm handoff:final -- --uat-evidence <handoff-business-uat-signoff.json> --backup-verification <backup.json> --asset-signoff <asset.json>` 校验。
 
 ## 2. 环境变量检查
 
@@ -213,11 +213,12 @@ pnpm --filter web lint
 - 甲方管理员能登录并看到全局概览。
 - 真实员工能登录并新建 API Key。
 - Claude Code 或 OpenAI 兼容客户端能使用员工 Key。
-- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com` 返回 `/v1/models` 通过，输出不包含明文 Key。
-- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --out <受控目录>` 生成可归档证据。
+- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... node scripts/production-smoke.mjs --base https://ai.seapllo.com --require-employee` 返回 `/v1/models` 通过，输出不包含明文 Key。
+- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm handoff:uat -- --out <受控目录>` 生成可归档自动证据。
 - 如需验证真实计费，使用 `--allow-billable --chat-model <model>`，只选接收方认可的小额模型。
-- 正式交接或资金敏感发布必须验证流式调用，在计费 smoke 命令后追加 `--include-stream`，并确认 `formalBusinessUatComplete=true`。
+- 正式交接或资金敏感发布必须验证流式调用，在计费 smoke 命令后追加 `--include-stream --require-stream`，并确认 `formalBusinessUatComplete=true`。
 - 管理员能查看该员工产生的用量和费用。
+- 复制 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 到受控目录，填写自动证据、usage 入库核对、费用核对和脱敏审查；单独的自动 smoke JSON 不足以通过正式签收。
 - 渠道余额、模型价格、额度百分比展示符合预期。
 - 飞书提醒能送达指定管理员或测试群。
 
