@@ -220,6 +220,12 @@ assert(productionEnv.includes("WEB_PORT_INTERNAL=3000"), ".env.production.exampl
 assert(productionEnv.includes("railway/start.mjs"), ".env.production.example must describe Railway port variable ownership");
 assert(productionEnv.includes("ENABLE_INTERNAL_BILLING_RESET=false"), ".env.production.example must keep billing reset disabled by default");
 assert(productionEnv.includes("ENABLE_PROXY_USAGE_QUEUE_CLEAR=false"), ".env.production.example must keep proxy queue clear disabled by default");
+assert(productionEnv.includes("MAX_USER_API_KEYS_PER_USER=5"), ".env.production.example must document employee key count limit");
+assert(productionEnv.includes("USER_API_KEY_CREATE_COOLDOWN_SECONDS=60"), ".env.production.example must document employee key creation cooldown");
+const userKeyRoute = read("web/src/app/api/user/key/route.ts");
+for (const token of ["MAX_USER_API_KEYS_PER_USER", "USER_API_KEY_CREATE_COOLDOWN_SECONDS", "429"]) {
+  assert(userKeyRoute.includes(token), `user API key route must keep abuse control: ${token}`);
+}
 const dockerCompose = read("docker-compose.yml");
 assert(dockerCompose.includes("CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?"), "docker-compose.yml must require explicit CORS_ALLOWED_ORIGINS");
 assert(dockerCompose.includes("PUBLIC_PROXY_BASE_URL=${PUBLIC_PROXY_BASE_URL:?"), "docker-compose.yml must require explicit PUBLIC_PROXY_BASE_URL");

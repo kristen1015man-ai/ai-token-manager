@@ -56,6 +56,8 @@
 - 认证使用 `searchableHash()` 做 SQL 精确查询。新 hash 带 `h2:` 前缀，HMAC key 通过 HKDF 从 `ENCRYPTION_KEY` 派生，和 AES 加密子密钥分离；历史无前缀 hex hash 继续兼容读取，并在成功认证时逐步升级。
 - 查到候选后再用解密明文做 timing-safe 二次校验。
 - 删除 Key 时至少保留一个。
+- 默认每个员工最多保留 5 个 Key，可用 `MAX_USER_API_KEYS_PER_USER` 调整。
+- 默认同一员工 60 秒内不能连续新建 Key，可用 `USER_API_KEY_CREATE_COOLDOWN_SECONDS` 调整。
 - 忘记 Key 只能新建，不能找回。
 
 关键代码：
