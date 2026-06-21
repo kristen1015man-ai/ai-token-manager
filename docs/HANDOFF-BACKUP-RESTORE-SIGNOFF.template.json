@@ -6,12 +6,14 @@
   "completedBy": "",
   "sqliteVerification": {
     "ok": false,
+    "inputType": "",
     "integrity": "",
+    "manifestMatches": false,
     "missingTables": [],
     "sha256": "",
     "size": 0,
     "evidenceRef": "",
-    "notes": "把 node scripts/verify-sqlite-backup.mjs <data.db> 的脱敏结果填入本节。不要记录明文密钥。"
+    "notes": "正式签收必须把完整备份目录下载到受控存储后执行 node scripts/verify-sqlite-backup.mjs <backup-dir>；inputType 必须是 backup-directory，manifestMatches 必须为 true。不要记录明文密钥。"
   },
   "externalStorage": {
     "complete": false,
@@ -19,7 +21,7 @@
     "locationRef": "",
     "evidenceRef": "",
     "retentionPolicy": "",
-    "notes": "确认 data.db、usage-queue、usage-dead-letter 或缺失说明已进入公司受控存储。locationRef 不应包含临时个人电脑路径。"
+    "notes": "确认 data.db、manifest.json、usage-queue.jsonl、usage-dead-letter.jsonl 已进入公司受控存储。locationRef 不应包含临时个人电脑路径。"
   },
   "restoreDrill": {
     "complete": false,
@@ -28,7 +30,7 @@
     "environment": "",
     "evidenceRef": "",
     "healthCheckRef": "",
-    "notes": "确认临时环境已用该备份恢复，并验证登录、渠道、价格、usage、余额、通知配置可读。"
+    "notes": "确认临时环境已使用该备份恢复，并验证登录、渠道、价格、usage、余额、通知配置可读。"
   },
   "rollbackDrill": {
     "complete": false,

@@ -343,8 +343,17 @@ for (const token of [
 }
 const handoffReadiness = read("scripts/handoff-readiness-report.mjs");
 for (const token of [
+  "expectedHandoffTag",
+  "expectedProject",
   "formalSignoffReady",
   "codeHandoffReady",
+  "validateSignoffHeader",
+  "schemaVersion must be 1",
+  "handoffTag must be",
+  "project must be",
+  "containsSecretLikeValue",
+  "validEvidenceRef",
+  "sign-off JSON must not contain secret-like values",
   "formalBusinessUatComplete",
   "validateBusinessUatSignoff",
   "automatedEvidenceOk",
@@ -359,6 +368,8 @@ for (const token of [
   "externalStorageOk",
   "restoreDrillOk",
   "rollbackDrillOk",
+  "inputType=backup-directory",
+  "manifestMatches=true",
   "--require-formal",
   "validateAssetSignoff",
   "readJsonEvidence",
@@ -399,6 +410,16 @@ const backupRestoreTemplate = JSON.parse(read("docs/HANDOFF-BACKUP-RESTORE-SIGNO
 for (const token of ["sqliteVerification", "externalStorage", "restoreDrill", "rollbackDrill"]) {
   assert(Object.hasOwn(backupRestoreTemplate, token), `handoff backup/restore template must include ${token}`);
 }
+for (const token of ["inputType", "manifestMatches", "evidenceRef"]) {
+  assert(
+    Object.hasOwn(backupRestoreTemplate.sqliteVerification || {}, token),
+    `handoff backup/restore sqlite verification template must include ${token}`
+  );
+}
+assert(
+  backupRestoreTemplate.sqliteVerification?.notes?.includes("backup-directory"),
+  "handoff backup/restore template must tell receivers to verify the full backup directory"
+);
 const nginxConf = read("nginx/nginx.conf");
 for (const token of ["location /v1/", "location /anthropic/", "proxy_buffering off", "proxy_read_timeout 600s"]) {
   assert(nginxConf.includes(token), `nginx reverse proxy must keep ${token}`);
