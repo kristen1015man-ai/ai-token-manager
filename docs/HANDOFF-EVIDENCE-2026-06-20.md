@@ -6,11 +6,21 @@
 
 - Branch: `codex/production-readiness-snapshot`
 - Handoff repository commit: 以 `pnpm handoff:status` 或 `git rev-list -n 1 handoff-2026-06-20` 输出为准
-- Runtime deployment commit: `2de9dff test: tighten formal handoff gates`
+- Runtime deployment commit: `185cc25 security: separate encryption and hash keys`
 - Tag: `handoff-2026-06-20`
 - Workspace: clean after commit
 
-说明：`handoff-2026-06-20` 是 annotated tag，核对提交时必须使用 `git rev-list -n 1 handoff-2026-06-20`，不要用 `git rev-parse handoff-2026-06-20` 直接当作提交 SHA。当前线上稳定 deployment 为 `11e4cccf-88fc-483e-90e2-ded4f5919813`，运行代码来自 `2de9dff test: tighten formal handoff gates`。
+Current production snapshot, updated 2026-06-21 11:19 +08:00:
+
+- Runtime commit: `185cc25057100b40677cb752187ae2cfcd1cb008`
+- Railway deployment ID: `ad570d77-f57e-45ce-b35b-5ea49c23a8e2`
+- Railway status: `Online`
+- URL: `https://ai.seapllo.com`
+- Local pre-deploy checks passed: `pnpm test`, `pnpm --filter web build`, `pnpm --filter proxy build`
+- Production public smoke passed: `pnpm smoke:production`
+- Employee billable smoke remains pending because no employee `sk-emp-*` test key was provided to the local shell.
+
+说明：`handoff-2026-06-20` 是 annotated tag，核对提交时必须使用 `git rev-list -n 1 handoff-2026-06-20`，不要用 `git rev-parse handoff-2026-06-20` 直接当作提交 SHA。当前线上稳定 deployment 为 `ad570d77-f57e-45ce-b35b-5ea49c23a8e2`，运行代码来自 `185cc25 security: separate encryption and hash keys`。
 
 本地已通过：
 
@@ -45,9 +55,9 @@
 - Service: `web`
 - URL: `https://ai.seapllo.com`
 - Volume: `web-volume-4jgN` mounted at `/data`
-- Deployment ID: `11e4cccf-88fc-483e-90e2-ded4f5919813`
+- Deployment ID: `ad570d77-f57e-45ce-b35b-5ea49c23a8e2`
 - Deployment status: `SUCCESS`
-- Deployment time: `2026-06-21 10:56 +08:00`
+- Deployment time: `2026-06-21 11:19 +08:00`
 
 部署前已补齐非敏感生产变量：
 
@@ -132,7 +142,7 @@ Detailed health checks with internal Bearer:
 Production smoke helper result:
 
 - Command: `node scripts/production-smoke.mjs --base https://ai.seapllo.com`
-- Time: `2026-06-20 17:25:20 +08:00`
+- Time: `2026-06-21 11:18 +08:00`
 - Result: `ok=true`
 - Confirmed public health:
   - `/health`: 200, `service=ai-token-proxy`
