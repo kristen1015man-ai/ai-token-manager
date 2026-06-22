@@ -119,6 +119,17 @@ const proxyIndex = read("proxy/src/index.ts");
 for (const token of ["ENABLE_PROXY_USAGE_QUEUE_CLEAR", "x-sparkloom-maintenance-confirm", "reset-billing-usage"]) {
   assert(proxyIndex.includes(token), `proxy usage queue clear must keep destructive maintenance guard: ${token}`);
 }
+for (const token of [
+  "assertProxyProductionConfig",
+  "Missing required production env vars",
+  "CORS_ALLOWED_ORIGINS must not contain '*'",
+  "UPSTREAM_ALLOWED_HOSTS must contain at least one approved provider host",
+  "WEB_URL must be a valid URL",
+  "assertStrongSecret(\"INTERNAL_API_KEY\", 32)",
+  "assertStrongSecret(\"ENCRYPTION_KEY\", 32)",
+]) {
+  assert(proxyIndex.includes(token), `proxy service must keep standalone production fail-fast: ${token}`);
+}
 const anthropicService = read("proxy/src/services/anthropic.ts");
 for (const token of ["proxyAnthropicCountTokensRequest", "Avoid unmetered upstream calls from count_tokens", "estimateTokens(requestBody)"]) {
   assert(anthropicService.includes(token), `anthropic count_tokens must stay local-only: ${token}`);
@@ -219,6 +230,7 @@ assert(healthRoute.includes("LIKE 'enc:%'"), "health secret decryption check mus
 for (const token of ["checkPlaintextSecretStorage", "secretStorage", "plaintextCount", "user_api_keys", "access_key_secret"]) {
   assert(healthRoute.includes(token), `health route must detect plaintext stored secrets: ${token}`);
 }
+assert(!/secret(?:Decryption|Storage)[\s\S]*LIMIT\s+(15|100)/.test(healthRoute), "health secret checks must scan all stored secret rows, not a fixed sample");
 
 const notificationRouter = read("web/src/lib/notification-router.ts");
 const fuzzyAdminToken = "%" + "admin" + "%";
@@ -255,6 +267,14 @@ for (const token of [
   assert(dockerCompose.includes(token), `docker-compose.yml must keep shared usage backup volume: ${token}`);
 }
 assert(!dockerCompose.includes("proxy-data:/proxy-data"), "docker-compose.yml must not isolate proxy usage queue from web backup");
+const proxyDockerfile = read("proxy/Dockerfile");
+const webDockerfile = read("web/Dockerfile");
+for (const token of ["mkdir -p /usage", "chown appuser:appgroup /usage"]) {
+  assert(proxyDockerfile.includes(token), `proxy Dockerfile must pre-own the shared usage volume for non-root runtime: ${token}`);
+}
+for (const token of ["mkdir -p /data /usage", "chown nextjs:nodejs /data /usage"]) {
+  assert(webDockerfile.includes(token), `web Dockerfile must pre-own data and usage volumes for non-root runtime: ${token}`);
+}
 
 const sharedCrypto = read("shared/crypto.ts");
 for (const token of [
@@ -459,8 +479,22 @@ const nginxConf = read("nginx/nginx.conf");
 for (const token of ["location /v1/", "location /anthropic/", "proxy_buffering off", "proxy_read_timeout 600s"]) {
   assert(nginxConf.includes(token), `nginx reverse proxy must keep ${token}`);
 }
+for (const token of [
+  "server_name ai.seapllo.com",
+  "return 301 https://ai.seapllo.com$request_uri",
+  "return 444",
+  "proxy_set_header Host ai.seapllo.com",
+  "proxy_set_header X-Forwarded-Host ai.seapllo.com",
+]) {
+  assert(nginxConf.includes(token), `nginx reverse proxy must keep strict production host boundary: ${token}`);
+}
 const forwardedHostCount = (nginxConf.match(/X-Forwarded-Host/g) || []).length;
 assert(forwardedHostCount >= 5, "nginx reverse proxy must forward X-Forwarded-Host for web, proxy, anthropic, and health routes");
+const reverseProxyDocs = read("docs/reverse-proxy.md");
+for (const token of ["只接受明确生产域名", "proxy_set_header Host ai.seapllo.com", "proxy_set_header X-Forwarded-Host ai.seapllo.com"]) {
+  assert(reverseProxyDocs.includes(token), `reverse proxy docs must document strict Host handling: ${token}`);
+}
+assert(!reverseProxyDocs.includes("X-Forwarded-Host $host"), "reverse proxy docs must not recommend forwarding arbitrary Host headers");
 for (const rel of [
   "docs/README.md",
   "docs/HANDOFF-UAT-SIGNOFF.md",

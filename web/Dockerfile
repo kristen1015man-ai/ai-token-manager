@@ -31,8 +31,8 @@ COPY --from=builder /app/web/.next/standalone ./
 COPY --from=builder /app/web/.next/static ./web/.next/static
 COPY --from=builder /app/web/public ./web/public
 
-# 创建数据目录
-RUN mkdir -p /data && chown nextjs:nodejs /data
+# Create data and shared usage directories before named volumes are mounted.
+RUN mkdir -p /data /usage && chown nextjs:nodejs /data /usage
 
 USER nextjs
 

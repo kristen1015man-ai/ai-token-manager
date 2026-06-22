@@ -20,6 +20,114 @@ const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
   .filter(Boolean);
 const RESET_CONFIRM_HEADER = "x-sparkloom-maintenance-confirm";
 const RESET_CONFIRM_VALUE = "reset-billing-usage";
+const DANGEROUS_DEFAULTS = new Set([
+  "dev-secret-change-in-production",
+  "change-me-to-a-random-string",
+  "your-random-secret-at-least-32-characters-long",
+  "xxx",
+]);
+
+function envValue(name: string): string {
+  return (process.env[name] || "").trim();
+}
+
+function failProductionConfig(message: string): never {
+  console.error(`[ProxyConfig] ${message}`);
+  process.exit(1);
+}
+
+function isProductionRuntime(): boolean {
+  return envValue("NODE_ENV") === "production" || envValue("RAILWAY_ENVIRONMENT_NAME") === "production";
+}
+
+function isPlaceholderValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    !normalized ||
+    DANGEROUS_DEFAULTS.has(normalized) ||
+    normalized.includes("change-me") ||
+    normalized.includes("your_") ||
+    normalized.includes("<") ||
+    normalized.includes(">")
+  );
+}
+
+function assertStrongSecret(name: string, minLength: number): void {
+  const value = envValue(name);
+  if (isPlaceholderValue(value) || value.length < minLength) {
+    failProductionConfig(`${name} must be a non-placeholder secret with at least ${minLength} characters`);
+  }
+}
+
+function assertWebUrl(): void {
+  try {
+    const parsed = new URL(envValue("WEB_URL"));
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      failProductionConfig("WEB_URL must use http or https");
+    }
+  } catch {
+    failProductionConfig("WEB_URL must be a valid URL");
+  }
+}
+
+function assertCorsOrigins(): void {
+  if (allowedOrigins.length === 0) {
+    failProductionConfig("CORS_ALLOWED_ORIGINS must contain at least one production origin");
+  }
+  for (const origin of allowedOrigins) {
+    if (origin === "*") {
+      failProductionConfig("CORS_ALLOWED_ORIGINS must not contain '*'");
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(origin);
+    } catch {
+      failProductionConfig(`CORS_ALLOWED_ORIGINS contains invalid URL: ${origin}`);
+    }
+    if (parsed.protocol !== "https:") {
+      failProductionConfig("CORS_ALLOWED_ORIGINS must only contain https origins in production");
+    }
+  }
+}
+
+function assertUpstreamAllowlist(): void {
+  const hosts = envValue("UPSTREAM_ALLOWED_HOSTS")
+    .split(",")
+    .map((host) => host.trim().toLowerCase().replace(/\.$/, ""))
+    .filter(Boolean);
+  if (hosts.length === 0) {
+    failProductionConfig("UPSTREAM_ALLOWED_HOSTS must contain at least one approved provider host");
+  }
+  for (const host of hosts) {
+    if (
+      host === "*" ||
+      host.includes("/") ||
+      host.includes(":") ||
+      host === "localhost" ||
+      host.endsWith(".local") ||
+      !/^[a-z0-9.-]+$/.test(host) ||
+      !host.includes(".")
+    ) {
+      failProductionConfig(`UPSTREAM_ALLOWED_HOSTS contains invalid production host: ${host}`);
+    }
+  }
+}
+
+function assertProxyProductionConfig(): void {
+  if (!isProductionRuntime()) return;
+  const missing = ["INTERNAL_API_KEY", "ENCRYPTION_KEY", "WEB_URL", "CORS_ALLOWED_ORIGINS", "UPSTREAM_ALLOWED_HOSTS"]
+    .filter((name) => !envValue(name));
+  if (missing.length > 0) {
+    failProductionConfig(`Missing required production env vars: ${missing.join(", ")}`);
+  }
+  assertStrongSecret("INTERNAL_API_KEY", 32);
+  assertStrongSecret("ENCRYPTION_KEY", 32);
+  assertWebUrl();
+  assertCorsOrigins();
+  assertUpstreamAllowlist();
+}
+
+assertProxyProductionConfig();
 
 function hasInternalAuth(authHeader?: string): boolean {
   const internalKey = process.env.INTERNAL_API_KEY;

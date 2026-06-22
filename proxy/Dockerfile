@@ -31,10 +31,10 @@ COPY shared/ shared/
 COPY proxy/package.json proxy/
 COPY --from=builder /app/proxy/dist proxy/dist
 
-# DOCKER-01: 非 root 用户运行
+# DOCKER-01: run as non-root and pre-own mounted runtime volumes.
 RUN addgroup --system --gid 1001 appgroup && \
     adduser --system --uid 1001 appuser && \
-    mkdir -p /proxy-data && chown appuser:appgroup /proxy-data
+    mkdir -p /usage && chown appuser:appgroup /usage
 
 WORKDIR /app/proxy
 

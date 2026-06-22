@@ -64,8 +64,8 @@ function checkSecretDecryption(
     const cols = columnsFor("channels");
     const hasAccessKeySecret = cols.has("access_key_secret");
     const channelRows = db.exec(hasAccessKeySecret
-      ? "SELECT id, api_key, access_key_secret FROM channels WHERE api_key LIKE 'enc:%' OR access_key_secret LIKE 'enc:%' LIMIT 15"
-      : "SELECT id, api_key, NULL FROM channels WHERE api_key LIKE 'enc:%' LIMIT 15"
+      ? "SELECT id, api_key, access_key_secret FROM channels WHERE api_key LIKE 'enc:%' OR access_key_secret LIKE 'enc:%'"
+      : "SELECT id, api_key, NULL FROM channels WHERE api_key LIKE 'enc:%'"
     );
     for (const row of channelRows[0]?.values ?? []) {
       const id = String(row[0] ?? "unknown");
@@ -75,7 +75,7 @@ function checkSecretDecryption(
   }
 
   if (tableSet.has("users")) {
-    const userRows = db.exec("SELECT id, api_key FROM users WHERE api_key LIKE 'enc:%' LIMIT 15");
+    const userRows = db.exec("SELECT id, api_key FROM users WHERE api_key LIKE 'enc:%'");
     for (const row of userRows[0]?.values ?? []) {
       checkEncryptedValue(`users.${String(row[0] ?? "unknown")}.api_key`, row[1], result);
     }
@@ -84,7 +84,7 @@ function checkSecretDecryption(
   if (tableSet.has("user_api_keys")) {
     const cols = columnsFor("user_api_keys");
     if (cols.has("key_encrypted")) {
-      const keyRows = db.exec("SELECT id, key_encrypted FROM user_api_keys WHERE key_encrypted LIKE 'enc:%' LIMIT 15");
+      const keyRows = db.exec("SELECT id, key_encrypted FROM user_api_keys WHERE key_encrypted LIKE 'enc:%'");
       for (const row of keyRows[0]?.values ?? []) {
         checkEncryptedValue(`user_api_keys.${String(row[0] ?? "unknown")}.key_encrypted`, row[1], result);
       }
@@ -118,8 +118,8 @@ function checkPlaintextSecretStorage(
     const cols = columnsFor("channels");
     const hasAccessKeySecret = cols.has("access_key_secret");
     const channelRows = db.exec(hasAccessKeySecret
-      ? "SELECT id, api_key, access_key_secret FROM channels WHERE COALESCE(api_key, '') != '' OR COALESCE(access_key_secret, '') != '' LIMIT 100"
-      : "SELECT id, api_key, NULL FROM channels WHERE COALESCE(api_key, '') != '' LIMIT 100"
+      ? "SELECT id, api_key, access_key_secret FROM channels WHERE COALESCE(api_key, '') != '' OR COALESCE(access_key_secret, '') != ''"
+      : "SELECT id, api_key, NULL FROM channels WHERE COALESCE(api_key, '') != ''"
     );
     for (const row of channelRows[0]?.values ?? []) {
       const id = String(row[0] ?? "unknown");
@@ -129,7 +129,7 @@ function checkPlaintextSecretStorage(
   }
 
   if (tableSet.has("users")) {
-    const userRows = db.exec("SELECT id, api_key FROM users WHERE COALESCE(api_key, '') != '' LIMIT 100");
+    const userRows = db.exec("SELECT id, api_key FROM users WHERE COALESCE(api_key, '') != ''");
     for (const row of userRows[0]?.values ?? []) {
       checkValue(`users.${String(row[0] ?? "unknown")}.api_key`, row[1]);
     }
@@ -138,7 +138,7 @@ function checkPlaintextSecretStorage(
   if (tableSet.has("user_api_keys")) {
     const cols = columnsFor("user_api_keys");
     if (cols.has("key_encrypted")) {
-      const keyRows = db.exec("SELECT id, key_encrypted FROM user_api_keys WHERE COALESCE(key_encrypted, '') != '' LIMIT 100");
+      const keyRows = db.exec("SELECT id, key_encrypted FROM user_api_keys WHERE COALESCE(key_encrypted, '') != ''");
       for (const row of keyRows[0]?.values ?? []) {
         checkValue(`user_api_keys.${String(row[0] ?? "unknown")}.key_encrypted`, row[1]);
       }
