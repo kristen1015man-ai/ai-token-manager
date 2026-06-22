@@ -68,7 +68,7 @@
 
 行为：
 
-- 透传 Anthropic count_tokens。
+- 本地估算并返回 `input_tokens`；不调用上游供应商，避免未计费的 provider key 消耗。
 - 用于 Claude Code 等客户端。
 
 ## 2. 健康检查

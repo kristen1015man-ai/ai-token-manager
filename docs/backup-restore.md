@@ -12,8 +12,9 @@
 
 计费队列文件：
 
-- `/data/usage-queue.jsonl`
-- `/data/usage-dead-letter.jsonl`
+- Docker Compose: `/usage/usage-queue.jsonl`
+- Docker Compose: `/usage/usage-dead-letter.jsonl`
+- Railway single-image: use configured `USAGE_QUEUE_FILE` / `USAGE_DEAD_LETTER_FILE`, usually under `/data`.
 
 如果 Railway Volume 路径不是 `/data`，以实际 `RAILWAY_VOLUME_MOUNT_PATH` 为准。
 
@@ -117,6 +118,8 @@ node scripts/verify-sqlite-backup.mjs /path/to/backup-dir
 - 目录级校验时 `manifestMatches=true`，确认 manifest 中记录的文件哈希和实际文件一致
 
 该脚本只读打开 SQLite 文件，不会修改备份内容，也不会输出密钥明文。正式灾备签收应优先校验完整备份目录；单独 `data.db` 只能证明 DB 文件可读，不能证明 usage queue/dead-letter 与 DB 是同一恢复点。
+
+`usage-queue.jsonl` 和 `usage-dead-letter.jsonl` 必须作为文件存在。如果备份时没有待重试或死信记录，系统会生成 0 字节空文件，并在 `manifest.json` 中记录空文件哈希。接收方不要因为文件为空而删除它们，目录级校验会用 manifest 同时核对这两个文件和 `data.db`。
 
 注意：2026-06-20 交接演练中，Railway CLI 可以列出备份目录并下载 `manifest.json`，但下载约 13.5 MB 的 `data.db` 多次因 `Timeout` 失败，目录下载并降低 concurrency 也未解决。因此正式灾备不能只依赖本机 Railway CLI 大文件下载；接收方应使用 Railway 可用的文件下载通道、对象存储备份任务，或公司认可的运维通道，把完整备份搬运到受控存储后再执行 `verify-sqlite-backup.mjs` 和恢复演练。
 
@@ -330,7 +333,7 @@ FEISHU_MAX_AUTO_DISABLE_DEPARTED=0
 
 生产必须有独立于应用进程的自动备份方案。最低要求：
 
-- 每日备份 `/data/data.db`、`usage-queue.jsonl`、`usage-dead-letter.jsonl`。
+- 每日备份 `data.db`、`usage-queue.jsonl`、`usage-dead-letter.jsonl`。Docker Compose 中 queue/dead-letter 位于共享 `/usage` 卷；Railway 单镜像按 `USAGE_QUEUE_FILE` / `USAGE_DEAD_LETTER_FILE` 配置。
 - 文件名包含北京时间和 Git commit。
 - 备份落到公司受控存储，不只保留在 Railway Volume 内。
 - 至少保留 14 天。

@@ -11,7 +11,8 @@ export type BackupFileInfo = {
 };
 
 export type OptionalBackupFileInfo = BackupFileInfo & {
-  copied: true;
+  copied: boolean;
+  sourceMissing?: true;
 };
 
 export type VerifiedBackupResult = {
@@ -20,8 +21,8 @@ export type VerifiedBackupResult = {
   manifest: BackupFileInfo;
   files: {
     dataDb: BackupFileInfo;
-    usageQueue: OptionalBackupFileInfo | null;
-    usageDeadLetter: OptionalBackupFileInfo | null;
+    usageQueue: OptionalBackupFileInfo;
+    usageDeadLetter: OptionalBackupFileInfo;
   };
   verification: {
     integrity: unknown;
@@ -31,8 +32,13 @@ export type VerifiedBackupResult = {
     channels: number;
     modelPrices: number;
     usageLogs: number;
+    quotaRules: number;
     quotaReservations: number;
     alertLogs: number;
+    alertSettings: number;
+    adminLogs: number;
+    syncBlacklist: number;
+    systemFlags: number;
   };
 };
 
@@ -68,8 +74,15 @@ function copyRequiredFile(source: string, destination: string): BackupFileInfo {
   return fileInfo(destination);
 }
 
-function copyOptionalFile(source: string, destination: string): OptionalBackupFileInfo | null {
-  if (!fs.existsSync(source)) return null;
+function copyOptionalJsonlFile(source: string, destination: string): OptionalBackupFileInfo {
+  if (!fs.existsSync(source)) {
+    fs.writeFileSync(destination, "", "utf8");
+    return {
+      ...fileInfo(destination),
+      copied: false,
+      sourceMissing: true,
+    };
+  }
   fs.copyFileSync(source, destination);
   return {
     ...fileInfo(destination),
@@ -112,8 +125,13 @@ async function verifyDatabaseCopy(dbBackupPath: string): Promise<VerifiedBackupR
       channels: countTable(db, "channels"),
       modelPrices: countTable(db, "model_prices"),
       usageLogs: countTable(db, "usage_logs"),
+      quotaRules: countTable(db, "quota_rules"),
       quotaReservations: countTable(db, "quota_reservations"),
       alertLogs: countTable(db, "alert_logs"),
+      alertSettings: countTable(db, "alert_settings"),
+      adminLogs: countTable(db, "admin_logs"),
+      syncBlacklist: countTable(db, "sync_blacklist"),
+      systemFlags: countTable(db, "system_flags"),
     };
   } finally {
     db.close();
@@ -152,8 +170,8 @@ export async function createVerifiedBackup(reason = "manual"): Promise<VerifiedB
   const dbBackupPath = path.join(backupDir, "data.db");
   const files = {
     dataDb: copyRequiredFile(dbPath, dbBackupPath),
-    usageQueue: copyOptionalFile(queueFile, path.join(backupDir, "usage-queue.jsonl")),
-    usageDeadLetter: copyOptionalFile(deadLetterFile, path.join(backupDir, "usage-dead-letter.jsonl")),
+    usageQueue: copyOptionalJsonlFile(queueFile, path.join(backupDir, "usage-queue.jsonl")),
+    usageDeadLetter: copyOptionalJsonlFile(deadLetterFile, path.join(backupDir, "usage-dead-letter.jsonl")),
   };
   const verification = await verifyDatabaseCopy(dbBackupPath);
 

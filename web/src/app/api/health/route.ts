@@ -16,6 +16,12 @@ interface SecretDecryptionCheck {
   failures: string[];
 }
 
+interface SecretStorageCheck {
+  ok: boolean;
+  checked: number;
+  plaintext: string[];
+}
+
 interface WritablePathCheck {
   ok: boolean;
   path?: string;
@@ -89,6 +95,60 @@ function checkSecretDecryption(
   return result;
 }
 
+function checkPlaintextSecretStorage(
+  db: ReturnType<typeof getRawExec>,
+  tableSet: Set<string>
+): SecretStorageCheck {
+  const result: SecretStorageCheck = { ok: true, checked: 0, plaintext: [] };
+  const columnsFor = (table: string) => new Set(
+    (db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []).map((row) => String(row[1]))
+  );
+
+  const checkValue = (label: string, value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    result.checked += 1;
+    if (!isEncrypted(trimmed)) {
+      result.plaintext.push(label);
+    }
+  };
+
+  if (tableSet.has("channels")) {
+    const cols = columnsFor("channels");
+    const hasAccessKeySecret = cols.has("access_key_secret");
+    const channelRows = db.exec(hasAccessKeySecret
+      ? "SELECT id, api_key, access_key_secret FROM channels WHERE COALESCE(api_key, '') != '' OR COALESCE(access_key_secret, '') != '' LIMIT 100"
+      : "SELECT id, api_key, NULL FROM channels WHERE COALESCE(api_key, '') != '' LIMIT 100"
+    );
+    for (const row of channelRows[0]?.values ?? []) {
+      const id = String(row[0] ?? "unknown");
+      checkValue(`channels.${id}.api_key`, row[1]);
+      checkValue(`channels.${id}.access_key_secret`, row[2]);
+    }
+  }
+
+  if (tableSet.has("users")) {
+    const userRows = db.exec("SELECT id, api_key FROM users WHERE COALESCE(api_key, '') != '' LIMIT 100");
+    for (const row of userRows[0]?.values ?? []) {
+      checkValue(`users.${String(row[0] ?? "unknown")}.api_key`, row[1]);
+    }
+  }
+
+  if (tableSet.has("user_api_keys")) {
+    const cols = columnsFor("user_api_keys");
+    if (cols.has("key_encrypted")) {
+      const keyRows = db.exec("SELECT id, key_encrypted FROM user_api_keys WHERE COALESCE(key_encrypted, '') != '' LIMIT 100");
+      for (const row of keyRows[0]?.values ?? []) {
+        checkValue(`user_api_keys.${String(row[0] ?? "unknown")}.key_encrypted`, row[1]);
+      }
+    }
+  }
+
+  result.ok = result.plaintext.length === 0;
+  return result;
+}
+
 function checkDirectoryWritable(filePath: string | undefined, probeName: string): WritablePathCheck {
   if (!filePath) return { ok: true };
 
@@ -140,6 +200,11 @@ export async function GET(request: NextRequest) {
       ? secretDecryption
       : { ok: secretDecryption.ok, checked: secretDecryption.checked };
     if (!secretDecryption.ok) ok = false;
+    const secretStorage = checkPlaintextSecretStorage(db, tableSet);
+    checks.secretStorage = detailed
+      ? secretStorage
+      : { ok: secretStorage.ok, checked: secretStorage.checked, plaintextCount: secretStorage.plaintext.length };
+    if (!secretStorage.ok) ok = false;
     if (tableSet.has("users")) {
       const userRows = db.exec(`SELECT status, COUNT(*) FROM users GROUP BY status`);
       checks.users = Object.fromEntries(

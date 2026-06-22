@@ -169,6 +169,7 @@ pnpm --filter web lint
 
 - `/health` 返回 ok。
 - `pnpm smoke:production` 返回 `ok=true`。
+- 正式 UAT/交接发布还必须执行 `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm smoke:production:full -- --chat-model <model>`，并确认 `complete=true`。
 - 内部 Web `/api/health` 详细检查 ok。
 - Proxy `/health` 详细检查 ok。
 - Railway Volume 可写。

@@ -698,6 +698,7 @@ pnpm handoff:final -- --uat-evidence <handoff-business-uat-signoff.json> --backu
 
 ```powershell
 pnpm smoke:production
+SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm smoke:production:full -- --chat-model <model>
 curl.exe -i https://ai.seapllo.com/api/health
 curl.exe -i https://ai.seapllo.com/health
 curl.exe -i -X POST https://ai.seapllo.com/api/internal/admin/reset-billing
@@ -758,8 +759,9 @@ node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
 备份对象：
 
 - `/data/data.db`
-- `/data/usage-queue.jsonl`
-- `/data/usage-dead-letter.jsonl`
+- Docker Compose: `/usage/usage-queue.jsonl`
+- Docker Compose: `/usage/usage-dead-letter.jsonl`
+- Railway single-image: `USAGE_QUEUE_FILE` / `USAGE_DEAD_LETTER_FILE` 指向的持久卷路径，通常在 `/data`
 - Railway 环境变量快照
 
 建议：
@@ -928,7 +930,8 @@ git diff --check
 
 线上 smoke test：
 
-- `pnpm smoke:production` 返回 `ok=true`。
+- `pnpm smoke:production` 返回 `ok=true`，但这只是非计费公网 smoke；缺员工 Key 时 `complete=false` 不能作为业务 UAT。
+- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm smoke:production:full -- --chat-model <model>` 返回 `ok=true` 且 `complete=true`，才能证明员工模型列表、非流式小额调用和流式小额调用都通过。
 - `pnpm handoff:status` 返回 `ok=true`，确认 handoff tag 指向当前提交且工作区干净。
 - `pnpm handoff:uat` 输出脱敏自动 JSON；提供员工 Key 时可用 `--out <受控目录>` 归档自动 UAT 证据。
 - `uat.json` 必须来自 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json`，并包含自动 evidence、usage 入库核对、费用核对和脱敏审查。

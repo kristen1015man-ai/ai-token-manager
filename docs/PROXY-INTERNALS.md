@@ -14,7 +14,7 @@
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 - `POST /anthropic/v1/messages`
-- `POST /anthropic/v1/messages/count_tokens`
+- `POST /anthropic/v1/messages/count_tokens`，本地估算 token，不调用上游
 
 中间件：
 
@@ -154,8 +154,8 @@ Proxy 不直接写 DB，而是向 Web 上报。
 
 队列文件：
 
-- `USAGE_QUEUE_FILE`，默认 `/data/usage-queue.jsonl`
-- `USAGE_DEAD_LETTER_FILE`，默认 `/data/usage-dead-letter.jsonl`
+- `USAGE_QUEUE_FILE`，Docker Compose 默认 `/usage/usage-queue.jsonl`；Railway 单镜像通常配置为 `/data/usage-queue.jsonl`
+- `USAGE_DEAD_LETTER_FILE`，Docker Compose 默认 `/usage/usage-dead-letter.jsonl`；Railway 单镜像通常配置为 `/data/usage-dead-letter.jsonl`
 
 行为：
 

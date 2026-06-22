@@ -224,21 +224,14 @@ export async function proxyAnthropicMessagesRequest(
 
 export async function proxyAnthropicCountTokensRequest(
   requestBody: AnthropicRequest,
-  clientHeaders: AnthropicClientHeaders
+  _clientHeaders: AnthropicClientHeaders
 ): Promise<Response> {
-  const { channel } = await findAnthropicChannel(requestBody.model);
-  if (!channel) {
-    return jsonError(404, "not_found_error", `No available channel for model '${requestBody.model}'. Please configure it in admin panel.`);
-  }
-
-  const response = await sendAnthropicRequest(
-    channel,
-    JSON.stringify(requestBody),
-    "count_tokens",
-    false,
-    clientHeaders
-  );
-  return passThroughResponse(response);
+  // Avoid unmetered upstream calls from count_tokens. This endpoint is used by
+  // Anthropic-compatible clients for sizing; it should not consume provider keys.
+  return new Response(JSON.stringify({ input_tokens: estimateTokens(requestBody) }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 async function handleAnthropicJson(

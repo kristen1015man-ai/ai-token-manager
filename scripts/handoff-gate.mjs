@@ -119,6 +119,11 @@ const proxyIndex = read("proxy/src/index.ts");
 for (const token of ["ENABLE_PROXY_USAGE_QUEUE_CLEAR", "x-sparkloom-maintenance-confirm", "reset-billing-usage"]) {
   assert(proxyIndex.includes(token), `proxy usage queue clear must keep destructive maintenance guard: ${token}`);
 }
+const anthropicService = read("proxy/src/services/anthropic.ts");
+for (const token of ["proxyAnthropicCountTokensRequest", "Avoid unmetered upstream calls from count_tokens", "estimateTokens(requestBody)"]) {
+  assert(anthropicService.includes(token), `anthropic count_tokens must stay local-only: ${token}`);
+}
+assert(!anthropicService.includes('sendAnthropicRequest(\n    channel,\n    JSON.stringify(requestBody),\n    "count_tokens"'), "anthropic count_tokens must not call upstream without billing");
 
 const debugRoute = read("web/src/app/api/admin/debug/route.ts");
 assert(debugRoute.includes("process.env.NODE_ENV === \"production\""), "debug route must stay disabled in production");
@@ -173,6 +178,10 @@ for (const token of [
   "RUN_BACKUP_DRILL_ON_START",
   "BACKUP_DRILL_RUN_ID",
   "PRAGMA integrity_check",
+  "copyOptionalJsonlFile",
+  "sourceMissing",
+  "usage-queue.jsonl",
+  "usage-dead-letter.jsonl",
   "[BackupDrill] completed",
 ]) {
   assert(verifiedBackup.includes(token), `verified backup helper must keep ${token}`);
@@ -207,6 +216,9 @@ assert(providerSecrets.includes("isEncrypted(key)"), "provider secret validation
 
 const healthRoute = read("web/src/app/api/health/route.ts");
 assert(healthRoute.includes("LIKE 'enc:%'"), "health secret decryption check must sample all encrypted secret versions");
+for (const token of ["checkPlaintextSecretStorage", "secretStorage", "plaintextCount", "user_api_keys", "access_key_secret"]) {
+  assert(healthRoute.includes(token), `health route must detect plaintext stored secrets: ${token}`);
+}
 
 const notificationRouter = read("web/src/lib/notification-router.ts");
 const fuzzyAdminToken = "%" + "admin" + "%";
@@ -214,6 +226,7 @@ assert(!notificationRouter.includes(fuzzyAdminToken), "notification router must 
 assert(notificationRouter.includes("parseRoles"), "notification router must use parseRoles for admin recipient checks");
 
 const productionEnv = read(".env.production.example");
+const localEnvExample = read(".env.example");
 const deprecatedAdminEmailsToken = "ADMIN_" + "EMAILS";
 assert(!productionEnv.includes(deprecatedAdminEmailsToken), ".env.production.example must not expose deprecated admin email variable");
 assert(productionEnv.includes("WEB_PORT_INTERNAL=3000"), ".env.production.example must document WEB_PORT_INTERNAL for Railway single-image routing");
@@ -222,6 +235,10 @@ assert(productionEnv.includes("ENABLE_INTERNAL_BILLING_RESET=false"), ".env.prod
 assert(productionEnv.includes("ENABLE_PROXY_USAGE_QUEUE_CLEAR=false"), ".env.production.example must keep proxy queue clear disabled by default");
 assert(productionEnv.includes("MAX_USER_API_KEYS_PER_USER=5"), ".env.production.example must document employee key count limit");
 assert(productionEnv.includes("USER_API_KEY_CREATE_COOLDOWN_SECONDS=60"), ".env.production.example must document employee key creation cooldown");
+assert(productionEnv.includes("USAGE_QUEUE_FILE=/usage/usage-queue.jsonl"), ".env.production.example must document shared usage queue path");
+assert(productionEnv.includes("USAGE_DEAD_LETTER_FILE=/usage/usage-dead-letter.jsonl"), ".env.production.example must document shared usage dead-letter path");
+assert(localEnvExample.includes("USAGE_QUEUE_FILE=../.tmp/usage-queue.jsonl"), ".env.example must document local usage queue path");
+assert(localEnvExample.includes("USAGE_DEAD_LETTER_FILE=../.tmp/usage-dead-letter.jsonl"), ".env.example must document local usage dead-letter path");
 const userKeyRoute = read("web/src/app/api/user/key/route.ts");
 for (const token of ["MAX_USER_API_KEYS_PER_USER", "USER_API_KEY_CREATE_COOLDOWN_SECONDS", "429"]) {
   assert(userKeyRoute.includes(token), `user API key route must keep abuse control: ${token}`);
@@ -229,6 +246,15 @@ for (const token of ["MAX_USER_API_KEYS_PER_USER", "USER_API_KEY_CREATE_COOLDOWN
 const dockerCompose = read("docker-compose.yml");
 assert(dockerCompose.includes("CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?"), "docker-compose.yml must require explicit CORS_ALLOWED_ORIGINS");
 assert(dockerCompose.includes("PUBLIC_PROXY_BASE_URL=${PUBLIC_PROXY_BASE_URL:?"), "docker-compose.yml must require explicit PUBLIC_PROXY_BASE_URL");
+for (const token of [
+  "USAGE_QUEUE_FILE=/usage/usage-queue.jsonl",
+  "USAGE_DEAD_LETTER_FILE=/usage/usage-dead-letter.jsonl",
+  "usage-data:/usage",
+  "usage-data:",
+]) {
+  assert(dockerCompose.includes(token), `docker-compose.yml must keep shared usage backup volume: ${token}`);
+}
+assert(!dockerCompose.includes("proxy-data:/proxy-data"), "docker-compose.yml must not isolate proxy usage queue from web backup");
 
 const sharedCrypto = read("shared/crypto.ts");
 for (const token of [
@@ -304,6 +330,11 @@ const backupVerifier = read("scripts/verify-sqlite-backup.mjs");
 for (const token of ["PRAGMA integrity_check", "missingTables", "sha256", "backup-directory", "usage-dead-letter.jsonl", "manifestMatches", "process.exitCode"]) {
   assert(backupVerifier.includes(token), `backup verifier must keep ${token}`);
 }
+for (const table of ["user_api_keys", "quota_reservations", "alert_settings", "admin_logs", "sync_blacklist", "system_flags"]) {
+  assert(backupVerifier.includes(`"${table}"`), `backup verifier must require operational table: ${table}`);
+}
+assert(!backupVerifier.includes("files.usageQueue === null"), "backup verifier must not accept a null usage queue manifest entry for directory sign-off");
+assert(!backupVerifier.includes("files.usageDeadLetter === null"), "backup verifier must not accept a null dead-letter manifest entry for directory sign-off");
 const productionSmoke = read("scripts/production-smoke.mjs");
 for (const token of [
   "/health",
@@ -420,10 +451,16 @@ assert(
   backupRestoreTemplate.sqliteVerification?.notes?.includes("backup-directory"),
   "handoff backup/restore template must tell receivers to verify the full backup directory"
 );
+const backupRestoreDocs = read("docs/backup-restore.md");
+for (const token of ["0 字节空文件", "usage-queue.jsonl", "usage-dead-letter.jsonl", "manifest"]) {
+  assert(backupRestoreDocs.includes(token), `backup/restore docs must explain stable backup set files: ${token}`);
+}
 const nginxConf = read("nginx/nginx.conf");
 for (const token of ["location /v1/", "location /anthropic/", "proxy_buffering off", "proxy_read_timeout 600s"]) {
   assert(nginxConf.includes(token), `nginx reverse proxy must keep ${token}`);
 }
+const forwardedHostCount = (nginxConf.match(/X-Forwarded-Host/g) || []).length;
+assert(forwardedHostCount >= 5, "nginx reverse proxy must forward X-Forwarded-Host for web, proxy, anthropic, and health routes");
 for (const rel of [
   "docs/README.md",
   "docs/HANDOFF-UAT-SIGNOFF.md",
@@ -436,6 +473,9 @@ for (const rel of [
   assert(source.includes("HANDOFF-BUSINESS-UAT-SIGNOFF.template.json"), `${rel} must document the business UAT sign-off template`);
   assert(source.includes("HANDOFF-ASSET-SIGNOFF.template.json"), `${rel} must document the asset sign-off template`);
   assert(source.includes("HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json"), `${rel} must document the backup/restore sign-off template`);
+}
+for (const rel of ["docs/README.md", "docs/HANDOVER.md", "docs/OPERATIONS.md", "docs/RELEASE-CHECKLIST.md"]) {
+  assert(read(rel).includes("smoke:production:full"), `${rel} must document the full production smoke command`);
 }
 for (const line of apiDocs.split(/\r?\n/)) {
   const publicAdminLine =
@@ -455,6 +495,18 @@ assert(
   rootPkg.scripts?.["smoke:production"] === "node scripts/production-smoke.mjs --base https://ai.seapllo.com",
   "root package must expose the production smoke command"
 );
+assert(
+  rootPkg.scripts?.["smoke:production:full"] === "node scripts/production-smoke.mjs --base https://ai.seapllo.com --require-employee --allow-billable --require-billable --include-stream --require-stream",
+  "root package must expose the full production smoke command"
+);
+assert(
+  rootPkg.scripts?.check === "node scripts/check.mjs",
+  "root package must expose the aggregate check command"
+);
+const aggregateCheck = read("scripts/check.mjs");
+for (const token of ["handoff gate", "proxy build", "web build", "spawnSync"]) {
+  assert(aggregateCheck.includes(token), `aggregate check script must keep ${token}`);
+}
 assert(
   rootPkg.scripts?.["handoff:status"] === "node scripts/handoff-status.mjs handoff-2026-06-20",
   "root package must expose the handoff status command"

@@ -62,7 +62,12 @@ const requiredTables = [
   "model_prices",
   "usage_logs",
   "quota_rules",
+  "quota_reservations",
   "alert_logs",
+  "alert_settings",
+  "admin_logs",
+  "sync_blacklist",
+  "system_flags",
 ];
 
 const SQL = await initSqlJs();
@@ -108,14 +113,10 @@ function manifestMatchesBackupSet(manifest, backupSet) {
   const files = manifest.value.files || {};
   const dataDbOk = files.dataDb?.sha256 === backupSet.dataDb?.sha256 && files.dataDb?.size === backupSet.dataDb?.size;
   const usageQueueOk =
-    files.usageQueue === null ||
-    (files.usageQueue?.sha256 === backupSet.usageQueue?.sha256 && files.usageQueue?.size === backupSet.usageQueue?.size);
+    files.usageQueue?.sha256 === backupSet.usageQueue?.sha256 && files.usageQueue?.size === backupSet.usageQueue?.size;
   const usageDeadLetterOk =
-    files.usageDeadLetter === null ||
-    (
-      files.usageDeadLetter?.sha256 === backupSet.usageDeadLetter?.sha256 &&
-      files.usageDeadLetter?.size === backupSet.usageDeadLetter?.size
-    );
+    files.usageDeadLetter?.sha256 === backupSet.usageDeadLetter?.sha256 &&
+    files.usageDeadLetter?.size === backupSet.usageDeadLetter?.size;
   return Boolean(dataDbOk && usageQueueOk && usageDeadLetterOk);
 }
 

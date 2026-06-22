@@ -34,11 +34,12 @@
 pnpm test
 pnpm handoff:status
 pnpm smoke:production
+SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm smoke:production:full -- --chat-model <model>
 pnpm handoff:uat
 pnpm handoff:readiness
 ```
 
-`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用；缺员工 Key 时输出会包含 skipped checks 和 `complete=false`，不能当作业务 UAT 完成。`pnpm handoff:uat` 输出可归档的脱敏 JSON 自动证据。`pnpm handoff:readiness` 输出正式签收缺口，只有业务 UAT、灾备和资产交割证据齐全时才会显示 `formalSignoffReady=true`。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。正式业务 UAT 证据必须带 `--allow-billable --chat-model <model> --include-stream`，同时覆盖非流式和流式调用。
+`pnpm handoff:status` 用于确认当前工作区干净、`handoff-2026-06-20` tag 指向当前提交。`pnpm smoke:production` 默认只检查线上 health、危险内部接口公网屏蔽、seed/dev-login 拦截，不产生模型调用费用；缺员工 Key 时输出会包含 skipped checks 和 `complete=false`，不能当作业务 UAT 完成。`pnpm smoke:production:full` 用于正式 UAT，必须提供真实员工 Key 和 `--chat-model <model>`，并强制非流式/流式小额调用都通过。`pnpm handoff:uat` 输出可归档的脱敏 JSON 自动证据。`pnpm handoff:readiness` 输出正式签收缺口，只有业务 UAT、灾备和资产交割证据齐全时才会显示 `formalSignoffReady=true`。员工 Key、小额计费和流式验收按 `HANDOFF-UAT-SIGNOFF.md` 执行，必须由接收方提供真实 `sk-emp-...`，且不得把 Key 写入文档或聊天。正式业务 UAT 证据必须带 `--allow-billable --chat-model <model> --include-stream`，同时覆盖非流式和流式调用。
 
 业务 UAT 必须复制 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` 到受控目录，填成 `handoff-business-uat-signoff.json`。该文件必须同时记录 `pnpm handoff:uat` 自动证据、后台 usage 入库核对、费用核对和脱敏审查结果；单独的自动 smoke JSON 不足以让 `business-uat` 通过。
 

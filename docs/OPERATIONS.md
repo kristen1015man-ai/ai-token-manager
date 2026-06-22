@@ -74,8 +74,9 @@
 
 建议显式配置：
 
-- `USAGE_QUEUE_FILE=/data/usage-queue.jsonl`
-- `USAGE_DEAD_LETTER_FILE=/data/usage-dead-letter.jsonl`
+- Docker Compose: `USAGE_QUEUE_FILE=/usage/usage-queue.jsonl`
+- Docker Compose: `USAGE_DEAD_LETTER_FILE=/usage/usage-dead-letter.jsonl`
+- Railway single-image: use the same variables and point them at the mounted volume, usually `/data/usage-queue.jsonl` and `/data/usage-dead-letter.jsonl`.
 - `PROXY_INTERNAL_URL=http://127.0.0.1:3001`
 - `MAX_REQUEST_BODY_BYTES=2097152`
 - `MAX_CHAT_BODY_BYTES=2097152`
@@ -191,6 +192,7 @@ curl http://localhost:3001/health
 
 - `pnpm test`：执行 `scripts/handoff-gate.mjs`，覆盖权限、内部接口、密钥扫描、交接脚本和文档约束。
 - `pnpm smoke:production`：执行线上非计费 smoke，检查 health、危险内部接口公网屏蔽、seed/dev-login 拦截。缺员工 Key 时输出会包含 skipped checks 和 `complete=false`，不能当作业务 UAT 完成。
+- `SPARKLOOM_EMPLOYEE_API_KEY=sk-emp-... pnpm smoke:production:full -- --chat-model <model>`：正式 UAT/交接 smoke，强制 `/v1/models`、非流式小额调用和流式小额调用都通过。不要把员工 Key 写入文档或聊天。
 - `pnpm handoff:uat`：生成脱敏 UAT 自动证据；正式业务签收必须提供真实员工 Key，并带 `--allow-billable --chat-model <model> --include-stream`，随后填写 `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json`。
 
 但当前仍没有纳入 package script 的标准业务 seed 命令。`/api/setup/seed` 只能作为本地受控入口，不是新人默认测试数据路径。
@@ -330,8 +332,8 @@ curl -X POST \
 
 Proxy usage 队列：
 
-- `USAGE_QUEUE_FILE`，默认 `/data/usage-queue.jsonl`
-- `USAGE_DEAD_LETTER_FILE`，默认 `/data/usage-dead-letter.jsonl`
+- `USAGE_QUEUE_FILE`，Docker Compose 默认 `/usage/usage-queue.jsonl`；Railway 单镜像通常配置为 `/data/usage-queue.jsonl`
+- `USAGE_DEAD_LETTER_FILE`，Docker Compose 默认 `/usage/usage-dead-letter.jsonl`；Railway 单镜像通常配置为 `/data/usage-dead-letter.jsonl`
 
 这两个文件也必须在持久卷里。
 

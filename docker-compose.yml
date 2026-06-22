@@ -32,12 +32,13 @@ services:
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
       - UPSTREAM_ALLOWED_HOSTS=${UPSTREAM_ALLOWED_HOSTS:-api.deepseek.com,api.siliconflow.cn,open.bigmodel.cn,api.openai.com,api.anthropic.com}
-      - USAGE_QUEUE_FILE=/proxy-data/usage-queue.jsonl
+      - USAGE_QUEUE_FILE=/usage/usage-queue.jsonl
+      - USAGE_DEAD_LETTER_FILE=/usage/usage-dead-letter.jsonl
       # Proxy 只持久化 usage 队列，不直接读写 data.db
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
     volumes:
       # usage flush 失败时的本地队列，避免短暂故障丢账
-      - proxy-data:/proxy-data
+      - usage-data:/usage
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3001/health"]
@@ -76,9 +77,13 @@ services:
       - BALANCE_SYNC_INTERVAL_MINUTES=${BALANCE_SYNC_INTERVAL_MINUTES:-60}
       - BALANCE_ALERT_TIMES=${BALANCE_ALERT_TIMES:-09:30,12:00,14:30,17:30}
       - BALANCE_ALERT_NOTIFY_ENABLED=${BALANCE_ALERT_NOTIFY_ENABLED:-true}
+      - USAGE_QUEUE_FILE=/usage/usage-queue.jsonl
+      - USAGE_DEAD_LETTER_FILE=/usage/usage-dead-letter.jsonl
     volumes:
       # data.db 只由 web 进程读写；proxy 通过内部 HTTP API 访问
       - app-data:/data
+      # proxy usage queue/dead-letter is backed up by web without giving proxy access to data.db
+      - usage-data:/usage
     # ENV-03: 添加 healthcheck
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
@@ -89,4 +94,4 @@ services:
 
 volumes:
   app-data:
-  proxy-data:
+  usage-data:

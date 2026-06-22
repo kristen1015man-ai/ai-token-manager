@@ -14,12 +14,14 @@
     "build:proxy": "pnpm --filter proxy build",
     "build:web": "pnpm --filter web build",
     "test": "node scripts/handoff-gate.mjs",
+    "check": "node scripts/check.mjs",
     "db:migrate": "pnpm --filter shared db:migrate",
     "handoff:status": "node scripts/handoff-status.mjs handoff-2026-06-20",
     "handoff:uat": "node scripts/handoff-uat-evidence.mjs --base https://ai.seapllo.com",
     "handoff:readiness": "node scripts/handoff-readiness-report.mjs",
     "handoff:final": "node scripts/handoff-final-check.mjs",
-    "smoke:production": "node scripts/production-smoke.mjs --base https://ai.seapllo.com"
+    "smoke:production": "node scripts/production-smoke.mjs --base https://ai.seapllo.com",
+    "smoke:production:full": "node scripts/production-smoke.mjs --base https://ai.seapllo.com --require-employee --allow-billable --require-billable --include-stream --require-stream"
   },
   "dependencies": {
     "sql.js": "^1.14.1"
