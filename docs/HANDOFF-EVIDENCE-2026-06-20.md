@@ -19,6 +19,7 @@ Production sensitive-field migration:
 - Execution used `INTERNAL_API_KEY` plus `x-sparkloom-maintenance-confirm: encrypt-sensitive-fields`.
 - Migration time: `2026-06-22T08:11:52.366Z` / `2026-06-22 16:11:52 +08:00`
 - Result: channels total `5`, encrypted `0`, skipped `5`; users total `155`, encrypted `4`, hashed `1`, skipped `150`.
+- Follow-up hardening: the temporary Railway edge allowlist used for this one migration was removed after success; `/api/internal/*` is again blocked at the Railway edge.
 
 Post-migration health:
 

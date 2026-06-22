@@ -131,13 +131,8 @@ for (const token of [
   assert(proxyIndex.includes(token), `proxy service must keep standalone production fail-fast: ${token}`);
 }
 const railwayStart = read("railway/start.mjs");
-for (const token of [
-  "EDGE_INTERNAL_ROUTE_ALLOWLIST",
-  "\"/api/internal/admin/migrate/encrypt\"",
-  "timingSafeEqual",
-]) {
-  assert(railwayStart.includes(token), `Railway edge must keep narrow internal maintenance allowlist: ${token}`);
-}
+assert(!railwayStart.includes("EDGE_INTERNAL_ROUTE_ALLOWLIST"), "Railway edge must not expose internal maintenance allowlists after migration");
+assert(!railwayStart.includes("\"/api/internal/admin/migrate/encrypt\""), "Railway edge must not expose internal sensitive-field migration after migration");
 assert(!railwayStart.includes("\"/api/internal/admin/reset-billing\""), "Railway edge must not expose destructive internal billing reset");
 const anthropicService = read("proxy/src/services/anthropic.ts");
 for (const token of ["proxyAnthropicCountTokensRequest", "Avoid unmetered upstream calls from count_tokens", "estimateTokens(requestBody)"]) {
