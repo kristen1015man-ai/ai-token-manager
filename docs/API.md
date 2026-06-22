@@ -217,6 +217,7 @@ Authorization: Bearer ${INTERNAL_API_KEY}
 | POST | `/api/internal/proxy/quota/release` | Proxy | 上游失败时释放预占 |
 | POST | `/api/internal/usage` | Proxy | usage 批量落库 |
 | POST | `/api/internal/quota-alert` | Web/internal | 额度预警 |
+| POST | `/api/internal/admin/migrate/encrypt` | internal + maintenance | 幂等加密迁移旧敏感字段，修复历史明文 `users.api_key`、渠道密钥字段；除 `INTERNAL_API_KEY` 外，还要求 `x-sparkloom-maintenance-confirm: encrypt-sensitive-fields` |
 | POST | `/api/internal/admin/reset-billing` | internal + maintenance | 重置计费数据；除 `INTERNAL_API_KEY` 外，还要求 `ENABLE_INTERNAL_BILLING_RESET=true` 和 `x-sparkloom-maintenance-confirm: reset-billing-usage` |
 | POST | `/api/internal/admin/flush-db` | internal | 强制 DB 落盘 |
 | POST | `/api/internal/admin/backup` | internal | 生成非破坏性备份并校验 SQLite integrity |

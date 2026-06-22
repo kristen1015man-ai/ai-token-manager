@@ -74,6 +74,7 @@ await checkJsonHealth("/health", "ai-token-proxy");
 await checkJsonHealth("/api/health", "sparkloom-web");
 
 await checkPublicBlocked("POST", "/api/internal/admin/backup");
+await checkPublicBlocked("POST", "/api/internal/admin/migrate/encrypt");
 await checkPublicBlocked("GET", "/api/internal/admin/reset-billing");
 await checkPublicBlocked("GET", "/api/auth/dev-login");
 await checkPublicBlocked("POST", "/api/setup/seed", 403);

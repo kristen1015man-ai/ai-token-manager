@@ -2,6 +2,7 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { timingSafeEqual } from "node:crypto";
 
 const publicPort = Number(process.env.PORT || 8080);
 const webPort = Number(process.env.WEB_PORT_INTERNAL || 3000);
@@ -34,6 +35,9 @@ const PRODUCTION_DISABLED_FLAGS = [
   "ENABLE_CLEANUP_ENDPOINT",
 ];
 const BAD_FEISHU_APP_PREFIX = "cli_" + "cli_";
+const EDGE_INTERNAL_ROUTE_ALLOWLIST = new Set([
+  "/api/internal/admin/migrate/encrypt",
+]);
 
 function failProductionConfig(message) {
   console.error(`[railway] ${message}`);
@@ -243,6 +247,19 @@ function rejectJson(res, statusCode, error) {
   res.end(JSON.stringify({ error }));
 }
 
+function hasInternalBearer(req) {
+  const internalKey = envValue("INTERNAL_API_KEY");
+  const authHeader = String(req.headers.authorization || "");
+  if (!internalKey || !authHeader) return false;
+  const expected = `Bearer ${internalKey}`;
+  const providedBuffer = Buffer.from(authHeader);
+  const expectedBuffer = Buffer.from(expected);
+  return (
+    providedBuffer.length === expectedBuffer.length &&
+    timingSafeEqual(providedBuffer, expectedBuffer)
+  );
+}
+
 function startProcess(name, command, args, options = {}) {
   const child = spawn(command, args, {
     stdio: ["ignore", "inherit", "inherit"],
@@ -299,9 +316,11 @@ function targetForPath(pathname) {
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url || "/", "http://localhost").pathname;
   if (pathname === "/api/internal" || pathname.startsWith("/api/internal/")) {
-    res.writeHead(404, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "Not found" }));
-    return;
+    if (!EDGE_INTERNAL_ROUTE_ALLOWLIST.has(pathname) || !hasInternalBearer(req)) {
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "Not found" }));
+      return;
+    }
   }
 
   const contentLength = Number(req.headers["content-length"] || 0);
