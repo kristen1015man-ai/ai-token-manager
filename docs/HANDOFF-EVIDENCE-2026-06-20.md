@@ -20,6 +20,8 @@ Production sensitive-field migration:
 - Migration time: `2026-06-22T08:11:52.366Z` / `2026-06-22 16:11:52 +08:00`
 - Result: channels total `5`, encrypted `0`, skipped `5`; users total `155`, encrypted `4`, hashed `1`, skipped `150`.
 - Follow-up hardening: the temporary Railway edge allowlist used for this one migration was removed after success; `/api/internal/*` is again blocked at the Railway edge.
+- Hardening deployment: `307ed344-31ab-44eb-9709-0c099899bc26`, commit `c924c41`, image digest `sha256:9efec89cb0aab4907194913010a3e99ec66a224c266ff851d0b1902c572d5730`.
+- Post-hardening verification: `POST /api/internal/admin/migrate/encrypt` returned 404 even when called with `INTERNAL_API_KEY` and the maintenance confirmation header through the public Railway edge.
 
 Post-migration health:
 
@@ -30,12 +32,14 @@ Post-migration health:
 - DB file, usage queue, and dead-letter directories writable: `/data`.
 - User counts: active `154`, disabled `1`.
 - Detailed `GET /health`: 200, `status=ok`; proxy usage queue pending records `0`.
+- Detailed `GET /health` after edge hardening: 200, `status=ok`; proxy usage queue pending records `0`.
 
 Production smoke:
 
 - Command: `pnpm smoke:production`
 - Time: `2026-06-22T08:12:31.924Z` / `2026-06-22 16:12:31 +08:00`
 - Result: `ok=true`, `complete=false`.
+- Re-run after edge hardening: `2026-06-22T08:28:27.119Z` / `2026-06-22 16:28:27 +08:00`, `ok=true`, `complete=false`.
 - Public health passed: `/health` 200 and `/api/health` 200.
 - Public blocking passed:
   - `POST /api/internal/admin/backup`: 404
