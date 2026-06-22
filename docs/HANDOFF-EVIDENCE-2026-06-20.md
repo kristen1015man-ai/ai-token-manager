@@ -51,6 +51,28 @@ Production smoke:
 
 Remaining formal sign-off evidence is unchanged: business UAT with a real employee key, external backup/restore drill, and asset ownership handoff JSONs are still required before `pnpm handoff:final` can pass.
 
+## 2026-06-23 Real Employee UAT Evidence
+
+This section records the first real employee-key production UAT run. The employee key itself was not written to the evidence file or committed documentation.
+
+- Model selected for low-cost billable smoke: `deepseek-v4-flash`
+- Read-only employee model check: `/v1/models` returned 200 with `15` models.
+- Full production smoke command was run with Railway production env plus a temporary employee key.
+- Full smoke result: `ok=true`, `complete=true`.
+- Full smoke time: `2026-06-22T16:02:44.033Z` / `2026-06-23 00:02:44 +08:00`.
+- Detailed internal health in full smoke: 200; DB readable true; DB writable true; secret decryption `ok=true`, checked `169`, failures `[]`.
+- Employee `/v1/models`: 200, model count `15`.
+- Employee non-stream billable chat: 200, model `deepseek-v4-flash`, `usagePresent=true`.
+- Employee stream billable chat: 200, model `deepseek-v4-flash`, `sawDone=true`, `sawUsage=true`.
+- Sanitized UAT evidence file generated locally: `handoff-evidence/handoff-uat-evidence-2026-06-22T16-03-02-481Z.json`.
+- Evidence file scan for the temporary employee key, raw `Bearer`, and raw `Authorization` headers returned no matches.
+
+Remaining business UAT sign-off gap after this run:
+
+- A project owner or receiver still must open the admin usage/billing pages and confirm the two billable test calls are visible in Sparkloom usage records.
+- The same reviewer must reconcile the recorded cost against provider-side usage/balance evidence within an agreed tolerance.
+- After that review, copy `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` to a controlled location and fill the `usageAudit` and `securityReview` sections.
+
 本文档记录 2026-06-20 交接前线上验收取证。所有命令输出均已避免记录密钥原文。
 
 ## 1. 本地基线
