@@ -1,5 +1,51 @@
 # Handoff Evidence - 2026-06-20
 
+## 2026-06-22 Production Update
+
+This section records the latest production alignment after the final handoff hardening pass.
+
+- Branch: `codex/production-readiness-snapshot`
+- Commit deployed: `9eedcbde94ff37f46971d9234aa5123b492b681b`
+- Railway deployment ID: `51207b03-2822-4b18-b557-3576e9d094fd`
+- Railway status: `SUCCESS`
+- Image digest: `sha256:be019d71c95a63b2f8b4f5cafd1dafe15f256d1ae4e2fe3923975fb9e2e7f77a`
+- Production URL: `https://ai.seapllo.com`
+- Local gates before deploy: `pnpm check` passed; `git diff --check` passed.
+
+Production sensitive-field migration:
+
+- Command path: `POST /api/internal/admin/migrate/encrypt`
+- Public unauthenticated access remains blocked by the Railway edge with 404.
+- Execution used `INTERNAL_API_KEY` plus `x-sparkloom-maintenance-confirm: encrypt-sensitive-fields`.
+- Migration time: `2026-06-22T08:11:52.366Z` / `2026-06-22 16:11:52 +08:00`
+- Result: channels total `5`, encrypted `0`, skipped `5`; users total `155`, encrypted `4`, hashed `1`, skipped `150`.
+
+Post-migration health:
+
+- Detailed `GET /api/health`: 200, `status=ok`.
+- `secretDecryption`: `ok=true`, checked `168`, failures `[]`.
+- `secretStorage`: `ok=true`, checked `168`, plaintext `[]`.
+- DB readable/writable: true.
+- DB file, usage queue, and dead-letter directories writable: `/data`.
+- User counts: active `154`, disabled `1`.
+- Detailed `GET /health`: 200, `status=ok`; proxy usage queue pending records `0`.
+
+Production smoke:
+
+- Command: `pnpm smoke:production`
+- Time: `2026-06-22T08:12:31.924Z` / `2026-06-22 16:12:31 +08:00`
+- Result: `ok=true`, `complete=false`.
+- Public health passed: `/health` 200 and `/api/health` 200.
+- Public blocking passed:
+  - `POST /api/internal/admin/backup`: 404
+  - `POST /api/internal/admin/migrate/encrypt`: 404
+  - `GET /api/internal/admin/reset-billing`: 404
+  - `GET /api/auth/dev-login`: 404
+  - `POST /api/setup/seed`: 403
+- Skipped checks remain: internal detailed health inside public smoke, employee `/v1/models`, billable chat, and billable stream chat, because no employee `sk-emp-...` test key was provided to the local shell.
+
+Remaining formal sign-off evidence is unchanged: business UAT with a real employee key, external backup/restore drill, and asset ownership handoff JSONs are still required before `pnpm handoff:final` can pass.
+
 本文档记录 2026-06-20 交接前线上验收取证。所有命令输出均已避免记录密钥原文。
 
 ## 1. 本地基线
