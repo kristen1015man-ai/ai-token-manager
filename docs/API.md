@@ -220,7 +220,7 @@ Authorization: Bearer ${INTERNAL_API_KEY}
 | POST | `/api/internal/admin/migrate/encrypt` | internal + maintenance | 幂等加密迁移旧敏感字段，修复历史明文 `users.api_key`、渠道密钥字段；除 `INTERNAL_API_KEY` 外，还要求 `x-sparkloom-maintenance-confirm: encrypt-sensitive-fields`。Railway 生产边缘默认对 `/api/internal/*` 返回 404，生产日常优先使用管理员登录后的迁移入口，不要长期暴露内部维护路径。 |
 | POST | `/api/internal/admin/reset-billing` | internal + maintenance | 重置计费数据；除 `INTERNAL_API_KEY` 外，还要求 `ENABLE_INTERNAL_BILLING_RESET=true` 和 `x-sparkloom-maintenance-confirm: reset-billing-usage` |
 | POST | `/api/internal/admin/flush-db` | internal | 强制 DB 落盘 |
-| POST | `/api/internal/admin/backup` | internal | 生成非破坏性备份并校验 SQLite integrity |
+| POST | `/api/internal/admin/backup` | internal | 生成非破坏性备份并校验 SQLite integrity；启用 R2/S3 变量时同步上传完整备份四件套 |
 | GET/POST | `/api/internal/admin/sync-feishu` | Web auto-sync | 飞书通讯录同步 |
 | POST | `/api/internal/admin/prices/sync` | Web auto-sync | 官方价格同步 |
 | POST | `/api/internal/admin/channels/balance-sync` | Web auto-sync | 渠道余额同步 |

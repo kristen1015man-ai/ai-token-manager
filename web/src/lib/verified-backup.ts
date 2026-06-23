@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import initSqlJs from "sql.js";
 import { getDb, getDbPath, saveDb, type SqliteExec } from "./db";
+import { uploadVerifiedBackupToObjectStorage } from "./object-storage-backup";
 
 export type BackupFileInfo = {
   path: string;
@@ -223,10 +224,12 @@ export async function runStartupBackupDrillIfEnabled(): Promise<void> {
   }
 
   const result = await createVerifiedBackup("startup-drill");
+  const objectStorage = await uploadVerifiedBackupToObjectStorage(result);
   const summary = summarizeForLogs(result);
   fs.writeFileSync(markerPath, `${JSON.stringify({
     completedAt: new Date().toISOString(),
     ...summary,
+    objectStorage,
   })}\n`, "utf8");
-  console.log(`[BackupDrill] completed ${JSON.stringify(summary)}`);
+  console.log(`[BackupDrill] completed ${JSON.stringify({ ...summary, objectStorage })}`);
 }

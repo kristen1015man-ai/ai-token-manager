@@ -60,6 +60,27 @@ curl -X POST \
 - 该接口只在 Railway Volume 内生成备份，不能替代下载到公司受控存储的灾备。
 - 返回内容不得包含明文 Secret、员工 Key 或供应商 Key。
 
+生产 Railway 推荐启用对象存储备份上传，避免 Railway CLI 下载大文件超时。配置以下变量后，同一个内部备份接口会把完整备份目录上传到 S3-compatible 存储，例如 Cloudflare R2：
+
+```env
+BACKUP_OBJECT_STORAGE_ENABLED=true
+BACKUP_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+BACKUP_S3_REGION=auto
+BACKUP_S3_BUCKET=sparkloom-prod-backups
+BACKUP_S3_ACCESS_KEY_ID=<access-key-id>
+BACKUP_S3_SECRET_ACCESS_KEY=<secret-access-key>
+BACKUP_S3_PREFIX=production
+```
+
+上传成功时响应会包含 `objectStorage.backupPrefix`，例如 `production/handoff-2026-06-23T...`。该前缀下必须有：
+
+- `data.db`
+- `manifest.json`
+- `usage-queue.jsonl`
+- `usage-dead-letter.jsonl`
+
+正式灾备签收应从对象存储下载这个完整前缀到公司受控目录，再执行 `node scripts/verify-sqlite-backup.mjs <backup-dir>`。不要把 R2/S3 的 Access Key 或 Secret Access Key 写入交接文档。
+
 Railway SSH 不可用时，可使用一次性启动演练开关：
 
 ```env

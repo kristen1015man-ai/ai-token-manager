@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireInternalRequest } from "../../../../../lib/internal-auth";
+import { uploadVerifiedBackupToObjectStorage } from "../../../../../lib/object-storage-backup";
 import { createVerifiedBackup } from "../../../../../lib/verified-backup";
 
 export const runtime = "nodejs";
@@ -11,7 +12,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await createVerifiedBackup("internal-route");
-    return NextResponse.json(result);
+    const objectStorage = await uploadVerifiedBackupToObjectStorage(result);
+    return NextResponse.json({
+      ...result,
+      objectStorage,
+    });
   } catch (error) {
     return NextResponse.json({
       success: false,

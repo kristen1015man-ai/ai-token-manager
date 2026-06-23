@@ -309,7 +309,7 @@ curl -X POST \
   http://127.0.0.1:3000/api/internal/admin/backup
 ```
 
-执行后检查返回的 `verification.integrity` 必须为 `ok`，并把 `backupDir`、`manifest.sha256`、核心表数量记录到变更单。该备份仍位于 Railway Volume 内，正式灾备还需要下载完整备份目录到公司受控存储，执行 `node scripts/verify-sqlite-backup.mjs <backup-dir>`，确认 `data.db`、`manifest.json`、`usage-queue.jsonl`、`usage-dead-letter.jsonl` 成套存在，并做恢复演练；交接签收时应复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`，填写 `handoff-backup-restore-signoff.json` 并归档。
+执行后检查返回的 `verification.integrity` 必须为 `ok`，并把 `backupDir`、`manifest.sha256`、核心表数量记录到变更单。生产 Railway 建议启用 `BACKUP_OBJECT_STORAGE_ENABLED=true`，并配置 R2/S3-compatible 变量：`BACKUP_S3_ENDPOINT`、`BACKUP_S3_REGION`、`BACKUP_S3_BUCKET`、`BACKUP_S3_ACCESS_KEY_ID`、`BACKUP_S3_SECRET_ACCESS_KEY`、`BACKUP_S3_PREFIX`。启用后响应必须包含 `objectStorage.backupPrefix`，该前缀下应有 `data.db`、`manifest.json`、`usage-queue.jsonl`、`usage-dead-letter.jsonl` 四个对象。正式灾备应从对象存储下载完整前缀到公司受控目录，执行 `node scripts/verify-sqlite-backup.mjs <backup-dir>`，确认 `inputType=backup-directory`、`manifestMatches=true`，并做恢复演练；交接签收时应复制 `docs/HANDOFF-BACKUP-RESTORE-SIGNOFF.template.json`，填写 `handoff-backup-restore-signoff.json` 并归档。
 
 如果 Railway SSH 不可用，可使用一次性启动演练：
 
@@ -320,7 +320,7 @@ curl -X POST \
 5. 记录 `backupDir`、`manifestSha256`、`dataDbSha256`、`dataDbSize`、`verification.integrity` 和核心表数量。
 6. 立刻删除 `RUN_BACKUP_DRILL_ON_START` 或改回 `false` 并重新部署。
 
-该方式只在应用启动时生成并校验备份，不开放公网下载数据库；仍不能替代把备份下载到公司受控存储后的恢复演练。
+该方式只在应用启动时生成并校验备份，不开放公网下载数据库；如果对象存储变量已启用，也会上传完整备份四件套。正式签收仍必须从对象存储下载到公司受控存储后做恢复演练。
 
 ## 8. 数据文件
 

@@ -201,6 +201,24 @@ for (const token of [
 ]) {
   assert(verifiedBackup.includes(token), `verified backup helper must keep ${token}`);
 }
+const objectStorageBackup = read("web/src/lib/object-storage-backup.ts");
+for (const token of [
+  "BACKUP_OBJECT_STORAGE_ENABLED",
+  "BACKUP_S3_ENDPOINT",
+  "BACKUP_S3_REGION",
+  "BACKUP_S3_BUCKET",
+  "BACKUP_S3_ACCESS_KEY_ID",
+  "BACKUP_S3_SECRET_ACCESS_KEY",
+  "AWS4-HMAC-SHA256",
+  "usage-dead-letter.jsonl",
+  "manifest.json",
+  "uploadVerifiedBackupToObjectStorage",
+]) {
+  assert(objectStorageBackup.includes(token), `object storage backup helper must keep ${token}`);
+}
+const internalBackupRoute = read("web/src/app/api/internal/admin/backup/route.ts");
+assert(internalBackupRoute.includes("uploadVerifiedBackupToObjectStorage"), "internal backup route must upload backup to object storage when enabled");
+assert(verifiedBackup.includes("uploadVerifiedBackupToObjectStorage"), "startup backup drill must upload backup to object storage when enabled");
 
 for (const token of [
   "PRODUCTION_DISABLED_FLAGS",
@@ -252,6 +270,17 @@ assert(productionEnv.includes("MAX_USER_API_KEYS_PER_USER=5"), ".env.production.
 assert(productionEnv.includes("USER_API_KEY_CREATE_COOLDOWN_SECONDS=60"), ".env.production.example must document employee key creation cooldown");
 assert(productionEnv.includes("USAGE_QUEUE_FILE=/usage/usage-queue.jsonl"), ".env.production.example must document shared usage queue path");
 assert(productionEnv.includes("USAGE_DEAD_LETTER_FILE=/usage/usage-dead-letter.jsonl"), ".env.production.example must document shared usage dead-letter path");
+for (const token of [
+  "BACKUP_OBJECT_STORAGE_ENABLED=false",
+  "BACKUP_S3_ENDPOINT=",
+  "BACKUP_S3_REGION=auto",
+  "BACKUP_S3_BUCKET=",
+  "BACKUP_S3_ACCESS_KEY_ID=",
+  "BACKUP_S3_SECRET_ACCESS_KEY=",
+  "BACKUP_S3_PREFIX=production",
+]) {
+  assert(productionEnv.includes(token), `.env.production.example must document object storage backup variable: ${token}`);
+}
 assert(localEnvExample.includes("USAGE_QUEUE_FILE=../.tmp/usage-queue.jsonl"), ".env.example must document local usage queue path");
 assert(localEnvExample.includes("USAGE_DEAD_LETTER_FILE=../.tmp/usage-dead-letter.jsonl"), ".env.example must document local usage dead-letter path");
 const userKeyRoute = read("web/src/app/api/user/key/route.ts");
