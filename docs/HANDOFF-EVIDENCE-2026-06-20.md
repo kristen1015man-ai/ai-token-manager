@@ -112,7 +112,58 @@ Remaining formal sign-off gap after this reconciliation:
 
 - Copy `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` to a controlled company location and fill it with the above usage and balance reconciliation.
 - The temporary employee API key used for this test should be deleted by the project owner and replaced with a fresh key for long-term use.
-- External backup/restore drill evidence and asset ownership handoff JSONs are still required before `pnpm handoff:final` can pass.
+- Asset ownership handoff JSON is still required before `pnpm handoff:final` can pass.
+
+## 2026-06-23 R2 Backup Restore Evidence
+
+This section records the first successful off-site backup movement and restore verification through Cloudflare R2-compatible object storage. R2 credentials were configured only in Railway environment variables and were not written to documentation or committed files.
+
+Deployment and startup drill:
+
+- Code commit deployed: `67d885d14507ff3bb71a5bb85f07b067729f571f`
+- Deployment ID for object-storage backup code: `dc45ca55-7249-43b2-8449-b3295fbfbf0e`
+- Startup drill deployment ID: `923ee40f-9c1a-4b91-8497-522253007c5c`
+- Post-drill cleanup deployment ID: `70e5826a-f338-4917-b919-f27172a2f21d`
+- Production smoke after deploy: `pnpm smoke:production` returned `ok=true`; public `/api/internal/admin/backup` remained 404.
+- One-time drill variables after cleanup: `RUN_BACKUP_DRILL_ON_START=false`; `BACKUP_DRILL_RUN_ID` deleted.
+
+Object storage backup result:
+
+- Object storage bucket: `sparkloom-prod-backups`
+- Backup prefix: `production/handoff-2026-06-23T03-50-47-332Z`
+- Uploaded files:
+  - `data.db`
+  - `manifest.json`
+  - `usage-queue.jsonl`
+  - `usage-dead-letter.jsonl`
+- `data.db` size: `13545472`
+- `data.db` SHA-256: `cb38b67cadb99029b7ad56fa5febebfc2218a94edecd28ff5a8a2c11a0b65842`
+- `manifest.json` SHA-256: `642cd7f815d01dce8be7aca3f29617ad893999aa2de22d018c5fb24617dd98de`
+- Backup verification from production startup drill: `integrity=ok`, tables `13`, users `155`, user keys `9`, channels `5`, model prices `30`, usage logs `145`, quota rules `154`.
+
+R2 download and restore verification:
+
+- R2 backup was downloaded into an isolated local restore directory: `F:/Sparkloom-r2-restore-drill-20260623-1155`.
+- Download evidence file: `F:/Sparkloom-r2-restore-drill-20260623-1155/r2-download-evidence.json`.
+- Restore verification file: `F:/Sparkloom-r2-restore-drill-20260623-1155/verify-r2-backup.json`.
+- Backup/restore sign-off draft: `F:/Sparkloom-r2-restore-drill-20260623-1155/handoff-backup-restore-signoff.json`.
+- `node scripts/verify-sqlite-backup.mjs F:/Sparkloom-r2-restore-drill-20260623-1155` returned:
+  - `ok=true`
+  - `inputType=backup-directory`
+  - `integrity=ok`
+  - `missingTables=[]`
+  - `manifestMatches=true`
+  - `backupSet.dataDb.present=true`
+  - `backupSet.manifest.present=true`
+  - `backupSet.usageQueue.present=true`
+  - `backupSet.usageDeadLetter.present=true`
+- `pnpm handoff:readiness -- --backup-verification F:/Sparkloom-r2-restore-drill-20260623-1155/handoff-backup-restore-signoff.json` reported `backup-restore.complete=true`.
+
+Remaining formal sign-off gap after R2 restore evidence:
+
+- Business UAT sign-off JSON is still required.
+- Asset ownership handoff JSON is still required.
+- Final command must still be run with all three evidence files: `pnpm handoff:final -- --uat-evidence <business-uat.json> --backup-verification <backup-restore.json> --asset-signoff <asset-handoff.json>`.
 
 本文档记录 2026-06-20 交接前线上验收取证。所有命令输出均已避免记录密钥原文。
 
