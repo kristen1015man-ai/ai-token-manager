@@ -67,11 +67,52 @@ This section records the first real employee-key production UAT run. The employe
 - Sanitized UAT evidence file generated locally: `handoff-evidence/handoff-uat-evidence-2026-06-22T16-03-02-481Z.json`.
 - Evidence file scan for the temporary employee key, raw `Bearer`, and raw `Authorization` headers returned no matches.
 
-Remaining business UAT sign-off gap after this run:
+## 2026-06-23 Provider Billing Reconciliation Evidence
 
-- A project owner or receiver still must open the admin usage/billing pages and confirm the two billable test calls are visible in Sparkloom usage records.
-- The same reviewer must reconcile the recorded cost against provider-side usage/balance evidence within an agreed tolerance.
-- After that review, copy `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` to a controlled location and fill the `usageAudit` and `securityReview` sections.
+This section records a controlled production billing reconciliation batch for `deepseek-v4-flash`. The temporary employee key was used only in the local shell and was not written to documentation or evidence files.
+
+Pre-test provider dashboard values reported by the project owner:
+
+- Flash calls: `821`
+- Input cache-hit tokens: `46592`
+- Input cache-miss tokens: `6435`
+- Output tokens: `12576`
+- Total tokens: `65603`
+- Provider balance: `CNY 44.19`
+
+Controlled Sparkloom test batch:
+
+- Endpoint: `POST https://ai.seapllo.com/v1/chat/completions`
+- Model: `deepseek-v4-flash`
+- Request type: non-stream chat completions
+- Successful calls: `25`
+- API-reported input cache-hit tokens: `0`
+- API-reported input cache-miss tokens: `1500`
+- API-reported output tokens: `13744`
+- API-reported total tokens: `15244`
+- Estimated cost from Sparkloom pricing formula: `CNY 0.028988`
+
+Post-test provider dashboard values reported by the project owner after propagation:
+
+- Flash calls: `846`
+- Selected-window input cache-hit tokens: `0`
+- Selected-window input cache-miss tokens: `1500`
+- Selected-window output tokens: `13744`
+- Selected-window total tokens: `15244`
+- Provider balance: `CNY 44.16`
+
+Reconciliation result:
+
+- Flash call delta matched exactly: `+25`.
+- Cache-hit, cache-miss, output token, total token, and balance movement matched the controlled batch.
+- Provider dashboard date buckets use UTC; Sparkloom business reporting and notifications use Beijing time. This is an expected reporting-window difference and must be explained during handoff.
+- Provider dashboard propagation has a short delay; final values matched after refresh.
+
+Remaining formal sign-off gap after this reconciliation:
+
+- Copy `docs/HANDOFF-BUSINESS-UAT-SIGNOFF.template.json` to a controlled company location and fill it with the above usage and balance reconciliation.
+- The temporary employee API key used for this test should be deleted by the project owner and replaced with a fresh key for long-term use.
+- External backup/restore drill evidence and asset ownership handoff JSONs are still required before `pnpm handoff:final` can pass.
 
 本文档记录 2026-06-20 交接前线上验收取证。所有命令输出均已避免记录密钥原文。
 
