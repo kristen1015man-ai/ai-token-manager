@@ -1,0 +1,14 @@
+Sparkloom Windows 快速开始
+
+1. 先右键下载的 zip 文件，选择“全部解压”。
+2. 打开解压后的文件夹。
+3. 双击“Start Sparkloom.cmd”。
+
+完成后会自动打开 Sparkloom Studio。
+
+以后使用时，直接双击桌面的“Sparkloom Studio”图标。
+
+如果失败：
+- 不要发送完整密钥。
+- 截图当前窗口最后几行。
+- 只告诉支持人员密钥末四位。
