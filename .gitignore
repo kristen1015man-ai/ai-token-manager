@@ -1,4 +1,7 @@
 node_modules/
+# desktop 生成物（CI prepare 重生成 agent；framework 是源码模板，要提交）
+desktop/resources/agent/
+desktop/.mingit-cache/
 dist/
 .next/
 .env
@@ -19,6 +22,7 @@ backups/
 data.db
 cookies.txt
 .codex-artifacts/
+web/public/downloads/studio-agent/
 .tmp-*
 *.log
 handoff-evidence/

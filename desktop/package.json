@@ -1,0 +1,22 @@
+{
+  "name": "sparkloom-studio-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sparkloom Studio 桌面客户端（Electron）",
+  "main": "src/main/index.cjs",
+  "author": "Sparkloom",
+  "scripts": {
+    "check": "node --check src/main/index.cjs && node --check src/main/agent.js && node --check src/main/token.js && node --check src/main/updater.cjs && node --check src/preload.js && node --check scripts/prepare-agent.cjs",
+    "dev": "set ELECTRON_IS_DEV=1&& electron .",
+    "prepare-agent": "node scripts/prepare-agent.cjs",
+    "build:win": "node scripts/prepare-agent.cjs && electron-builder --win --x64",
+    "build:mac": "node scripts/prepare-agent.cjs && electron-builder --mac"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -10,6 +10,31 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  // 内容安全策略：限制脚本/连接来源，降低 XSS 后密钥被外泄的风险
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:*",
+              "img-src 'self' data: https:",
+              "style-src 'self' 'unsafe-inline'",
+              "font-src 'self' data:",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "base-uri 'self'",
+              "frame-ancestors 'none'",
+              "form-action 'self'",
+            ].join("; "),
+          },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -1,0 +1,106 @@
+"use strict";
+// 自动更新封装（electron-updater）。
+// 设计要点：
+// - electron-updater 未安装时降级为 no-op，绝不阻塞主进程启动（开发态/精简包也能跑）
+// - macOS 未签名：Squirrel.Mac 校验签名失败，update-downloaded 永不触发 → mac 直接 short-circuit，
+//   不误导用户"后台下载中"
+// - 更新源由 electron-builder 的 publish 配置决定（打包时写入 app-update.yml）
+// - 接收 window getter（实时取最新窗口，避免持有已销毁旧引用，mac 关窗再开也能弹）
+// - 用户感知：发现新版→提示后台下载；下载完→提示重启；已承诺下载却失败→提示（否则用户干等）
+
+let autoUpdater = null;
+try {
+  // eslint-disable-next-line global-require
+  autoUpdater = require("electron-updater").autoUpdater;
+} catch (_) {
+  autoUpdater = null;
+}
+
+const { dialog } = require("electron");
+
+function initAutoUpdater(getWindow) {
+  if (!autoUpdater) {
+    console.log("[updater] electron-updater 未安装，跳过自动更新");
+    return;
+  }
+  // macOS 未签名：Squirrel.Mac 无法校验签名，update-downloaded 永不触发，直接跳过
+  // （mac 新版需手动下载 dmg 覆盖；Windows 不受影响）
+  if (process.platform === "darwin") {
+    console.log("[updater] mac 未签名，跳过自动更新");
+    return;
+  }
+  // 兼容旧调用（直接传 BrowserWindow）：包成 getter
+  const getWin = typeof getWindow === "function" ? getWindow : () => getWindow;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = {
+    info: (m) => console.log("[updater]", m),
+    warn: (m) => console.warn("[updater]", m),
+    error: (m) => console.error("[updater]", m),
+  };
+
+  let hasAnnouncedUpdate = false; // 是否已向用户承诺"后台下载中"
+
+  autoUpdater.on("update-available", (info) => {
+    console.log("[updater] 发现新版本", info && info.version);
+    hasAnnouncedUpdate = true;
+    const w = getWin();
+    if (w && !w.isDestroyed()) {
+      dialog
+        .showMessageBox(w, {
+          type: "info",
+          title: "发现新版本",
+          message: `Sparkloom Studio ${info && info.version} 已发布，正在后台下载，完成后会提示你重启。`,
+          buttons: ["好的"],
+        })
+        .catch(() => {});
+    }
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    const w = getWin();
+    const target = w && !w.isDestroyed() ? w : null;
+    dialog
+      .showMessageBox(target, {
+        type: "info",
+        title: "更新已就绪",
+        message: `新版本 ${info && info.version} 已下载，重启后生效。`,
+        buttons: ["立即重启", "稍后"],
+      })
+      .then((res) => {
+        if (res && res.response === 0) autoUpdater.quitAndInstall();
+      })
+      .catch(() => {});
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("[updater] error", err && err.message);
+    // 已承诺"下载中"却失败 → 提示用户（否则用户守着"正在下载"干等）
+    if (hasAnnouncedUpdate) {
+      hasAnnouncedUpdate = false;
+      const w = getWin();
+      if (w && !w.isDestroyed()) {
+        dialog
+          .showMessageBox(w, {
+            type: "warning",
+            title: "更新下载失败",
+            message: "新版本下载失败，下次启动会自动重试。",
+            buttons: ["好的"],
+          })
+          .catch(() => {});
+      }
+    }
+  });
+
+  // 延迟首次检查（避免和 Agent 启动抢资源）+ 周期性检查（每 4 小时，覆盖长时间挂机）
+  const checkOnce = () => {
+    autoUpdater.checkForUpdates().catch((e) => {
+      console.log("[updater] 检查失败（开发态或无更新源，正常）:", e && e.message);
+    });
+  };
+  setTimeout(checkOnce, 5000);
+  setInterval(checkOnce, 4 * 60 * 60 * 1000).unref();
+}
+
+module.exports = { initAutoUpdater };

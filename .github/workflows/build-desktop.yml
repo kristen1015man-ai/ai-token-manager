@@ -1,0 +1,79 @@
+name: Build Desktop
+
+# 触发：推送 v* 标签（发版），或手动 workflow_dispatch（仅构建不发布）
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# CI 权限：写 Releases（action-gh-release 上传产物）
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # win 只打 x64：SDK 在 x64 runner 上交叉编译 arm64 会打进 x64 binary（残包），
+          # 且 win32-arm64 罕见；ARM Windows 用户用 x64 包（WoW64 可跑）。
+          - os: windows-latest
+            platform: win
+            arch: x64
+          # mac-x64 用 macos-15-intel：macos-13 已 2025-12-04 退役，macos-15-intel 是官方 Intel 替代
+          # （注意 macos-15 / macos-15-large 都是 arm64，不是 Intel）。Fall 2027 Intel macOS runner 全退役，届时需迁 arm64 + cross-arch。
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
+          # mac-arm64 用 macos-latest（arm64 runner，原生装 darwin-arm64 binary）
+          - os: macos-latest
+            platform: mac
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # desktop 是独立 npm 工程（不在 pnpm workspace）；CI 只需 desktop + agent 源码，
+      # 不装 web/proxy/shared（prepare-agent 直接 copyDir agent/src，无需 pnpm install）。
+      - name: Install desktop deps
+        run: cd desktop && npm install --no-audit --no-fund
+
+      # 准备内置 Agent（复制 + 装平台 SDK binary + 校验 binary 存在）
+      - name: Prepare agent resources
+        run: cd desktop && node scripts/prepare-agent.cjs
+
+      # 只构建，不 publish（--publish never）。统一由下面 action-gh-release 单点发布到本仓，
+      # 避免 electron-builder GitHub provider 跨仓写权限失败 + 与 action-gh-release 双写冲突。
+      # 动态注入 publish.owner/repo = 当前 workflow 仓（CI 跑在 monorepo），覆盖 electron-builder.yml
+      # 的静态占位 publish，让 app-update.yml 烘进正确仓（与 action-gh-release 上传目标一致），
+      # 否则 Windows 客户端按占位仓拉 latest.yml 必 404、自动更新永久失效。
+      - name: Build
+        shell: bash
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          cd desktop && npx electron-builder \
+            --${{ matrix.platform }} --${{ matrix.arch }} --publish never \
+            -c.publish.owner="${{ github.repository_owner }}" \
+            -c.publish.repo="${REPO_NAME}"
+
+      # 单点发布：tag 触发时把产物（含 latest.yml/blockmap，electron-updater 要）传到本 workflow 仓。
+      # draft:false 让 release 直接 published —— electron-updater 走 releases/latest/download/latest.yml，
+      # draft release 不在该端点，draft:true 会导致自动更新永远 404。
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.yml
+            desktop/dist/*.blockmap
+          draft: false
+          generate_release_notes: true

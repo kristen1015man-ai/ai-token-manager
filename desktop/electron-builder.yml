@@ -1,0 +1,83 @@
+appId: com.seapllo.sparkloom.studio
+productName: Sparkloom Studio
+copyright: Copyright © 2026 Sparkloom
+
+# 只保留中英文语言包，删掉 Electron 自带的其余几十种 locale（省 ~27MB）
+electronLanguages:
+  - zh-CN
+  - en-US
+
+directories:
+  output: dist
+  buildResources: build
+
+# 主进程代码打进 app.asar（纯 JS，无 native）
+files:
+  - src/main/**
+  - src/preload.js
+  - package.json
+  - "!**/*.{md,markdown}"
+  - "!**/.*"
+
+# Agent（含 node_modules 和 claude.exe native binary）放 asar 外，
+# 否则 SDK spawn claude.exe 会失败（asar 是虚拟文件系统）。
+# 拆分列出各项 —— electron-builder 的 filter "**" 会默认排除 node_modules，
+# 必须把 node_modules 单独作为 from（无 filter）才能原样复制进去。
+extraResources:
+  - from: resources/framework
+    to: framework
+  - from: resources/agent/src
+    to: agent/src
+  - from: resources/agent/skills
+    to: agent/skills
+  - from: resources/agent/node_modules
+    to: agent/node_modules
+  - from: resources/agent/desktop-entry.mjs
+    to: agent/desktop-entry.mjs
+  - from: resources/agent/package.json
+    to: agent/package.json
+  - from: resources/agent/package-lock.json
+    to: agent/package-lock.json
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+
+# macOS：dmg（Intel + Apple Silicon），内部分发不签名/公证
+# （首次打开：右键→打开，或 系统设置→隐私与安全性→仍然打开）
+# 注意：未签名 → electron-updater 在 mac 上无法自动更新（Squirrel.Mac 校验签名失败），
+# mac 新版需手动下载 dmg 覆盖；Windows 自动更新不受影响。
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.png
+  category: public.app-category.developer-tools
+  identity: null
+  gatekeeperAssess: false
+  hardenedRuntime: false
+
+# 自动更新源：GitHub Releases。owner/repo 必须与本 workflow 所在仓一致
+# （本工程是 monorepo，prepare-agent 依赖 ../agent，workflow 跑在主仓；独立仓无 agent 源码会失败）。
+# electron-updater 按这里的 owner/repo 拉 latest.yml，CI 的 action-gh-release 也必须传到同一仓。
+# 公开仓可匿名读；私有仓需在 publish 下加 token/privateToken（不是 CI 的 GH_TOKEN）。
+publish:
+  provider: github
+  owner: seapllo
+  repo: sparkloom-studio-desktop  # TODO: 改成你 monorepo 实际仓（= workflow 所在仓）
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  shortcutName: Sparkloom Studio
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  menuCategory: Sparkloom
+  deleteAppDataOnUninstall: false
