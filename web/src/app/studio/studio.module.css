@@ -4011,7 +4011,6 @@
 .policyBox,
 .agentBanner,
 .fileItem,
-.skillItem,
 .permissionRow {
   border: 1px solid #262a31;
   border-radius: 12px;
@@ -4130,7 +4129,6 @@
 }
 
 .permissionRow,
-.skillItem,
 .fileItem,
 .agentBanner {
   display: grid;
@@ -4140,14 +4138,12 @@
   padding: 10px;
 }
 
-.permissionRow span,
-.skillItem span {
+.permissionRow span {
   color: #dce2eb;
   font-size: 12px;
 }
 
-.permissionRow strong,
-.skillItem em {
+.permissionRow strong {
   color: #8f99a8;
   font-size: 11px;
   font-style: normal;
@@ -4186,14 +4182,6 @@
 
 .agentBanner {
   grid-template-columns: 20px minmax(0, 1fr);
-}
-
-.skillItem svg:first-child {
-  color: #fbbf24;
-}
-
-.skillItem:has(svg:first-child + span) {
-  min-height: 40px;
 }
 
 .agentMessage {

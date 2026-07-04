@@ -1,32 +1,61 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CheckCircle2, Copy, Download, Laptop, MonitorDown, ShieldCheck, Sparkles, TerminalSquare } from "lucide-react";
+import { CheckCircle2, Download, Laptop, MonitorDown, ShieldCheck, Sparkles, TerminalSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
-import { STUDIO_AGENT_RELEASE } from "@/generated/studio-agent-release";
 import styles from "./download.module.css";
 
 export const dynamic = "force-dynamic";
 
-function getArtifact(platform: "windows" | "mac") {
-  const manifestPlatform = platform === "windows" ? "windows" : "macos";
-  const bundled = STUDIO_AGENT_RELEASE.artifacts.find((artifact) => artifact.platform === manifestPlatform);
+// 桌面安装包发布清单（Electron 产物）。
+// 发新版时只改这里即可：version + 三平台直链 + 各自 sha256（可选，留空字符串则不显示）。
+// 直链走 GitHub Releases；中国大陆可通过 gh-proxy.com 镜像加速。
+const DESKTOP_RELEASE = {
+  version: "0.2.0",
+  github: "https://github.com/kristen1015man-ai/ai-token-manager/releases/tag/v0.2.0",
+  platforms: {
+    windows: {
+      label: "Windows",
+      arch: "x64",
+      ext: ".exe",
+      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.0/Sparkloom.Studio.Setup.0.2.0.exe",
+      sha256: "",
+      // 安装方式：Electron 双击安装
+      install: "双击 .exe 安装包，按向导完成安装后从开始菜单启动 Sparkloom Studio。",
+      note: "适用于 Windows 10/11 (x64)。安装后会自动接入本机 Studio，无需再配 Node/Python 环境。",
+    },
+    macArm64: {
+      label: "macOS",
+      arch: "Apple Silicon (M1/M2/M3/M4)",
+      ext: ".dmg",
+      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.0/Sparkloom.Studio-0.2.0-arm64.dmg",
+      sha256: "",
+      install: "双击 .dmg，把 Sparkloom Studio 拖入 Applications。首次打开右键 → 打开（M 芯片 Gatekeeper 验证）。",
+      note: "适用于 macOS Apple Silicon（M 系列芯片）。安装后从启动台打开即可。",
+    },
+    macIntel: {
+      label: "macOS",
+      arch: "Intel (x64)",
+      ext: ".dmg",
+      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.0/Sparkloom.Studio-0.2.0.dmg",
+      sha256: "",
+      install: "双击 .dmg，把 Sparkloom Studio 拖入 Applications，从启动台打开。",
+      note: "适用于 macOS Intel 芯片。如果不确定芯片类型，点苹果菜单 →「关于本机」查看。",
+    },
+  },
+} as const;
 
-  return {
-    url: bundled?.publicPath || "",
-    sha256: bundled?.sha256 || "",
-    label: platform === "windows" ? "Windows" : "macOS",
-    command: platform === "windows" ? "双击 Start Sparkloom.cmd" : "chmod +x ./install-macos.sh && ./install-macos.sh",
-    note: platform === "windows"
-      ? "适用于 Windows 10/11。解压后只需要双击一个文件，后续会自动安装、启动并打开 Studio。"
-      : "适用于 macOS Apple Silicon / Intel。解压后用 Terminal 运行安装脚本，自动检查 Homebrew、Node.js、Python、Git 和 Sparkloom Agent SDK。",
-  };
+// 中国大陆加速镜像前缀（直链前面拼接即可走代理下载，不改原链接）
+const CN_MIRROR_PREFIX = "https://gh-proxy.com/";
+
+type PlatformKey = keyof typeof DESKTOP_RELEASE.platforms;
+
+function mirrorUrl(directUrl: string): string {
+  return `${CN_MIRROR_PREFIX}${directUrl}`;
 }
 
 export default function DownloadPage() {
-  const version = STUDIO_AGENT_RELEASE.version || "preview";
-  const windows = getArtifact("windows");
-  const mac = getArtifact("mac");
+  const version = DESKTOP_RELEASE.version;
 
   return (
     <main className={styles.page}>
@@ -46,12 +75,14 @@ export default function DownloadPage() {
 
         <section className={styles.hero}>
           <div>
-            <span className={styles.badge}>Sparkloom · {version}</span>
+            <span className={styles.badge}>Sparkloom · v{version}</span>
             <h1>
-              <span>下载 Sparkloom</span>
-              <span>打开后自动连接 Studio</span>
+              <span>下载 Sparkloom 桌面端</span>
+              <span>安装后自动连接 Studio</span>
             </h1>
-            <p>Windows 用户先“全部解压”，再双击 Start Sparkloom。安装、启动、打开 Studio 会自动完成。</p>
+            <p>
+              桌面端是 Electron 一键安装包，自带运行所需全部环境。Windows 双击 .exe、macOS 拖入 Applications 即可，无需手动安装 Node.js / Python / Git。
+            </p>
           </div>
           <div className={styles.devicePreview} aria-hidden="true">
             <div className={styles.deviceChrome}>
@@ -67,53 +98,70 @@ export default function DownloadPage() {
           </div>
         </section>
 
-        <section className={styles.cards} aria-label="下载 Sparkloom">
-          <DownloadCard artifact={windows} />
-          <DownloadCard artifact={mac} />
+        <section className={styles.cards} aria-label="下载 Sparkloom 桌面端">
+          <DownloadCard platformKey="windows" />
+          <DownloadCard platformKey="macArm64" />
+          <DownloadCard platformKey="macIntel" />
         </section>
 
         <section className={styles.steps}>
-          <Step icon={Download} title="下载 Sparkloom" text="选择对应系统。Windows 下载后先右键 zip，选择“全部解压”。" />
-          <Step icon={TerminalSquare} title="双击开始使用" text="Windows 双击 Start Sparkloom.cmd；安装、启动、打开 Studio 会自动完成。" />
-          <Step icon={CheckCircle2} title="看到已连接" text="Studio 会自动检测本机连接。看到已连接后即可开始使用。" />
+          <Step icon={Download} title="下载安装包" text="根据系统选择对应安装包。Windows 是 .exe，macOS 是 .dmg。" />
+          <Step icon={MonitorDown} title="双击安装" text="Windows 双击 .exe；macOS 双击 .dmg 后把应用拖入 Applications。" />
+          <Step icon={CheckCircle2} title="看到已连接" text="打开 Sparkloom Studio，浏览器中的 Studio 会自动检测到本机连接。" />
           <Step icon={ShieldCheck} title="安全保护" text="不会保存供应商官方密钥；本机敏感操作需要来自桌面入口的连接确认。" />
+        </section>
+
+        <section className={styles.releaseNote}>
+          <TerminalSquare size={16} />
+          <span>
+            全部发布产物见 GitHub Releases：
+            <a href={DESKTOP_RELEASE.github} target="_blank" rel="noreferrer">v{version} release notes</a>。
+            中国大陆如直连下载慢，请使用卡片下方的「镜像下载（中国大陆加速）」。
+          </span>
         </section>
       </section>
     </main>
   );
 }
 
-function DownloadCard({
-  artifact,
-}: {
-  artifact: { url: string; sha256: string; label: string; command: string; note: string };
-}) {
-  const enabled = Boolean(artifact.url);
+function DownloadCard({ platformKey }: { platformKey: PlatformKey }) {
+  const p = DESKTOP_RELEASE.platforms[platformKey];
+  const enabled = Boolean(p.url);
+  const title = platformKey === "windows" ? `${p.label} ${p.arch}` : `${p.label} ${p.arch}`;
 
   return (
     <article className={styles.card}>
       <div className={styles.cardHeader}>
         <MonitorDown size={22} />
         <div>
-          <h2>{artifact.label}</h2>
-          <p>{artifact.note}</p>
+          <h2>{title}</h2>
+          <p>{p.note}</p>
         </div>
       </div>
       {enabled ? (
-        <a className={styles.downloadButton} href={artifact.url}>
-          <Download size={17} />
-          下载 {artifact.label} Sparkloom
-        </a>
+        <div className={styles.downloadButtons}>
+          <a className={styles.downloadButton} href={p.url}>
+            <Download size={17} />
+            下载 {p.label} {p.ext}
+          </a>
+          <a
+            className={`${styles.downloadButton} ${styles.downloadButtonMirror}`}
+            href={mirrorUrl(p.url)}
+            title={`经 gh-proxy.com 代理下载（中国大陆加速）：${CN_MIRROR_PREFIX}${p.url}`}
+          >
+            <Download size={15} />
+            镜像下载（中国大陆加速）
+          </a>
+        </div>
       ) : (
         <button className={styles.disabledButton} type="button" disabled>
           安装包待发布
         </button>
       )}
       <div className={styles.commandLine}>
-        <code>{artifact.command}</code>
-        <Copy size={14} />
+        <code>{p.install}</code>
       </div>
-      <code className={styles.hash}>{artifact.sha256 || "SHA256 发布后显示"}</code>
+      <code className={styles.hash}>{p.sha256 || `SHA256 发布后于 GitHub Releases 查看（v${DESKTOP_RELEASE.version}）`}</code>
     </article>
   );
 }

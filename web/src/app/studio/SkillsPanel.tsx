@@ -33,14 +33,20 @@ export default function SkillsPanel({ installed, missing, onUseSkill, onInstall,
   const [installing, setInstalling] = useState(false);
   const [installedLocal, setInstalledLocal] = useState<Set<string>>(new Set());
 
-  const isInstalled = (key: string) => installed.includes(key) || installedLocal.has(key);
+  // 防御：父组件理论上始终传数组，但 /skills/status 返回畸形数据（installed/missing 字段缺失）时
+  // 也可能传入 undefined/null。这里兜底成空数组，避免 .includes 抛错导致整个 tab 崩溃。
+  const installedList = installed ?? [];
+  const missingList = missing ?? [];
+  const agentOffline = installedList.length === 0 && missingList.length === 0;
+
+  const isInstalled = (key: string) => installedList.includes(key) || installedLocal.has(key);
 
   const handleInstall = async () => {
     if (installing) return;
     setInstalling(true);
     // 快照本次要装的目标：onInstall 不抛即视为命令链成功；服务端真实状态由父组件 checkAgent 刷新后传入 installed 覆盖。
     // 不再无脑 setInstalledLocal(new Set([...missing]))——那样部分失败也会被误标全部完成。
-    const targetKeys = missing.slice();
+    const targetKeys = missingList.slice();
     try {
       await onInstall();
       setInstalledLocal((prev) => {
@@ -55,8 +61,8 @@ export default function SkillsPanel({ installed, missing, onUseSkill, onInstall,
     }
   };
 
-  const allInstalledOptimistic = missing.length > 0 && missing.every((k) => installedLocal.has(k));
-  const hasMissing = missing.length > 0 && !allInstalledOptimistic;
+  const allInstalledOptimistic = missingList.length > 0 && missingList.every((k) => installedLocal.has(k));
+  const hasMissing = missingList.length > 0 && !allInstalledOptimistic;
 
   return (
     <div className={styles.inspectorSection}>
@@ -81,6 +87,11 @@ export default function SkillsPanel({ installed, missing, onUseSkill, onInstall,
       <p className={styles.skillsHint}>
         技能是一组预制 Skill 提示，对应一类高频任务。点击「用这个 skill」会把触发语发送到对话，由 Claude 自动展开执行。
       </p>
+      {agentOffline && (
+        <p className={styles.skillsHint} style={{ color: "#fbbf24" }}>
+          本机 Agent 未连接，暂时无法读取安装状态。先在主界面连接 Agent 后再回来查看。
+        </p>
+      )}
       <ul className={styles.skillsList}>
         {SKILLS_CATALOG.map((s) => {
           const ok = isInstalled(s.key);

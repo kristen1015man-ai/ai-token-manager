@@ -3341,6 +3341,16 @@ export default function StudioClient() {
               <button type="button" className={styles.setupButton} onClick={checkAgent}>
                 重新连接
               </button>
+              <button
+                type="button"
+                className={styles.setupButton}
+                onClick={() => void createStudioKey()}
+                disabled={creatingKey}
+                title="新建一个 Studio API 密钥，并把网关地址 + 密钥的环境变量片段显示在「模型」标签里，方便贴到本机 Agent 配置"
+              >
+                {creatingKey ? <Loader2 size={13} className={styles.spin} /> : <KeyRound size={13} />}
+                {creatingKey ? "创建中" : "配置连接"}
+              </button>
             </div>
           )}
 

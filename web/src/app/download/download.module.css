@@ -157,7 +157,17 @@
 }
 
 .cards {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.downloadButtons {
+  display: grid;
+  gap: 8px;
+}
+
+.downloadButtonMirror {
+  color: #e8ecf3;
+  background: linear-gradient(135deg, #2a3140, #1d222b);
 }
 
 .card,
@@ -251,6 +261,37 @@
 .step svg,
 .cardHeader svg {
   color: #ff8d3d;
+}
+
+.releaseNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 18px 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #a8b1c0;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.releaseNote svg {
+  flex: 0 0 auto;
+  color: #ff8d3d;
+  margin-top: 1px;
+}
+
+.releaseNote a {
+  color: #ffd7bd;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin: 0 4px;
+}
+
+.releaseNote a:hover {
+  color: #fff;
 }
 
 @media (max-width: 900px) {

@@ -8,7 +8,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { ensureToken, configDir } = require("./token");
 const { healthCheck, waitForHealth, startAgent, stopAgent } = require("./agent");
-const { initAutoUpdater } = require("./updater");
+const { initAutoUpdater } = require("./updater.cjs");
 
 // 只允许加载/跳转的精确主机名（收窄，不接受任意 *.seapllo.com 子域，防子域被接管）
 const ALLOWED_HOSTS = new Set(["ai.seapllo.com", "seapllo.com"]);
