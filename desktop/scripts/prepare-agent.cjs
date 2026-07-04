@@ -82,13 +82,20 @@ delete process.env.ELECTRON_RUN_AS_NODE;
 
 // 父进程看门狗：父（Electron 主进程）崩溃/被强杀时 before-quit 不触发，
 // 靠这个 self-exit 避免变僵尸 Agent 占着 39271 端口（Windows 无 Job Object 的兜底）。
+//
+// L14 已知限制：探测用 process.kill(__parentPid, 0)，仅校验 PID 存活、不校验进程身份。
+// 极端场景下父进程崩溃后该 PID 被操作系统复用给新进程，探测仍返回成功，看门狗误判父进程存活，
+// Agent 不 self-exit 成为孤儿。根治方案是 Windows Job Object（JOBOBJECT_LIMIT_KILL_ON_JOB_CLOSE）：
+// 主进程把 agent 子进程绑到 Job Object，主进程无论正常退出还是崩溃，OS 内核自动杀掉整个 agent
+// 进程树，彻底消除 PID 复用窗口。这需要 native addon（如 node-windows-job-object），
+// 当前未引入，靠缩短看门狗间隔（3s → 1500ms）减小撞窗概率作为轻量补强。
 const __parentPid = process.ppid;
 setInterval(() => {
   try { process.kill(__parentPid, 0); } catch (_) {
     console.log("[desktop-entry] 父进程已退出，Agent self-exit 避免僵尸");
     process.exit(0);
   }
-}, 3000).unref();
+}, 1500).unref();
 
 await import("./src/index.mjs").catch((err) => {
   console.error("[desktop-entry] Agent 启动失败：", err);

@@ -1,5 +1,6 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -179,6 +180,130 @@ function assertAdminIds() {
   }
 }
 
+function assertSha256Env(name) {
+  const value = envValue(name);
+  if (!/^[a-f0-9]{64}$/i.test(value)) {
+    failProductionConfig(`${name} must be a 64-character SHA-256 hex digest`);
+  }
+}
+
+function assertDownloadUrlEnv(name) {
+  const value = envValue(name);
+  if (value.startsWith("/downloads/studio-agent/") && value.endsWith(".zip")) {
+    return;
+  }
+  assertHttpsUrl(name);
+}
+
+function sha256File(file) {
+  return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function bundledAgentManifestPath() {
+  const candidates = [
+    path.join(process.cwd(), "standalone", "web", "public", "downloads", "studio-agent", "manifest.json"),
+    path.join(process.cwd(), "web", "public", "downloads", "studio-agent", "manifest.json"),
+    path.join(process.cwd(), "public", "downloads", "studio-agent", "manifest.json"),
+  ];
+  return candidates.find((file) => fs.existsSync(file)) || "";
+}
+
+function assertBundledStudioAgentRelease() {
+  const manifestPath = bundledAgentManifestPath();
+  if (!manifestPath) {
+    failProductionConfig("Studio Agent release is required, but no STUDIO_AGENT_* URL/SHA values or bundled manifest were found");
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch (err) {
+    failProductionConfig(`Bundled Studio Agent manifest is invalid JSON: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const manifestDir = path.dirname(manifestPath);
+  for (const platform of ["windows", "macos"]) {
+    const artifact = manifest.artifacts?.find((item) => item.platform === platform);
+    if (!artifact) {
+      failProductionConfig(`Bundled Studio Agent manifest is missing ${platform} artifact`);
+    }
+    if (!artifact.publicPath?.startsWith("/downloads/studio-agent/") || !artifact.publicPath.endsWith(".zip")) {
+      failProductionConfig(`Bundled Studio Agent ${platform} artifact has invalid publicPath`);
+    }
+    if (!/^[a-f0-9]{64}$/i.test(artifact.sha256 || "")) {
+      failProductionConfig(`Bundled Studio Agent ${platform} artifact has invalid sha256`);
+    }
+    const file = path.join(manifestDir, artifact.fileName || "");
+    if (!fs.existsSync(file)) {
+      failProductionConfig(`Bundled Studio Agent ${platform} artifact file is missing: ${artifact.fileName}`);
+    }
+    const actualSha = sha256File(file);
+    if (actualSha !== artifact.sha256) {
+      failProductionConfig(`Bundled Studio Agent ${platform} sha256 mismatch`);
+    }
+  }
+}
+
+function readBundledStudioAgentManifest() {
+  const manifestPath = bundledAgentManifestPath();
+  if (!manifestPath) return null;
+  try {
+    return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function assertStudioAgentRelease() {
+  if (!isTruthyEnv("STUDIO_AGENT_RELEASE_REQUIRED")) return;
+
+  const version = envValue("STUDIO_AGENT_VERSION");
+  if (isPlaceholderValue(version) || version === "preview") {
+    failProductionConfig("STUDIO_AGENT_VERSION must be a concrete release version when STUDIO_AGENT_RELEASE_REQUIRED=true");
+  }
+
+  const releaseEnvNames = [
+    "STUDIO_AGENT_WINDOWS_URL",
+    "STUDIO_AGENT_WINDOWS_SHA256",
+    "STUDIO_AGENT_MAC_URL",
+    "STUDIO_AGENT_MAC_SHA256",
+  ];
+  const configured = releaseEnvNames.filter((name) => envValue(name));
+  if (configured.length > 0 && configured.length !== releaseEnvNames.length) {
+    failProductionConfig(`Studio Agent release env vars must be provided as a complete set: ${releaseEnvNames.join(", ")}`);
+  }
+
+  if (configured.length === releaseEnvNames.length) {
+    assertDownloadUrlEnv("STUDIO_AGENT_WINDOWS_URL");
+    assertSha256Env("STUDIO_AGENT_WINDOWS_SHA256");
+    assertDownloadUrlEnv("STUDIO_AGENT_MAC_URL");
+    assertSha256Env("STUDIO_AGENT_MAC_SHA256");
+    const bundled = readBundledStudioAgentManifest();
+    if (bundled) {
+      if (bundled.version && bundled.version !== version) {
+        failProductionConfig(`STUDIO_AGENT_VERSION ${version} does not match bundled Studio Agent version ${bundled.version}`);
+      }
+      for (const [platform, urlName, shaName] of [
+        ["windows", "STUDIO_AGENT_WINDOWS_URL", "STUDIO_AGENT_WINDOWS_SHA256"],
+        ["macos", "STUDIO_AGENT_MAC_URL", "STUDIO_AGENT_MAC_SHA256"],
+      ]) {
+        const artifact = bundled.artifacts?.find((item) => item.platform === platform);
+        const configuredUrl = envValue(urlName);
+        const configuredSha = envValue(shaName);
+        if (!configuredUrl.startsWith("/downloads/studio-agent/") && !isTruthyEnv("ALLOW_EXTERNAL_STUDIO_AGENT_RELEASE")) {
+          failProductionConfig(`${urlName} must use the bundled /downloads/studio-agent path unless ALLOW_EXTERNAL_STUDIO_AGENT_RELEASE=true`);
+        }
+        if (configuredUrl.startsWith("/downloads/studio-agent/") && artifact && (configuredUrl !== artifact.publicPath || configuredSha !== artifact.sha256)) {
+          failProductionConfig(`${platform} Studio Agent env release does not match bundled manifest`);
+        }
+      }
+    }
+    return;
+  }
+
+  assertBundledStudioAgentRelease();
+}
+
 function assertProductionConfig() {
   if (!isProductionRuntime()) return;
 
@@ -191,6 +316,7 @@ function assertProductionConfig() {
     "FEISHU_REDIRECT_URI",
     "NEXT_PUBLIC_FEISHU_APP_ID",
     "NEXT_PUBLIC_FEISHU_REDIRECT_URI",
+    "PUBLIC_APP_URL",
     "PUBLIC_PROXY_BASE_URL",
     "CORS_ALLOWED_ORIGINS",
     "ADMIN_IDS",
@@ -212,10 +338,12 @@ function assertProductionConfig() {
   assertStrongSecret("ENCRYPTION_KEY", 32);
   assertStrongSecret("FEISHU_APP_SECRET", 16);
   assertFeishuConfig();
+  assertHttpsUrl("PUBLIC_APP_URL");
   assertHttpsUrl("PUBLIC_PROXY_BASE_URL");
   assertCorsOrigins();
   assertUpstreamAllowlist();
   assertAdminIds();
+  assertStudioAgentRelease();
 
   const databasePath = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes(":")
     ? process.env.DATABASE_URL

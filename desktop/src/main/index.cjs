@@ -10,10 +10,9 @@ const { ensureToken, configDir } = require("./token");
 const { healthCheck, waitForHealth, startAgent, stopAgent } = require("./agent");
 const { initAutoUpdater } = require("./updater");
 
-const STUDIO_URL = process.env.SPARKLOOM_STUDIO_URL || "https://ai.seapllo.com/studio";
-
 // 只允许加载/跳转的精确主机名（收窄，不接受任意 *.seapllo.com 子域，防子域被接管）
 const ALLOWED_HOSTS = new Set(["ai.seapllo.com", "seapllo.com"]);
+const DEFAULT_STUDIO_URL = "https://ai.seapllo.com/studio";
 
 let mainWindow = null;
 let agentChild = null;
@@ -28,6 +27,19 @@ function isSameSite(url) {
     return false;
   }
 }
+
+// L16：STUDIO_URL 经 isSameSite 白名单校验。若启动环境（快捷方式/父 shell/.env）注入了
+// 未通过白名单的 SPARKLOOM_STUDIO_URL，回退默认 URL 并打 warning，防止主窗口加载任意 URL
+// 把 agent 配对 token 拼进其 fragment 泄漏给攻击者页面。
+function resolveStudioUrl() {
+  const raw = process.env.SPARKLOOM_STUDIO_URL;
+  if (!raw) return DEFAULT_STUDIO_URL;
+  if (isSameSite(raw)) return raw;
+  console.warn(`[main] SPARKLOOM_STUDIO_URL 未通过主机白名单校验（${raw}），回退默认 Studio URL`);
+  return DEFAULT_STUDIO_URL;
+}
+
+const STUDIO_URL = resolveStudioUrl();
 
 function resolveAgentEntry() {
   if (app.isPackaged) {
@@ -151,7 +163,7 @@ async function bootstrap() {
   let existing = await healthCheck();
   if (existing) {
     // 单实例锁保证这是唯一实例；existing 只可能是上次崩溃的孤儿 agent。
-    // 看门狗（desktop-entry.mjs）3s 内检测到旧父死会 self-exit。等其退出，避免 spawn 新 agent 撞 EADDRINUSE。
+    // 看门狗（desktop-entry.mjs）~1.5s 内检测到旧父死会 self-exit。等其退出，避免 spawn 新 agent 撞 EADDRINUSE。
     console.log("[main] 检测到残留 Agent（疑似上次崩溃孤儿），等待其看门狗退出…");
     for (let i = 0; i < 10; i++) {
       await new Promise((r) => setTimeout(r, 500));

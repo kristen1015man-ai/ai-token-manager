@@ -65,6 +65,7 @@ export const MENU_ITEMS: MenuItem[] = [
   // ===== 通用页面 =====
   { label: "我的用量", href: "/dashboard", icon: "chart", roles: ["admin", "finance", "dept_manager", "member"] },
   { label: "API Key", href: "/dashboard/key", icon: "key", roles: ["admin", "finance", "dept_manager", "member"] },
+  { label: "Studio", href: "/studio", icon: "sparkles", roles: ["admin", "finance", "dept_manager", "member"] },
 
   // ===== 管理页面 =====
   { label: "全局概览", href: "/dashboard/admin", icon: "globe", roles: ["admin", "finance"] },

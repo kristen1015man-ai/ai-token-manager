@@ -13,6 +13,8 @@ function pnpmStep(name, args) {
 
 const steps = [
   { name: "handoff gate", command: process.execPath, args: ["scripts/handoff-gate.mjs"] },
+  pnpmStep("agent check", ["--filter", "sparkloom-agent", "check"]),
+  pnpmStep("agent package", ["agent:package"]),
   pnpmStep("proxy build", ["--filter", "proxy", "build"]),
   pnpmStep("web build", ["--filter", "web", "build"]),
 ];

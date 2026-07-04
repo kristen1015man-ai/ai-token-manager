@@ -11,6 +11,9 @@
   "scripts": {
     "dev:proxy": "pnpm --filter proxy dev",
     "dev:web": "pnpm --filter web dev",
+    "agent:start": "pnpm --filter sparkloom-agent start",
+    "agent:check": "pnpm --filter sparkloom-agent check",
+    "agent:package": "node scripts/package-agent.mjs",
     "build:proxy": "pnpm --filter proxy build",
     "build:web": "pnpm --filter web build",
     "test": "node scripts/handoff-gate.mjs",

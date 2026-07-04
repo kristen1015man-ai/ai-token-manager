@@ -65,7 +65,7 @@ function getCspHeader(): Record<string, string> {
     "style-src 'self' 'unsafe-inline'",                   // Tailwind 需要 inline styles
     "img-src 'self' data: https:",                         // 头像来自外部
     "font-src 'self'",
-    "connect-src 'self'",                                    // 浏览器只连本站（代理由服务端转发）
+    "connect-src 'self' http://127.0.0.1:39271 http://localhost:39271 ws://127.0.0.1:39271 ws://localhost:39271",
     "frame-ancestors 'none'",                              // 等同 X-Frame-Options: DENY
   ].join("; ");
 
@@ -127,6 +127,10 @@ function isDashboardPage(pathname: string): boolean {
   return pathname.startsWith("/dashboard");
 }
 
+function isStudioPage(pathname: string): boolean {
+  return pathname === "/studio" || pathname.startsWith("/studio/");
+}
+
 function isPublicRoute(pathname: string): boolean {
   // 认证相关路由（登录、回调）
   if (pathname.startsWith("/api/auth/")) return true;
@@ -140,7 +144,7 @@ function isPublicRoute(pathname: string): boolean {
   if (pathname.startsWith("/favicon")) return true;
   if (pathname.endsWith(".png") || pathname.endsWith(".ico") || pathname.endsWith(".svg")) return true;
   // 根路径和登录页
-  if (pathname === "/" || pathname === "/login") return true;
+  if (pathname === "/" || pathname === "/login" || pathname === "/download") return true;
   return false;
 }
 
@@ -260,8 +264,8 @@ export async function proxy(request: NextRequest) {
     return applySecurityHeaders(NextResponse.next(), isApiRoute);
   }
 
-  // Dashboard 页面：JWT 校验
-  if (isDashboardPage(pathname)) {
+  // Dashboard / Studio 页面：JWT 校验
+  if (isDashboardPage(pathname) || isStudioPage(pathname)) {
     const payload = await verifyJwtFromCookie(request);
     if (!payload) {
       const loginUrl = request.nextUrl.clone();

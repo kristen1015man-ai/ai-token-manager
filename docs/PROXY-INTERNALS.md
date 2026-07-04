@@ -114,7 +114,7 @@ Anthropic 兼容：
 
 1. Proxy 估算输入 token。
 2. Proxy 根据 `max_completion_tokens` 或 `max_tokens` 估算输出 token。
-3. 未设置时默认预留 `QUOTA_DEFAULT_OUTPUT_TOKEN_RESERVE`，默认 2000。
+3. 未设置时默认预留 `QUOTA_DEFAULT_OUTPUT_TOKEN_RESERVE`，默认 2000；显式 `max_tokens` 会受 `QUOTA_MAX_OUTPUT_TOKEN_RESERVE` 限制，默认最多按 8192 输出 token 预占，避免 Claude Code 这类客户端用超大理论上限误触发 429。
 4. Proxy 调 Web quota check。
 5. Web 按个人、部门、公司额度检查。
 6. Web 写 `quota_reservations`。

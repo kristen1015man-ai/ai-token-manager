@@ -171,3 +171,103 @@ export const adminLogs = sqliteTable("admin_logs", {
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+// ===== Sparkloom Studio local-agent workspace state =====
+export const studioSessions = sqliteTable("studio_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  title: text("title").notNull().default("New Studio Session"),
+  defaultModel: text("default_model"),
+  mode: text("mode", { enum: ["default", "plan", "auto", "review", "safe_auto"] })
+    .notNull()
+    .default("default"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const studioMessages = sqliteTable("studio_messages", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => studioSessions.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  role: text("role", { enum: ["user", "assistant", "system", "tool"] }).notNull(),
+  content: text("content").notNull(),
+  metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const studioAgentDevices = sqliteTable("studio_agent_devices", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  deviceName: text("device_name").notNull(),
+  platform: text("platform"),
+  agentVersion: text("agent_version"),
+  publicKey: text("public_key"),
+  status: text("status", { enum: ["active", "disabled"] })
+    .notNull()
+    .default("active"),
+  pairedAt: integer("paired_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+});
+
+export const studioProjects = sqliteTable("studio_projects", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  deviceId: text("device_id")
+    .references(() => studioAgentDevices.id),
+  name: text("name").notNull(),
+  rootHash: text("root_hash").notNull(),
+  lastOpenedAt: integer("last_opened_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const studioCommands = sqliteTable("studio_commands", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .references(() => studioSessions.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  deviceId: text("device_id")
+    .references(() => studioAgentDevices.id),
+  projectId: text("project_id")
+    .references(() => studioProjects.id),
+  mode: text("mode", { enum: ["default", "plan", "auto", "review", "safe_auto"] })
+    .notNull()
+    .default("default"),
+  commandSummary: text("command_summary").notNull(),
+  commandHash: text("command_hash").notNull(),
+  status: text("status", {
+    enum: ["pending_confirmation", "running", "succeeded", "failed", "cancelled", "blocked"],
+  })
+    .notNull()
+    .default("pending_confirmation"),
+  riskLevel: text("risk_level", { enum: ["low", "medium", "high", "blocked"] })
+    .notNull()
+    .default("medium"),
+  exitCode: integer("exit_code"),
+  outputHash: text("output_hash"),
+  startedAt: integer("started_at", { mode: "timestamp" }),
+  finishedAt: integer("finished_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});

@@ -7,13 +7,17 @@ RUN corepack enable && corepack prepare pnpm@11.4.0 --activate
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY shared/package.json shared/
 COPY web/package.json web/
+COPY agent/package.json agent/
 
 RUN pnpm install --frozen-lockfile
 
 COPY shared/ shared/
 COPY web/ web/
+COPY agent/ agent/
+COPY scripts/package-agent.mjs scripts/package-agent.mjs
 
 # Next.js standalone 构建
+RUN pnpm agent:package
 RUN cd web && pnpm next build
 
 # ---- Production Stage ----

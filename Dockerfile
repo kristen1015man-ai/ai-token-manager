@@ -8,13 +8,17 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY shared/package.json shared/
 COPY web/package.json web/
 COPY proxy/package.json proxy/
+COPY agent/package.json agent/
 
 RUN pnpm install --frozen-lockfile
 
 COPY shared/ shared/
 COPY web/ web/
 COPY proxy/ proxy/
+COPY agent/ agent/
+COPY scripts/package-agent.mjs scripts/package-agent.mjs
 
+RUN pnpm agent:package
 RUN cd web && pnpm next build
 RUN pnpm --filter proxy build
 

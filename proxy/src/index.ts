@@ -7,6 +7,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import anthropicRoutes from "./routes/anthropic.js";
+import anthropicModelRoutes from "./routes/anthropic-models.js";
 import chatRoutes from "./routes/chat.js";
 import modelRoutes from "./routes/models.js";
 import { clearUsageQueue, flushUsageToWeb, getUsageQueueHealth } from "./services/usage.js";
@@ -217,6 +218,9 @@ app.use("/anthropic/v1/messages/*", authMiddleware);
 app.use("/anthropic/v1/messages/*", rateLimitMiddleware);
 app.route("/anthropic/v1/messages", anthropicRoutes);
 
+app.use("/anthropic/v1/models", authMiddleware);
+app.route("/anthropic/v1/models", anthropicModelRoutes);
+
 // 404 兜底
 app.notFound((c) => {
   return c.json(
@@ -238,6 +242,7 @@ console.log(`   Health: http://localhost:${PORT}/health`);
 console.log(`   Models: http://localhost:${PORT}/v1/models`);
 console.log(`   Chat:   http://localhost:${PORT}/v1/chat/completions`);
 console.log(`   Anthropic: http://localhost:${PORT}/anthropic/v1/messages`);
+console.log(`   Anthropic Models: http://localhost:${PORT}/anthropic/v1/models`);
 
 // GRACEFUL-01: 优雅关停 — flush 用量记录、关闭 HTTP 连接
 let isShuttingDown = false;

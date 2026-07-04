@@ -288,6 +288,15 @@ export async function recordUsage(
   pendingRecords.push(record);
   appendPersistedRecord(record);
 
+  if (reservationId || process.env.USAGE_FLUSH_IMMEDIATE === "true") {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    await flushUsageToWeb();
+    return;
+  }
+
   if (pendingRecords.length >= MAX_BATCH_SIZE) {
     if (flushTimer) {
       clearTimeout(flushTimer);

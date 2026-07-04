@@ -38,6 +38,8 @@ Thumbs.db
 docs/
 *.md
 !shared/README.md
+!agent/README.md
+!agent/skills/**/SKILL.md
 
 # 日志
 *.log
@@ -50,3 +52,4 @@ cookies.txt
 
 # Do not upload local backups to remote builders
 backups/
+handoff-packages/

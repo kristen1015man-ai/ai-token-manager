@@ -1,4 +1,5 @@
 import { findChannelForModel, findFallbackChannel, type ChannelInfo } from "./channel.js";
+import { fromClaudeGatewayModelId } from "./model-alias.js";
 import { estimateTokens, recordUsage, type UsageRecord } from "./usage.js";
 import { assertSafeUpstreamBaseUrl } from "./upstream-safety.js";
 import { checkUserQuota, releaseQuotaReservation } from "./web-internal.js";
@@ -18,7 +19,7 @@ interface AnthropicClientHeaders {
 }
 
 function normalizeModelForBilling(model: string): string {
-  return model.replace(/\[[^\]]+\]$/, "");
+  return fromClaudeGatewayModelId(model).replace(/\[[^\]]+\]$/, "");
 }
 
 function safeInt(value: number): number {
@@ -86,12 +87,27 @@ function jsonError(status: number, type: string, message: string, extra?: Record
   );
 }
 
+function isModelUnavailableError(status: number, bodyText: string): boolean {
+  if (![400, 404, 422].includes(status)) return false;
+  return /1211|模型不存在|model[^"'，。]*不存在|model[^"'，。]*(not found|not exist|does not exist|invalid)/i.test(bodyText);
+}
+
+function passThroughTextResponse(upstreamResponse: Response, bodyText: string): Response {
+  return new Response(bodyText, {
+    status: upstreamResponse.status,
+    headers: { "Content-Type": upstreamResponse.headers.get("content-type") || "application/json" },
+  });
+}
+
 function reserveOutputTokens(requestBody: AnthropicRequest): number {
+  const parsedCap = Number(process.env.QUOTA_MAX_OUTPUT_TOKEN_RESERVE ?? 8192);
+  const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? Math.ceil(parsedCap) : 8192;
   const explicit = Number(requestBody.max_tokens);
-  if (Number.isFinite(explicit) && explicit > 0) return Math.ceil(explicit);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.min(Math.ceil(explicit), cap);
 
   const fallback = Number(process.env.QUOTA_DEFAULT_OUTPUT_TOKEN_RESERVE ?? 2000);
-  return Number.isFinite(fallback) && fallback > 0 ? Math.ceil(fallback) : 2000;
+  const reserve = Number.isFinite(fallback) && fallback > 0 ? Math.ceil(fallback) : 2000;
+  return Math.min(reserve, cap);
 }
 
 async function reserveQuotaForChannel(
@@ -165,6 +181,53 @@ async function findAnthropicChannel(model: string): Promise<{ channel: ChannelIn
   return { channel, billingModel };
 }
 
+async function tryFallbackAnthropicChannels(
+  userId: string,
+  billingModel: string,
+  upstreamRequestBody: AnthropicRequest,
+  upstreamBody: string,
+  stream: boolean,
+  clientHeaders: AnthropicClientHeaders,
+  failedChannelId: string
+): Promise<{ response: Response; usedChannel: ChannelInfo; reservationId: string | null; estimatedInputTokens: number } | Response | null> {
+  let excludeChannelId = failedChannelId;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const fallback = await findFallbackChannel(billingModel, excludeChannelId);
+    if (!fallback) return null;
+
+    const fallbackReservation = await reserveQuotaForChannel(userId, fallback, billingModel, upstreamRequestBody);
+    if (fallbackReservation instanceof Response) return fallbackReservation;
+
+    try {
+      const fallbackResponse = await sendAnthropicRequest(fallback, upstreamBody, "messages", stream, clientHeaders);
+      if (!fallbackResponse.ok) {
+        const fallbackText = await fallbackResponse.text();
+        await releaseQuotaReservation(fallbackReservation.reservationId);
+        if (isModelUnavailableError(fallbackResponse.status, fallbackText)) {
+          console.warn(`[Anthropic] Fallback channel ${fallback.name} does not support model=${billingModel}; trying next channel`);
+          excludeChannelId = fallback.id;
+          continue;
+        }
+        return passThroughTextResponse(fallbackResponse, fallbackText);
+      }
+
+      return {
+        response: fallbackResponse,
+        usedChannel: fallback,
+        reservationId: fallbackReservation.reservationId,
+        estimatedInputTokens: fallbackReservation.estimatedInputTokens,
+      };
+    } catch (fallbackErr) {
+      await releaseQuotaReservation(fallbackReservation.reservationId);
+      console.error(`[Anthropic] Fallback ${fallback.name} failed:`, fallbackErr);
+      excludeChannelId = fallback.id;
+    }
+  }
+
+  return null;
+}
+
 export async function proxyAnthropicMessagesRequest(
   userId: string,
   requestBody: AnthropicRequest,
@@ -176,8 +239,9 @@ export async function proxyAnthropicMessagesRequest(
     return jsonError(404, "not_found_error", `No available channel for model '${model}'. Please configure it in admin panel.`);
   }
 
-  const upstreamBody = JSON.stringify(requestBody);
-  let reservation = await reserveQuotaForChannel(userId, channel, billingModel, requestBody);
+  const upstreamRequestBody = { ...requestBody, model: billingModel };
+  const upstreamBody = JSON.stringify(upstreamRequestBody);
+  let reservation = await reserveQuotaForChannel(userId, channel, billingModel, upstreamRequestBody);
   if (reservation instanceof Response) return reservation;
 
   let response: Response;
@@ -196,7 +260,7 @@ export async function proxyAnthropicMessagesRequest(
       return jsonError(502, "api_error", "Upstream request failed: all channels unavailable");
     }
 
-    const fallbackReservation = await reserveQuotaForChannel(userId, fallback, billingModel, requestBody);
+    const fallbackReservation = await reserveQuotaForChannel(userId, fallback, billingModel, upstreamRequestBody);
     if (fallbackReservation instanceof Response) return fallbackReservation;
 
     usedChannel = fallback;
@@ -213,13 +277,38 @@ export async function proxyAnthropicMessagesRequest(
   }
 
   if (!response.ok) {
+    const errorText = await response.text();
     await releaseQuotaReservation(reservationId);
-    return passThroughResponse(response);
+
+    if (isModelUnavailableError(response.status, errorText)) {
+      console.warn(`[Anthropic] Channel ${usedChannel.name} does not support model=${billingModel}; trying fallback channel`);
+      const fallbackResult = await tryFallbackAnthropicChannels(
+        userId,
+        billingModel,
+        upstreamRequestBody,
+        upstreamBody,
+        Boolean(stream),
+        clientHeaders,
+        usedChannel.id
+      );
+
+      if (fallbackResult instanceof Response) return fallbackResult;
+      if (fallbackResult) {
+        response = fallbackResult.response;
+        usedChannel = fallbackResult.usedChannel;
+        reservationId = fallbackResult.reservationId;
+        estimatedInputTokens = fallbackResult.estimatedInputTokens;
+      } else {
+        return passThroughTextResponse(response, errorText);
+      }
+    } else {
+      return passThroughTextResponse(response, errorText);
+    }
   }
   if (stream) {
     return handleAnthropicStream(response, userId, billingModel, usedChannel.id, estimatedInputTokens, reservationId);
   }
-  return handleAnthropicJson(response, userId, billingModel, usedChannel.id, requestBody, reservationId);
+  return handleAnthropicJson(response, userId, billingModel, usedChannel.id, upstreamRequestBody, reservationId);
 }
 
 export async function proxyAnthropicCountTokensRequest(
@@ -228,7 +317,7 @@ export async function proxyAnthropicCountTokensRequest(
 ): Promise<Response> {
   // Avoid unmetered upstream calls from count_tokens. This endpoint is used by
   // Anthropic-compatible clients for sizing; it should not consume provider keys.
-  return new Response(JSON.stringify({ input_tokens: estimateTokens(requestBody) }), {
+  return new Response(JSON.stringify({ input_tokens: estimateTokens({ ...requestBody, model: normalizeModelForBilling(requestBody.model) }) }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -358,13 +447,5 @@ function handleAnthropicStream(
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     },
-  });
-}
-
-async function passThroughResponse(upstreamResponse: Response): Promise<Response> {
-  const bodyText = await upstreamResponse.text();
-  return new Response(bodyText, {
-    status: upstreamResponse.status,
-    headers: { "Content-Type": upstreamResponse.headers.get("content-type") || "application/json" },
   });
 }

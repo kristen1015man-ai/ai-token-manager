@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: https:",
               "style-src 'self' 'unsafe-inline'",
               "font-src 'self' data:",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "script-src 'self' 'unsafe-inline'",
               "base-uri 'self'",
               "frame-ancestors 'none'",
               "form-action 'self'",

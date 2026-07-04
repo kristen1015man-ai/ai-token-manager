@@ -56,12 +56,17 @@ jobs:
       # 否则 Windows 客户端按占位仓拉 latest.yml 必 404、自动更新永久失效。
       - name: Build
         shell: bash
+        env:
+          # 私有 repo 时,electron-updater 客户端拉 latest.yml 需 token(只读 release PAT)。
+          # secret 没配时为空,等同 public 匿名;配了就烘进 app-update.yml 让客户端带 token 拉。
+          GH_UPDATE_TOKEN: ${{ secrets.DESKTOP_UPDATE_TOKEN }}
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           cd desktop && npx electron-builder \
             --${{ matrix.platform }} --${{ matrix.arch }} --publish never \
             -c.publish.owner="${{ github.repository_owner }}" \
-            -c.publish.repo="${REPO_NAME}"
+            -c.publish.repo="${REPO_NAME}" \
+            ${GH_UPDATE_TOKEN:+-c.publish.token="${GH_UPDATE_TOKEN}"}
 
       # 单点发布：tag 触发时把产物（含 latest.yml/blockmap，electron-updater 要）传到本 workflow 仓。
       # draft:false 让 release 直接 published —— electron-updater 走 releases/latest/download/latest.yml，

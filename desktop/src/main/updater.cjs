@@ -99,7 +99,9 @@ function initAutoUpdater(getWindow) {
       console.log("[updater] 检查失败（开发态或无更新源，正常）:", e && e.message);
     });
   };
-  setTimeout(checkOnce, 5000);
+  // L15: 首次检查的 setTimeout 也补 .unref()，与下一行 setInterval 保持一致，
+  // 避免启动后 5 秒内退出应用时该 timer 拖住主进程事件循环。
+  setTimeout(checkOnce, 5000).unref();
   setInterval(checkOnce, 4 * 60 * 60 * 1000).unref();
 }
 

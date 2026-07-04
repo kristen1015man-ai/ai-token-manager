@@ -71,6 +71,15 @@
 - 本地估算并返回 `input_tokens`；不调用上游供应商，避免未计费的 provider key 消耗。
 - 用于 Claude Code 等客户端。
 
+### GET `/anthropic/v1/models`
+
+认证同上。
+
+行为：
+
+- 返回 Claude Code 网关模型发现列表。
+- 非 Claude 命名模型以 `claude-sparkloom-*` 别名暴露；Proxy 转发前映射回真实模型名，usage 和计费仍按真实模型记录。
+
 ## 2. 健康检查
 
 ### GET `/health`
@@ -106,6 +115,16 @@ Web 健康检查。
 | GET | `/api/user/key` | 登录用户 | 返回自己的 Key 列表，只有脱敏值 |
 | POST | `/api/user/key` | 登录用户 | 新建 Key，明文只在本次响应返回 |
 | DELETE | `/api/user/key` | 登录用户 | 删除自己的 Key，至少保留一个 |
+| GET | `/api/studio/bootstrap` | 登录用户 | Studio 启动数据：额度、模型、网关配置、Agent 检测地址 |
+| GET | `/api/studio/models` | 登录用户 | Studio/Claude Code 可用模型和分组 |
+| GET | `/api/studio/sessions` | 登录用户 | Studio 会话列表 |
+| POST | `/api/studio/sessions` | 登录用户 | 新建 Studio 会话，可保存 `default`、`plan`、`auto` 执行模式 |
+| GET | `/api/studio/sessions/:sessionId` | 登录用户 | 读取单个会话和消息 |
+| PATCH | `/api/studio/sessions/:sessionId` | 登录用户 | 更新会话标题、默认模型或执行模式 |
+| POST | `/api/studio/sessions/:sessionId/messages` | 登录用户 | 保存 Studio 会话消息 |
+| GET | `/api/studio/commands` | 登录用户 | 旧版命令记录查询接口；新版 Studio 前端不再使用 |
+| POST | `/api/studio/commands` | 登录用户 | 旧版命令记录创建接口；不执行命令 |
+| PATCH | `/api/studio/commands/:commandId` | 登录用户 | 旧版命令记录状态接口；不触发本机执行 |
 | GET | `/api/usage/summary` | 登录用户 | 个人用量概览 |
 | GET | `/api/usage/chart` | 登录用户 | 个人图表数据 |
 | GET | `/api/usage/details` | 登录用户 | 个人明细 |

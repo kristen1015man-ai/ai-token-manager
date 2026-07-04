@@ -1,16 +1,39 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
+
+function isLocalRequest(request: NextRequest): boolean {
+  const host = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  return (
+    host === "localhost" ||
+    host.startsWith("localhost:") ||
+    host === "127.0.0.1" ||
+    host.startsWith("127.0.0.1:") ||
+    host === "[::1]" ||
+    host.startsWith("[::1]:")
+  );
+}
 
 /**
  * GET /api/auth/feishu/start
  * 生成随机 state 防 CSRF，存入 HttpOnly cookie，重定向到飞书授权页
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const feishuAppId = process.env.NEXT_PUBLIC_FEISHU_APP_ID || "";
   const redirectUri = process.env.NEXT_PUBLIC_FEISHU_REDIRECT_URI || "";
 
   if (!feishuAppId || !redirectUri) {
-    return NextResponse.json({ error: "Feishu OAuth not configured" }, { status: 503 });
+    if (
+      process.env.NODE_ENV !== "production" &&
+      process.env.ENABLE_DEV_LOGIN === "true" &&
+      isLocalRequest(request)
+    ) {
+      return NextResponse.redirect(new URL("/api/auth/dev-login?next=/studio", request.url));
+    }
+
+    return NextResponse.redirect(new URL("/login?error=feishu_config", request.url));
   }
 
   // 生成 32 字节随机 state，防 CSRF

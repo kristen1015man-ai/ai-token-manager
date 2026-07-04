@@ -27,11 +27,14 @@ function jsonError(status: number, message: string, type: string, extra?: Record
 }
 
 function reserveOutputTokens(requestBody: Record<string, unknown>): number {
+  const parsedCap = Number(process.env.QUOTA_MAX_OUTPUT_TOKEN_RESERVE ?? 8192);
+  const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? Math.ceil(parsedCap) : 8192;
   const explicit = Number(requestBody.max_completion_tokens ?? requestBody.max_tokens);
-  if (Number.isFinite(explicit) && explicit > 0) return Math.ceil(explicit);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.min(Math.ceil(explicit), cap);
 
   const fallback = Number(process.env.QUOTA_DEFAULT_OUTPUT_TOKEN_RESERVE ?? 2000);
-  return Number.isFinite(fallback) && fallback > 0 ? Math.ceil(fallback) : 2000;
+  const reserve = Number.isFinite(fallback) && fallback > 0 ? Math.ceil(fallback) : 2000;
+  return Math.min(reserve, cap);
 }
 
 async function reserveQuotaForChannel(
