@@ -28,6 +28,27 @@ function isSameSite(url) {
   }
 }
 
+// 飞书 OAuth 登录域：主窗口需导航到这些域扫码，回调才在同窗口完成、session 落在 Electron。
+// 否则 will-navigate/setWindowOpenHandler 把飞书域当外链阻止/转系统浏览器，
+// 导致扫码在系统浏览器完成但 session 不在 Electron，主窗口卡「登录中」。
+const FEISHU_AUTH_HOSTS = new Set([
+  "open.feishu.cn", "pass.feishu.cn", "feishu.cn", "www.feishu.cn",
+  "open.larksuite.com", "pass.larksuite.com", "www.larksuite.com",
+]);
+function isFeishuAuth(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    return (
+      FEISHU_AUTH_HOSTS.has(u.hostname) ||
+      /\.feishu\.cn$/.test(u.hostname) ||
+      /\.larksuite\.com$/.test(u.hostname)
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
 // L16：STUDIO_URL 经 isSameSite 白名单校验。若启动环境（快捷方式/父 shell/.env）注入了
 // 未通过白名单的 SPARKLOOM_STUDIO_URL，回退默认 URL 并打 warning，防止主窗口加载任意 URL
 // 把 agent 配对 token 拼进其 fragment 泄漏给攻击者页面。
@@ -284,7 +305,7 @@ app.on("web-contents-created", (_event, contents) => {
   // 给每个 webContents（含主窗口 + 任意 popup）都挂 setWindowOpenHandler，
   // 防止同站 popup 用 Electron 默认行为打开外链/恶意窗口，绕过主窗口的 openExternal 路由。
   contents.setWindowOpenHandler(({ url }) => {
-    if (isSameSite(url)) {
+    if (isSameSite(url) || isFeishuAuth(url)) {
       return { action: "allow", overrideBrowserWindowOptions: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } };
     }
     if (/^https?:\/\//.test(url)) {
@@ -294,7 +315,7 @@ app.on("web-contents-created", (_event, contents) => {
     return { action: "deny" };
   });
   contents.on("will-navigate", (e, url) => {
-    if (!isSameSite(url)) {
+    if (!isSameSite(url) && !isFeishuAuth(url)) {
       e.preventDefault();
       if (/^https?:\/\//.test(url)) shell.openExternal(url);
     }

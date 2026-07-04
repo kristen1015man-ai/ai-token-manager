@@ -3779,8 +3779,20 @@ export default function StudioClient() {
                 <PermissionRow icon={Cpu} label="当前模型" value={selectedModelInfo?.displayName || selectedModel || "未选择"} />
                 <PermissionRow icon={Gauge} label="配额剩余" value={formatCurrency(data.quota.remaining)} />
                 <div className={`${styles.quotaPill} ${quotaClass}`}>{quotaStatusLabel(data.quota.status)}</div>
-                {newKey && (
+                <button
+                  type="button"
+                  className={styles.setupButton}
+                  onClick={() => void createStudioKey()}
+                  disabled={creatingKey}
+                  title="新建一个 Studio API 密钥，并把网关地址 + 密钥的环境变量片段显示在下面，方便贴到本机 Agent 配置"
+                >
+                  {creatingKey ? <Loader2 size={13} className={styles.spin} /> : <KeyRound size={13} />}
+                  {creatingKey ? "创建中" : "新建密钥"}
+                </button>
+                {newKey ? (
                   <ConfigBlock title="本机环境变量" value={configText} copied={copied} onCopy={copyText} />
+                ) : (
+                  <p className={styles.inspectorHint}>点「新建密钥」生成 Studio API 密钥 + 本机 Agent 配置片段。</p>
                 )}
               </div>
             )}
