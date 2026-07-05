@@ -396,7 +396,7 @@ export default function AgentsPanel({ agentBase, agentAuthHeaders, projectPath, 
             <strong className={styles.memoryEditorTitle} title={selectedPath}>
               {selectedFile?.name || "编辑"}
             </strong>
-            <button type="button" className={styles.iconButton} onClick={deleteCurrent} aria-label="删除" title="清空内容" disabled={saving}>
+            <button type="button" className={styles.iconButton} onClick={deleteCurrent} aria-label="删除" title="删除 agent 文件" disabled={saving}>
               <Trash2 size={14} />
             </button>
           </div>

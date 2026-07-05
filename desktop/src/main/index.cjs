@@ -3,7 +3,7 @@
 // 职责：预置 Vibe Coding 框架 → 生成/读取本地 agent-token → 拉起内置 Agent
 //      → 加载远程 Studio 页面 → 检查自动更新。
 
-const { app, BrowserWindow, shell, dialog } = require("electron");
+const { app, BrowserWindow, shell, dialog, ipcMain } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { ensureToken, configDir } = require("./token");
@@ -299,6 +299,14 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   if (agentChild) stopAgent(agentChild);
+});
+
+// 桌面端文件夹选择器：远程 Studio 页面通过 preload 暴露的 openDirectory() 触发，
+// invoke 跨进程到这里弹原生 dialog。仅返回选中的单个目录字符串，取消返回 null。
+// 不暴露任意文件系统能力——选完路径交回 web 端的 pickProject 走原有校验链路。
+ipcMain.handle("sparkloom:open-directory", async () => {
+  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+  return result.canceled ? null : result.filePaths[0] || null;
 });
 
 app.on("web-contents-created", (_event, contents) => {

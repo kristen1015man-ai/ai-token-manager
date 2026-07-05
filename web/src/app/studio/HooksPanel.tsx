@@ -253,7 +253,7 @@ export default function HooksPanel({ agentBase, agentAuthHeaders, onError, onNot
                           </label>
                           <button
                             type="button"
-                            className={styles.sessionDelete}
+                            className={styles.hooksDeleteBtn}
                             onClick={() => removeEntry(evt.id, idx)}
                             title="删除此 hook"
                           >
@@ -275,7 +275,7 @@ export default function HooksPanel({ agentBase, agentAuthHeaders, onError, onNot
                               </label>
                               <button
                                 type="button"
-                                className={styles.sessionDelete}
+                                className={styles.hooksDeleteBtn}
                                 onClick={() => removeHook(evt.id, idx, hookIdx)}
                                 title={entry.hooks.length <= 1 ? "至少保留一条命令（要删整条 entry 请点上方删除）" : "删除此命令"}
                                 disabled={entry.hooks.length <= 1}

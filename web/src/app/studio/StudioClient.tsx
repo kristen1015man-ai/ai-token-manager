@@ -670,6 +670,7 @@ export default function StudioClient() {
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [autoAcceptSession, setAutoAcceptSession] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("model");
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   // 任务 1：usage 版本号触发 CostPanel 重新读 localStorage
   const [usageVersion, setUsageVersion] = useState(0);
   const usageRecords = useMemo<UsageRecord[]>(() => {
@@ -1072,7 +1073,7 @@ export default function StudioClient() {
       if (keyResp.status === 400) {
         setConfirmDialog({
           message: "密钥已达上限（5 个）。请到后台删除不用的密钥后回来点「重新连接」。",
-          onConfirm: () => window.open("/dashboard#api-keys", "_blank"),
+          onConfirm: () => window.open("/dashboard/key", "_blank"),
         });
         return;
       }
@@ -1116,7 +1117,7 @@ export default function StudioClient() {
         desktopKeyConfiguredRef.current = true;
         setConfirmDialog({
           message: "密钥已创建但写入本机失败（占了一个名额）。请到后台删除该密钥，或在「写入配置」手动处理。",
-          onConfirm: () => window.open("/dashboard#api-keys", "_blank"),
+          onConfirm: () => window.open("/dashboard/key", "_blank"),
         });
         return;
       }
@@ -2417,9 +2418,48 @@ export default function StudioClient() {
     if (typeof window !== "undefined") window.localStorage.setItem("sparkloom.studioTheme", next);
   }
 
-  function pickProject(path: string) {
-    setProjectPath(path);
+  // 选定项目目录：trim + 非空校验 + （Agent 在线时）轻量探活 /files 验证目录可读，
+  // 失败提前提示，避免错误延后到「发送」才暴露（原 cleanCwd 抛英文技术错）。
+  async function pickProject(path: string) {
+    const dir = path.trim();
+    if (!dir) {
+      setError("请填写项目目录");
+      return;
+    }
+    const baseUrl = agentBaseUrl();
+    const token = agentToken || readStoredAgentToken();
+    if (baseUrl && token) {
+      try {
+        const res = await fetch(`${baseUrl}/files?path=${encodeURIComponent(dir)}`, { headers: agentAuthHeaders(), cache: "no-store" });
+        const body = await res.json().catch(() => ({} as { error?: string })) as { error?: string };
+        if (!res.ok || (body && body.error)) {
+          setError(`目录不可用：${body?.error || res.statusText || "请检查路径"}`);
+          return;
+        }
+      } catch {
+        setError("无法连接本机 Agent 校验目录，请确认 Agent 已启动");
+        return;
+      }
+    }
+    setProjectPath(dir);
     setProjectPickerOpen(false);
+  }
+
+  // 调用桌面端 preload 注入的原生文件夹选择器；网页端 sparkloomDesktop 不存在，提示手动输入。
+  // 选到目录后复用 pickProject（走原有 trim/校验/setProjectPath 链路），取消（返回 null）不动。
+  async function browseFolder() {
+    const openDirectory = (window as { sparkloomDesktop?: { openDirectory?: () => Promise<string | null> } })
+      .sparkloomDesktop?.openDirectory;
+    if (typeof openDirectory !== "function") {
+      setError("网页端无法选择文件夹，请手动输入路径（桌面端支持原生选择）");
+      return;
+    }
+    try {
+      const dir = await openDirectory();
+      if (dir) await pickProject(dir);
+    } catch (err) {
+      setError(`选择文件夹失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   function toggleToolExpand(id: string) {
@@ -3031,11 +3071,42 @@ export default function StudioClient() {
           >
             <Menu size={18} />
           </button>
-          <button type="button" className={styles.railActive} title="会话" aria-label="会话">
+          <button
+            type="button"
+            className={inspectorCollapsed ? styles.railActive : ""}
+            title="会话（收起配置面板，回到对话）"
+            aria-label="会话"
+            onClick={() => {
+              // 始终进入"对话视图"：收起 Inspector + 没选会话则选最近一个（触发 messages 加载，避免对话区空白）+ 聚焦输入框（视觉反馈）
+              setInspectorCollapsed(true);
+              if (!activeSessionId && sessions.length > 0) {
+                setActiveSessionId(sessions[0].id);
+              }
+              requestAnimationFrame(() => {
+                const ta = document.querySelector<HTMLTextAreaElement>(`.${styles.composer} textarea`);
+                ta?.focus();
+              });
+            }}
+          >
             <MessageSquare size={18} />
           </button>
-          <button type="button" title="Skills" aria-label="Skills" onClick={() => setInspectorTab("skills")}>
+          <button
+            type="button"
+            className={!inspectorCollapsed && inspectorTab === "skills" ? styles.railActive : ""}
+            title="Skills"
+            aria-label="Skills"
+            onClick={() => { setInspectorCollapsed(false); setInspectorTab("skills"); }}
+          >
             <Boxes size={18} />
+          </button>
+          <button
+            type="button"
+            className={inspectorCollapsed ? "" : styles.railActive}
+            title="Inspector 配置面板"
+            aria-label="Inspector 配置面板"
+            onClick={() => setInspectorCollapsed(false)}
+          >
+            <Settings size={18} />
           </button>
           <Link href="/download" title="安装 Agent" aria-label="安装 Agent">
             <Download size={18} />
@@ -3335,7 +3406,7 @@ export default function StudioClient() {
                 <span>3</span>
                 <strong>{agentConfigured ? "已连接" : "写入配置"}</strong>
               </div>
-              <Link href="/download" className={styles.setupButton}>
+              <Link href="/download" className={`${styles.setupButton} ${styles.setupButtonFirst}`}>
                 {agentOnline ? "重新下载" : "下载"}
               </Link>
               <button type="button" className={styles.setupButton} onClick={checkAgent}>
@@ -3556,21 +3627,31 @@ export default function StudioClient() {
                     className={styles.commandInput}
                     value={projectPath}
                     onChange={(e) => setProjectPath(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { pickProject(projectPath); } }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { void pickProject(projectPath); } }}
                     placeholder="输入或粘贴路径，或选最近项目"
                   />
+                  <button
+                    type="button"
+                    className={styles.atItem}
+                    onClick={() => void browseFolder()}
+                    style={{ marginTop: 4 }}
+                    title="点击选择本地文件夹（桌面端原生选择器）"
+                  >
+                    <FolderOpen size={14} />
+                    <span className={styles.atName}>浏览文件夹…</span>
+                  </button>
                   {recentProjects.length > 0 && (
                     <>
                       <div className={styles.commandEmpty} style={{ padding: "6px 10px", textAlign: "left" }}>最近项目</div>
                       {recentProjects.map((p) => (
-                        <button key={p} type="button" className={styles.atItem} onClick={() => pickProject(p)}>
+                        <button key={p} type="button" className={styles.atItem} onClick={() => void pickProject(p)}>
                           <span>📁</span>
                           <span className={styles.atName}>{p}</span>
                         </button>
                       ))}
                     </>
                   )}
-                  <button type="button" className={`${styles.primaryAction} ${styles.atItem}`} onClick={() => pickProject(projectPath)} style={{ marginTop: 4 }}>
+                  <button type="button" className={`${styles.primaryAction} ${styles.atItem}`} onClick={() => void pickProject(projectPath)} style={{ marginTop: 4 }}>
                     确认使用当前路径
                   </button>
                 </div>
@@ -3755,7 +3836,11 @@ export default function StudioClient() {
 
         </section>
 
-        <aside className={styles.inspector} aria-label="Inspector 面板">
+        <aside
+          className={styles.inspector}
+          data-collapsed={inspectorCollapsed ? "true" : undefined}
+          aria-label="Inspector 面板"
+        >
           <div className={styles.inspectorTabs} role="tablist">
             {INSPECTOR_TABS.map((tab) => (
               <button
@@ -3770,6 +3855,15 @@ export default function StudioClient() {
                 <span>{tab.label}</span>
               </button>
             ))}
+            <button
+              type="button"
+              className={styles.inspectorClose}
+              title="关闭面板 / 返回对话"
+              aria-label="关闭面板 / 返回对话"
+              onClick={() => setInspectorCollapsed(true)}
+            >
+              <X size={14} />
+            </button>
           </div>
 
           <div className={styles.inspectorBody}>

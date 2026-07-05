@@ -111,10 +111,10 @@ export default function SkillsPanel({ installed, missing, onUseSkill, onInstall,
                     className={styles.skillInstallBtn}
                     onClick={handleInstall}
                     disabled={installing}
-                    title="复制到本机 Claude Code 配置目录"
+                    title="本机 Agent 的安装端点为批量操作，点击会安装所有未安装技能（含本条）"
                   >
                     {installing ? <Loader2 size={11} className={styles.spin} /> : <Download size={11} />}
-                    安装
+                    安装全部
                   </button>
                 )}
                 <button

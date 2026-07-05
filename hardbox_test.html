@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body { margin:0; }
+  .page { padding:10px; }
+  .shell {
+    display: grid;
+    grid-template-columns: 58px 260px minmax(0, 1fr) 320px;
+    height: 600px;
+    border: 1px solid #262a31;
+    overflow: hidden;
+  }
+  .col1 { background:#111; }
+  .col2 { background:#111; }
+  .col3 { background:#0a0a0a; }
+  .inspector {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #262a31;
+  }
+  .inspectorTabs {
+    display: flex;
+    border-bottom: 1px solid #262a31;
+    background: #0d1016;
+  }
+  .inspectorTabBtn {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 8px;
+    border: 0;
+    background: transparent;
+    color: #6f7886;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .inspectorTabActive { color:#fff; border-bottom-color:#6366f1; }
+  .ic { width:14px; height:14px; display:inline-block; background:#888; }
+</style></head>
+<body>
+<div class="page">
+  <div class="shell" id="shell">
+    <div class="col1"></div>
+    <div class="col2"></div>
+    <div class="col3"></div>
+    <aside class="inspector" id="inspector">
+      <div class="inspectorTabs" id="inspectorTabs" role="tablist">
+        <button class="inspectorTabBtn"><span class="ic"></span><span>模型</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>执行</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>文件</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>模板</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>技能</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>Agents</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>MCP</span></button>
+        <button class="inspectorTabBtn inspectorTabActive"><span class="ic"></span><span>成本</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>记忆</span></button>
+        <button class="inspectorTabBtn"><span class="ic"></span><span>Hooks</span></button>
+      </div>
+    </aside>
+  </div>
+</div>
+<pre id="result" style="color:#fff;background:#000;padding:8px;font-size:11px;"></pre>
+<script>
+function measure(){
+  var shell=document.getElementById('shell').getBoundingClientRect();
+  var insp=document.getElementById('inspector').getBoundingClientRect();
+  var tabs=document.getElementById('inspectorTabs');
+  var tabsRect=tabs.getBoundingClientRect();
+  var btns=tabs.querySelectorAll('.inspectorTabBtn');
+  var lines=[];
+  lines.push('viewport='+window.innerWidth+'x'+window.innerHeight);
+  lines.push('shell.right='+shell.right+' width='+shell.width);
+  lines.push('inspector.right='+insp.right+' width='+insp.width);
+  lines.push('inspectorTabs.scrollWidth='+tabs.scrollWidth+' clientWidth='+tabs.clientWidth+' offsetWidth='+tabs.offsetWidth);
+  lines.push('inspectorTabs.right='+tabsRect.right);
+  var clippedByShell=0;
+  btns.forEach(function(b,i){
+    var r=b.getBoundingClientRect();
+    var clipped = r.right > shell.right + 0.5;
+    if(clipped) clippedByShell++;
+    lines.push('tab['+i+'] "'+b.textContent.trim()+'" left='+r.left.toFixed(1)+' right='+r.right.toFixed(1)+' width='+r.width.toFixed(1)+(clipped?' [CLIPPED-BY-SHELL]':''));
+  });
+  lines.push('CLIPPED_COUNT='+clippedByShell+'/10');
+  document.getElementById('result').textContent=lines.join('\n');
+  document.title='MEASURED';
+}
+window.onload=measure;
+</script>
+</body></html>

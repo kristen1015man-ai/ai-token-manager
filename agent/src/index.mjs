@@ -701,8 +701,11 @@ async function cleanCwd(value) {
   })) {
     throw new Error(`不能选择系统目录 ${resolved} 作为项目目录，请选一个具体的项目文件夹。`);
   }
+  // 非 ASCII 路径（如中文目录）：Claude Code/SDK 实测支持（本工具自身就跑在中文路径下），
+  // 不再硬拒——只警告，允许用户继续。如个别 SDK 子进程对中文 cwd 敏感，会在运行时报错，
+  // 由用户看到具体错误后决定，而非此处预先阻断（预先阻断让中国用户无法用中文项目目录）。
   if (process.platform === "win32" && !isAsciiPath(resolved)) {
-    throw new Error(`Project directory contains non-ASCII characters and the local SDK runtime on Windows may not run there: ${resolved}. Move the project to an ASCII path such as C:\\SparkloomProjects\\app, then try again.`);
+    console.warn(`[cleanCwd] 非 ASCII 项目路径（个别子进程可能敏感，允许继续）: ${resolved}`);
   }
   if (!(await isUsableDirectory(realResolved))) {
     throw new Error(`Project directory does not exist or is not readable/writable: ${resolved}`);

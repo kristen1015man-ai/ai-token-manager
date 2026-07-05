@@ -33,6 +33,17 @@
   display: none;
 }
 
+/* Inspector 收起：隐藏面板，对话区自动占满第 3/4 列；与 sidebar 折叠可叠加。
+   仅桌面（≥1181px）生效，避免污染窄屏断点的 3 列布局。 */
+@media (min-width: 1181px) {
+  .shell:has(.inspector[data-collapsed="true"]):not(:has(.sidebar[data-collapsed="true"])) {
+    grid-template-columns: 58px 260px minmax(0, 1fr);
+  }
+  .shell:has(.inspector[data-collapsed="true"]):has(.sidebar[data-collapsed="true"]) {
+    grid-template-columns: 58px 0 minmax(0, 1fr);
+  }
+}
+
 .sidebarCollapseBtn {
   display: inline-flex;
   align-items: center;
@@ -517,6 +528,28 @@
   opacity: 0.45;
 }
 
+.hooksDeleteBtn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  color: #6f7886;
+  background: transparent;
+  opacity: 1;
+}
+
+.hooksDeleteBtn:hover {
+  color: #f8fafc;
+  background: #2a303c;
+}
+
+.hooksDeleteBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .sessionRename {
   width: 26px;
   height: 32px;
@@ -907,8 +940,10 @@
 
 .setupGuide {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  max-width: 100%;
   margin: 12px 18px 0;
   padding: 10px;
   border: 1px solid #282e38;
@@ -966,7 +1001,7 @@
   cursor: pointer;
 }
 
-.setupButton:first-of-type {
+.setupButtonFirst {
   margin-left: auto;
 }
 
@@ -1936,8 +1971,10 @@
 }
 
 .projectPathBar {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  position: relative;
+  /* 用 flex 而非 grid：让 .projectPickerBtn 上的 flex:1 能撑满剩余宽度（grid item 上 flex 不生效）。
+     .atMenu 是 position:absolute，锚向 projectPathBar(relative)，改 display 不影响其定位。 */
+  display: flex;
   align-items: center;
   gap: 8px;
   min-height: 40px;
@@ -1996,7 +2033,7 @@
 .composer {
   position: relative;
   display: grid;
-  grid-template-columns: 42px 42px 42px minmax(0, 1fr) 42px 42px;
+  grid-template-columns: 42px 42px 42px 42px minmax(0, 1fr) 42px 42px;
   gap: 6px;
   align-items: center;
   padding: 8px 10px;
@@ -3659,13 +3696,22 @@
   border-left: 1px solid #262a31;
 }
 
+.inspector[data-collapsed="true"] {
+  display: none;
+}
+
 .inspectorTabs {
   display: flex;
+  overflow-x: auto;
   border-bottom: 1px solid #262a31;
   background: #0d1016;
+  scrollbar-width: thin;
+}
+.inspectorTabs::-webkit-scrollbar {
+  height: 4px;
 }
 .inspectorTabBtn {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3677,6 +3723,7 @@
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
   border-bottom: 2px solid transparent;
   transition: color 150ms ease, border-color 150ms ease;
 }
@@ -3686,6 +3733,30 @@
 .inspectorTabActive {
   color: #f4f6fa;
   border-bottom-color: #6366f1;
+}
+
+.inspectorClose {
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 4px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: #0d1016;
+  color: #929aa7;
+  cursor: pointer;
+  position: sticky;
+  right: 0;
+  transition: color 150ms ease, background 150ms ease;
+}
+.inspectorClose:hover {
+  color: #fff;
+  background: #222733;
 }
 
 .inspectorBody {
@@ -3705,6 +3776,15 @@
   padding: 16px 10px;
   text-align: center;
   font-size: 12px;
+  color: #64748b;
+}
+
+/* Inspector 面板内次要引导文字（如「新建密钥」下的提示）。
+   与 .inspectorEmpty 同色同字号，保持视觉层次一致；margin:0 抵消 <p> 浏览器默认外边距。 */
+.inspectorHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
   color: #64748b;
 }
 
@@ -4283,6 +4363,13 @@
     padding: 0;
   }
 
+  .setupGuide {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 12px 0;
+    padding: 8px;
+  }
+
   .shell {
     min-height: 100dvh;
     grid-template-columns: 1fr;
@@ -4331,7 +4418,7 @@
   }
 
   .composer {
-    grid-template-columns: 38px 38px minmax(0, 1fr) 38px 38px;
+    grid-template-columns: 36px 36px 36px 36px minmax(0, 1fr) 36px 36px;
   }
 }
 
