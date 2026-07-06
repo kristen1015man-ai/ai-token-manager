@@ -1,6 +1,6 @@
 {
   "name": "sparkloom-studio-desktop",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "Sparkloom Studio 桌面客户端（Electron）",
   "main": "src/main/index.cjs",

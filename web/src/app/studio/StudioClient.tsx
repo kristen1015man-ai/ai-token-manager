@@ -2911,7 +2911,9 @@ export default function StudioClient() {
   const agentOnline = agentStatus.state === "online";
   const agentReachable = agentStatus.state === "online" || agentStatus.state === "unpaired";
   const agentConfigured = agentOnline && Boolean(agentStatus.claude?.configured);
-  const agentPaired = Boolean(agentToken || readStoredAgentToken());
+  // 方案 B：同机 agent 自动配对(agent 鉴权已放宽：同机 + 浏览器 Origin 放行)。
+  // 不再强制 token——浏览器单独访问 ai.seapllo.com/studio(同机桌面端在跑)也能连上 agent。
+  const agentPaired = agentOnline;
   const setupStep = agentConfigured ? 3 : agentOnline && agentPaired ? 2 : 1;
   const quotaClass = quotaStatusClass(data.quota.status);
 

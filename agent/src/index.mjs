@@ -449,7 +449,18 @@ function tokenAuthorized(value) {
   return Boolean(AGENT_TOKEN && value && safeEqual(value, AGENT_TOKEN));
 }
 
+// 方案 B 同机自动配对：同机(loopback) + 浏览器 Origin 命中白名单(ai.seapllo.com / 本机开发)
+// → 视为已配对，不强制 token。桌面端注入的 token 仍兼容(走 tokenAuthorized 分支)。
+// 安全权衡(用户知情选 B)：ai.seapllo.com 上任意页面/XSS 可驱动本机 agent。
+// 不接受空 Origin(非浏览器客户端仍需 token)，限制只在"同机浏览器 Studio"放行。
+function isLocalStudioRequest(req) {
+  if (!isLoopback(req)) return false;
+  const origin = String(req.headers.origin || "").replace(/\/+$/, "");
+  return Boolean(origin) && ALLOWED_ORIGINS.has(origin);
+}
+
 function authorized(req) {
+  if (isLocalStudioRequest(req)) return true; // 同机 + 浏览器 Studio → 自动放行
   const token = req.headers["x-sparkloom-agent-token"];
   const value = Array.isArray(token) ? token[0] : token;
   return tokenAuthorized(value);
@@ -1952,7 +1963,7 @@ function handleWebSocketUpgrade(req, socket, head) {
   const headerToken = req.headers["x-sparkloom-agent-token"];
   const headerValue = Array.isArray(headerToken) ? headerToken[0] : headerToken;
   const token = url.searchParams.get("token") || headerValue || "";
-  if (!tokenAuthorized(token)) return rejectUpgrade(socket, 401, "Unauthorized");
+  if (!tokenAuthorized(token) && !isLocalStudioRequest(req)) return rejectUpgrade(socket, 401, "Unauthorized");
 
   socket.write([
     "HTTP/1.1 101 Switching Protocols",

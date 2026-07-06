@@ -36,3 +36,5 @@ handoff-backup-restore-signoff-*.json
 
 # 移交打包产物,不入库
 handoff-packages/
+
+hardbox_test.html
