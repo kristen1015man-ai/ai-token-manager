@@ -14,6 +14,10 @@ const { initAutoUpdater } = require("./updater.cjs");
 const ALLOWED_HOSTS = new Set(["ai.seapllo.com", "seapllo.com"]);
 const DEFAULT_STUDIO_URL = "https://ai.seapllo.com/studio";
 
+// --hidden：开机自启后台常驻（仅 bootstrap agent，不显示窗口）。
+// 协议触发或 dock/任务栏再次点击时由 second-instance/open-url 补创建窗口。
+const startHidden = process.argv.includes("--hidden");
+
 let mainWindow = null;
 let agentChild = null;
 let bootstrapped = false;
@@ -260,19 +264,46 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  // macOS 协议触发：必须在 app.whenReady 之前注册才能收到启动时的 open-url 事件。
+  app.on("open-url", (_e, url) => {
+    console.log("[main] open-url:", url);
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow(ensureToken());
+    }
+  });
+
+  app.on("second-instance", (_e, argv) => {
+    // 协议触发（sparkloom://...）或用户再次双击图标：确保有窗口并显示。
+    // --hidden 启动时窗口可能未创建，这里补创建。
+    const hasProto = argv.some((a) => String(a).startsWith("sparkloom://"));
+    if (hasProto) console.log("[main] sparkloom:// 协议触发拉起");
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
       mainWindow.focus();
+    } else {
+      createWindow(ensureToken());
     }
   });
 
   app.whenReady().then(async () => {
     try {
+      // 注册 sparkloom:// 自定义协议（网页点「启动 Agent」按钮 → 系统弹窗拉起桌面端）。
+      app.setAsDefaultProtocolClient("sparkloom");
+      // 开机自启：以 --hidden 后台启动，只 bootstrap agent 不显示窗口。
+      app.setLoginItemSettings({ openAtLogin: true, args: ["--hidden"] });
+
       const token = await bootstrap();
-      createWindow(token);
+      if (!startHidden) {
+        createWindow(token);
+      } else {
+        console.log("[main] --hidden 模式：仅 bootstrap agent，跳过窗口创建");
+      }
       initAutoUpdater(() => mainWindow);
-      maybePromptGitBash(); // 非阻塞：不 await，主窗口已先创建
+      if (!startHidden) maybePromptGitBash(); // 非阻塞：不 await，主窗口已先创建；hidden 模式用户不在场，不弹
     } catch (err) {
       // bootstrap 失败：清理可能已 spawn 的 agent（避免占端口），再退出（避免无窗口僵尸）
       if (agentChild) {

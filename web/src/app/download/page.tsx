@@ -11,14 +11,14 @@ export const dynamic = "force-dynamic";
 // 发新版时只改这里即可：version + 三平台直链 + 各自 sha256（可选，留空字符串则不显示）。
 // 直链走 GitHub Releases；中国大陆可通过 gh-proxy.com 镜像加速。
 const DESKTOP_RELEASE = {
-  version: "0.2.4",
-  github: "https://github.com/kristen1015man-ai/ai-token-manager/releases/tag/v0.2.4",
+  version: "0.2.5",
+  github: "https://github.com/kristen1015man-ai/ai-token-manager/releases/tag/v0.2.5",
   platforms: {
     windows: {
       label: "Windows",
       arch: "x64",
       ext: ".exe",
-      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.4/Sparkloom.Studio.Setup.0.2.4.exe",
+      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.5/Sparkloom.Studio.Setup.0.2.5.exe",
       sha256: "",
       // 安装方式：Electron 双击安装
       install: "双击 .exe 安装包，按向导完成安装后从开始菜单启动 Sparkloom Studio。",
@@ -28,7 +28,7 @@ const DESKTOP_RELEASE = {
       label: "macOS",
       arch: "Apple Silicon (M1/M2/M3/M4)",
       ext: ".dmg",
-      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.4/Sparkloom.Studio-0.2.4-arm64.dmg",
+      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.5/Sparkloom.Studio-0.2.5-arm64.dmg",
       sha256: "",
       install: "双击 .dmg，把 Sparkloom Studio 拖入 Applications。首次打开右键 → 打开（M 芯片 Gatekeeper 验证）。",
       note: "适用于 macOS Apple Silicon（M 系列芯片）。安装后从启动台打开即可。",
@@ -37,7 +37,7 @@ const DESKTOP_RELEASE = {
       label: "macOS",
       arch: "Intel (x64)",
       ext: ".dmg",
-      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.4/Sparkloom.Studio-0.2.4.dmg",
+      url: "https://github.com/kristen1015man-ai/ai-token-manager/releases/download/v0.2.5/Sparkloom.Studio-0.2.5.dmg",
       sha256: "",
       install: "双击 .dmg，把 Sparkloom Studio 拖入 Applications，从启动台打开。",
       note: "适用于 macOS Intel 芯片。如果不确定芯片类型，点苹果菜单 →「关于本机」查看。",

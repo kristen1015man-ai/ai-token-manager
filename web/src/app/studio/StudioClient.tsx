@@ -65,6 +65,7 @@ import {
   Pin,
   Library,
   Bell,
+  Power,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -3424,6 +3425,13 @@ export default function StudioClient() {
                 {creatingKey ? <Loader2 size={13} className={styles.spin} /> : <KeyRound size={13} />}
                 {creatingKey ? "创建中" : "配置连接"}
               </button>
+              <a
+                className={styles.setupButton}
+                href="sparkloom://launch"
+                title="启动本机 Sparkloom 桌面端(拉起 Agent)"
+              >
+                <Power size={13} /> 启动 Agent
+              </a>
             </div>
           )}
 
