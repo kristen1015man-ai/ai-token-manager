@@ -40,6 +40,16 @@ function initAutoUpdater(getWindow) {
     error: (m) => console.error("[updater]", m),
   };
 
+  // 国内 GitHub 直连慢/失败，自动更新走 gh-proxy 镜像（覆盖 app-update.yml 的 GitHub provider）。
+  // latest.yml + exe 全走 ghproxy 加速。镜像失败时 error 事件提示，用户可手动从 /download 镜像下载。
+  const RELEASE_URL = "https://github.com/kristen1015man-ai/ai-token-manager/releases/latest/download/";
+  try {
+    autoUpdater.setFeedURL({ provider: "generic", url: "https://gh-proxy.com/" + RELEASE_URL });
+    console.log("[updater] 更新源切到 gh-proxy 镜像（国内加速）");
+  } catch (e) {
+    console.warn("[updater] setFeedURL 镜像失败，回退 app-update.yml 默认源:", e && e.message);
+  }
+
   let hasAnnouncedUpdate = false; // 是否已向用户承诺"后台下载中"
 
   autoUpdater.on("update-available", (info) => {
