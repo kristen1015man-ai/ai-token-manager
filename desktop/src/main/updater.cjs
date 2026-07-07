@@ -40,15 +40,26 @@ function initAutoUpdater(getWindow) {
     error: (m) => console.error("[updater]", m),
   };
 
-  // 国内 GitHub 直连慢/失败，自动更新走 gh-proxy 镜像（覆盖 app-update.yml 的 GitHub provider）。
-  // latest.yml + exe 全走 ghproxy 加速。镜像失败时 error 事件提示，用户可手动从 /download 镜像下载。
+  // 国内 GitHub 直连慢/失败，自动更新走镜像（多镜像 fallback：gh-proxy.com → ghproxy.net → gh-proxy.net → GitHub 直连兜底）。
+  // 任一镜像失败，error 事件自动切下一个重试，提高国内下载成功率。
   const RELEASE_URL = "https://github.com/kristen1015man-ai/ai-token-manager/releases/latest/download/";
-  try {
-    autoUpdater.setFeedURL({ provider: "generic", url: "https://gh-proxy.com/" + RELEASE_URL });
-    console.log("[updater] 更新源切到 gh-proxy 镜像（国内加速）");
-  } catch (e) {
-    console.warn("[updater] setFeedURL 镜像失败，回退 app-update.yml 默认源:", e && e.message);
-  }
+  const MIRROR_BASES = [
+    "https://gh-proxy.com/" + RELEASE_URL,
+    "https://ghproxy.net/" + RELEASE_URL,
+    "https://gh-proxy.net/" + RELEASE_URL,
+    RELEASE_URL, // GitHub 直连兜底（有代理的用户能走）
+  ];
+  let mirrorIdx = 0;
+  let mirrorRetry = 0;
+  const setMirrorFeed = () => {
+    try {
+      autoUpdater.setFeedURL({ provider: "generic", url: MIRROR_BASES[mirrorIdx] });
+      console.log("[updater] 更新源:", MIRROR_BASES[mirrorIdx]);
+    } catch (e) {
+      console.warn("[updater] setFeedURL 失败:", e && e.message);
+    }
+  };
+  setMirrorFeed();
 
   let hasAnnouncedUpdate = false; // 是否已向用户承诺"后台下载中"
 
@@ -85,17 +96,27 @@ function initAutoUpdater(getWindow) {
   });
 
   autoUpdater.on("error", (err) => {
-    console.error("[updater] error", err && err.message);
-    // 已承诺"下载中"却失败 → 提示用户（否则用户守着"正在下载"干等）
+    console.error("[updater] error", err && err.message, "镜像:", MIRROR_BASES[mirrorIdx]);
+    // 切下一个镜像重试（避免单镜像不稳/被墙）。最多切 MIRROR_BASES.length 次，防循环。
+    if (mirrorRetry < MIRROR_BASES.length - 1) {
+      mirrorRetry++;
+      mirrorIdx = (mirrorIdx + 1) % MIRROR_BASES.length;
+      console.log("[updater] 切镜像重试:", MIRROR_BASES[mirrorIdx]);
+      setMirrorFeed();
+      setTimeout(() => { autoUpdater.checkForUpdates().catch(() => {}); }, 1500).unref();
+      return;
+    }
+    // 全部镜像失败 → 提示用户手动下载
     if (hasAnnouncedUpdate) {
       hasAnnouncedUpdate = false;
+      mirrorRetry = 0; // 重置，下次启动/4 小时后再试
       const w = getWin();
       if (w && !w.isDestroyed()) {
         dialog
           .showMessageBox(w, {
             type: "warning",
             title: "更新下载失败",
-            message: "新版本下载失败，下次启动会自动重试。",
+            message: "所有镜像下载失败（国内 GitHub 不稳）。请手动下载：访问 ai.seapllo.com/download 点「镜像下载」按钮，下载最新版覆盖安装。",
             buttons: ["好的"],
           })
           .catch(() => {});
